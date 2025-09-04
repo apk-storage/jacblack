@@ -18,12 +18,6 @@ wget https://github.com/immisterio/jacred-fdb/releases/latest/download/publish.z
 unzip -oq publish.zip
 rm -f publish.zip
 
-# Download database
-wget http://redb.cfhttp.top/latest.zip
-echo "Unpacking the database"
-unzip -oq latest.zip
-rm -f latest.zip
-
 # Create service
 echo ""
 echo "Install service to /etc/systemd/system/jacred.service ..."
@@ -46,7 +40,7 @@ EOF
 # Enable service
 systemctl daemon-reload
 systemctl enable jacred
-systemctl start jacred
+#systemctl start jacred
 
 crontab -l | { cat; echo "*/40 * * * * curl -s \"http://127.0.0.1:9117/jsondb/save\""; } | crontab -
 
@@ -64,6 +58,14 @@ iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
 iptables -P OUTPUT ACCEPT
 EOF
+
+# Download database
+wget http://redb.cfhttp.top/latest.zip
+echo "Unpacking the database"
+unzip -oq latest.zip
+rm -f latest.zip
+
+systemctl start jacred
 
 # Note
 echo ""
