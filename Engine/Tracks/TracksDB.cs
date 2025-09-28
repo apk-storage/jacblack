@@ -109,7 +109,7 @@ namespace JacRed.Engine
             }
             catch { }
 
-            _ = HttpClient.Post($"{tsuri}/torrents", "{\"action\":\"rem\",\"hash\":\"" + infohash + "\"}");
+            await HttpClient.Post($"{tsuri}/torrents", "{\"action\":\"rem\",\"hash\":\"" + infohash + "\"}");
 
             if (res?.streams == null || res.streams.Count == 0)
                 return;

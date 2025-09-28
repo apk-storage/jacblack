@@ -64,6 +64,10 @@ namespace JacRed.Controllers
         {
             //Console.WriteLine(HttpContext.Request.Path + HttpContext.Request.QueryString.Value);
 
+            string cachekey = $"api:v2.0:indexers:{query}:{title}:{title_original}:{year}:{(category != null && category.Count > 0 ? string.Join(",", category.Select(i => $"{i.Key}={i.Value}")) : "null")}:{is_serial}";
+            if (memoryCache.TryGetValue(cachekey, out List<Result> _cacheResult))
+                return Json(new RootObject() { Results = _cacheResult });
+
             var fastdb = getFastdb();
             var torrents = new Dictionary<string, TorrentDetails>();
             bool rqnum = !HttpContext.Request.QueryString.Value.Contains("&is_serial=") && HttpContext.Request.Headers.UserAgent.ToString() == "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36";
@@ -646,6 +650,8 @@ namespace JacRed.Controllers
                 });
             }
 
+            memoryCache.Set(cachekey, Results, DateTime.Now.AddMinutes(5));
+
             return Json(new RootObject() { Results = Results });
         }
         #endregion
@@ -930,7 +936,7 @@ namespace JacRed.Controllers
             {
                 var fastdb = new Dictionary<string, List<string>>();
 
-                foreach (var item in FileDB.masterDb)
+                foreach (var item in FileDB.masterDb.ToArray())
                 {
                     foreach (string k in item.Key.Split(":"))
                     {
