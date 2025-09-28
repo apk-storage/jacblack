@@ -7,10 +7,8 @@ apt update && apt install -y wget unzip
 
 # Install .NET
 wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh && chmod 755 dotnet-install.sh
-./dotnet-install.sh --channel 6.0.1xx
-echo "export DOTNET_ROOT=\$HOME/.dotnet" >> ~/.bashrc
-echo "export PATH=\$PATH:\$HOME/.dotnet:\$HOME/.dotnet/tools" >> ~/.bashrc
-source ~/.bashrc
+./dotnet-install.sh --channel 9.0 --install-dir /usr/share/dotnet
+ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
 
 # Download zip
 mkdir $DEST -p && cd $DEST
@@ -29,7 +27,7 @@ Wants=network.target
 After=network.target
 [Service]
 WorkingDirectory=$DEST
-ExecStart=$HOME/.dotnet/dotnet JacRed.dll
+ExecStart=/usr/bin/dotnet JacRed.dll
 #ExecReload=/bin/kill -s HUP $MAINPID
 #ExecStop=/bin/kill -s QUIT $MAINPID
 Restart=always

@@ -47,7 +47,7 @@ namespace JacRed.Engine
             if (types != null && theBad(types))
                 return null;
 
-            string infohash = MagnetLink.Parse(magnet).InfoHash.ToHex();
+            string infohash = MagnetLink.Parse(magnet).InfoHashes.V1OrV2.ToHex();
             if (Database.TryGetValue(infohash, out ffprobemodel res))
                 return res.streams;
 
@@ -76,7 +76,7 @@ namespace JacRed.Engine
             if (AppInit.conf.tsuri == null || AppInit.conf.tsuri.Length == 0)
                 return;
 
-            string infohash = MagnetLink.Parse(magnet).InfoHash.ToHex();
+            string infohash = MagnetLink.Parse(magnet).InfoHashes.V1OrV2.ToHex();
             if (string.IsNullOrEmpty(infohash))
                 return;
 

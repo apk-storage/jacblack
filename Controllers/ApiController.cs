@@ -461,7 +461,7 @@ namespace JacRed.Controllers
                 foreach (var torrent in torrents.Values)
                 {
                     var magnetLink = MagnetLink.Parse(torrent.magnet);
-                    string hex = magnetLink.InfoHash.ToHex();
+                    string hex = magnetLink.InfoHashes.V1OrV2.ToHex();
 
                     if (!temp.TryGetValue(hex, out _))
                     {
