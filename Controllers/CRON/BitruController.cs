@@ -72,22 +72,22 @@ namespace JacRed.Controllers.CRON
                 // Максимальное количиство страниц
                 int.TryParse(Regex.Match(html, $"<a href=\"browse.php\\?tmp={cat}&page=[^\"]+\">([0-9]+)</a></div>").Groups[1].Value, out int maxpages);
 
-                if (maxpages > 0)
-                {
-                    // Загружаем список страниц в список задач
-                    for (int page = 1; page <= maxpages; page++)
-                    {
-                        try
-                        {
-                            if (!taskParse.ContainsKey(cat))
-                                taskParse.Add(cat, new List<TaskParse>());
+                if (maxpages == 0)
+                    maxpages = 1;
 
-                            var val = taskParse[cat];
-                            if (val.FirstOrDefault(i => i.page == page) == null)
-                                val.Add(new TaskParse(page));
-                        }
-                        catch { }
+                // Загружаем список страниц в список задач
+                for (int page = 1; page <= maxpages; page++)
+                {
+                    try
+                    {
+                        if (!taskParse.ContainsKey(cat))
+                            taskParse.Add(cat, new List<TaskParse>());
+
+                        var val = taskParse[cat];
+                        if (val.FirstOrDefault(i => i.page == page) == null)
+                            val.Add(new TaskParse(page));
                     }
+                    catch { }
                 }
             }
 

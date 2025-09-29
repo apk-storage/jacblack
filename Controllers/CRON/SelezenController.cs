@@ -133,18 +133,18 @@ namespace JacRed.Controllers.CRON
             // Максимальное количиство страниц
             int.TryParse(Regex.Match(html, "<span class='page-link'>...</span></li> <li class='page-item'><a class='page-link' href=\"[^\"]+/page/[0-9]+/\">([0-9]+)</a></li>").Groups[1].Value, out int maxpages);
 
-            if (maxpages > 0)
+            if (maxpages == 0)
+                maxpages = 1;
+
+            // Загружаем список страниц в список задач
+            for (int page = 1; page <= maxpages; page++)
             {
-                // Загружаем список страниц в список задач
-                for (int page = 1; page <= maxpages; page++)
+                try
                 {
-                    try
-                    {
-                        if (taskParse.FirstOrDefault(i => i.page == page) == null)
-                            taskParse.Add(new TaskParse(page));
-                    }
-                    catch { }
+                    if (taskParse.FirstOrDefault(i => i.page == page) == null)
+                        taskParse.Add(new TaskParse(page));
                 }
+                catch { }
             }
 
             IO.File.WriteAllText("Data/temp/selezen_taskParse.json", JsonConvert.SerializeObject(taskParse));
