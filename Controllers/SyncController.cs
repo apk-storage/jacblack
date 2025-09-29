@@ -18,6 +18,8 @@ namespace JacRed.Controllers
 
         public static void Configuration()
         {
+            Console.WriteLine("SyncController load");
+
             masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value);
 
             ThreadPool.QueueUserWorkItem(async _ =>

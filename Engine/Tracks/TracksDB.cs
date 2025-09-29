@@ -19,6 +19,8 @@ namespace JacRed.Engine
     {
         public static void Configuration()
         {
+            Console.WriteLine("TracksDB load");
+
             foreach (var folder1 in Directory.GetDirectories("Data/tracks"))
             {
                 foreach (var folder2 in Directory.GetDirectories(folder1))
@@ -26,7 +28,6 @@ namespace JacRed.Engine
                     foreach (var file in Directory.GetFiles(folder2))
                     {
                         string infohash = folder1.Substring(12) + folder2.Substring(folder1.Length + 1) + Path.GetFileName(file);
-                        Console.WriteLine(infohash);
 
                         try
                         {
