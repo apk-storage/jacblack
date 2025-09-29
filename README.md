@@ -3,6 +3,9 @@ curl -s https://raw.githubusercontent.com/immisterio/jacred-fdb/main/install.sh 
 
 * ПО УМОЛЧАНИЯ НАСТРОЕНА СИНХРОНИЗАЦИЯ БАЗЫ С ВНЕШНЕГО СЕРВЕРА
 
+# Docker
+https://github.com/pavelpikta/docker-jacred-fdb
+
 # Источники 
 Kinozal, Nnmclub, Rutor, Torrentby, Bitru, Rutracker, Megapeer, Selezen, Toloka (UKR), Baibako, LostFilm, Animelayer
 
