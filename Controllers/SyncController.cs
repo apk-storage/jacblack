@@ -74,6 +74,9 @@ namespace JacRed.Controllers
 
                 foreach (var t in FileDB.OpenRead(item.Key, cache: false))
                 {
+                    if (AppInit.conf.disable_trackers != null && AppInit.conf.disable_trackers.Contains(t.Value.trackerName))
+                        continue;
+
                     if (spidr || (start != -1 && start > t.Value.updateTime.ToFileTimeUtc()))
                     {
                         torrent.TryAdd(t.Key, new TorrentDetails() 
@@ -146,6 +149,9 @@ namespace JacRed.Controllers
             {
                 foreach (var torrent in FileDB.OpenRead(item.Key, cache: false))
                 {
+                    if (AppInit.conf.disable_trackers != null && AppInit.conf.disable_trackers.Contains(torrent.Value.trackerName))
+                        continue;
+
                     var _t = (TorrentDetails)torrent.Value.Clone();
                     _t.updateTime = item.Value.updateTime;
 
