@@ -462,7 +462,7 @@ namespace JacRed.Controllers
             {
                 Dictionary<string, (TorrentDetails torrent, string title, string Name, List<string> AnnounceUrls)> temp = new Dictionary<string, (TorrentDetails, string, string, List<string>)>();
 
-                foreach (var torrent in torrents.Values)
+                foreach (var torrent in torrents.Values.OrderByDescending(i => i.createTime).ThenBy(i => i.trackerName == "selezen"))
                 {
                     var magnetLink = MagnetLink.Parse(torrent.magnet);
                     string hex = magnetLink.InfoHashes.V1OrV2.ToHex();
@@ -551,11 +551,14 @@ namespace JacRed.Controllers
                         }
                         #endregion
 
-                        if (torrent.sid > t.torrent.sid)
-                            t.torrent.sid = torrent.sid;
+                        if (torrent.trackerName != "selezen")
+                        {
+                            if (torrent.sid > t.torrent.sid)
+                                t.torrent.sid = torrent.sid;
 
-                        if (torrent.pir > t.torrent.pir)
-                            t.torrent.pir = torrent.pir;
+                            if (torrent.pir > t.torrent.pir)
+                                t.torrent.pir = torrent.pir;
+                        }
 
                         if (torrent.createTime > t.torrent.createTime)
                             t.torrent.createTime = torrent.createTime;
@@ -605,7 +608,7 @@ namespace JacRed.Controllers
                     return t.ffprobe;
                 }
 
-                var streams = TracksDB.Get(t.magnet, t.types);
+                var streams = TracksDB.Get(t.magnet, t.types, onlydb: true);
                 langs = TracksDB.Languages(t, streams ?? t.ffprobe);
                 if (streams == null)
                     return null;
@@ -650,7 +653,8 @@ namespace JacRed.Controllers
                 });
             }
 
-            memoryCache.Set(cachekey, Results, DateTime.Now.AddMinutes(5));
+            if (AppInit.conf.evercache.enable && AppInit.conf.evercache.validHour == 0)
+                memoryCache.Set(cachekey, Results, DateTime.Now.AddMinutes(5));
 
             return Json(new RootObject() { Results = Results });
         }
@@ -853,7 +857,7 @@ namespace JacRed.Controllers
                     langs = TracksDB.Languages(t, t.ffprobe);
                 else
                 {
-                    var streams = TracksDB.Get(t.magnet, t.types);
+                    var streams = TracksDB.Get(t.magnet, t.types, onlydb: true);
                     langs = TracksDB.Languages(t, streams ?? t.ffprobe);
                 }
 

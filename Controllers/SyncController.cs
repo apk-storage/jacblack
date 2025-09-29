@@ -1,23 +1,38 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using JacRed.Engine;
+﻿using JacRed.Engine;
 using JacRed.Engine.CORE;
 using JacRed.Models;
 using JacRed.Models.Details;
 using JacRed.Models.Sync.v2;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace JacRed.Controllers
 {
     public class SyncController : BaseController
     {
-        private static readonly object masterDbCacheLock = new object();
-        private static Dictionary<string, TorrentInfo> masterDbCache;
-        private static DateTime masterDbCacheUpdated = DateTime.MinValue;
+        static Dictionary<string, TorrentInfo> masterDbCache;
+
+        public static void Configuration()
+        {
+            masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value);
+
+            ThreadPool.QueueUserWorkItem(async _ =>
+            {
+                while (true)
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(10));
+                    try { masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value); } catch { }
+                }
+            });
+        }
+
 
         [Route("/sync/conf")]
-        public JsonResult Configuration()
+        public JsonResult SyncConf()
         {
             return Json(new 
             {
@@ -52,19 +67,6 @@ namespace JacRed.Controllers
             bool nextread = false;
             int take = 2_000, countread = 0;
             var collections = new List<Collection>(take);
-
-            // Use static cache updated every 10 minutes
-            if (masterDbCache == null || (DateTime.Now - masterDbCacheUpdated) > TimeSpan.FromMinutes(10))
-            {
-                lock (masterDbCacheLock)
-                {
-                    if (masterDbCache == null || (DateTime.Now - masterDbCacheUpdated) > TimeSpan.FromMinutes(10))
-                    {
-                        masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value);
-                        masterDbCacheUpdated = DateTime.Now;
-                    }
-                }
-            }
             
             foreach (var item in masterDbCache.Where(i => i.Value.fileTime > time))
             {
@@ -85,16 +87,18 @@ namespace JacRed.Controllers
 
                     if (t.Value.ffprobe == null || t.Value.languages == null)
                     {
-                        var _t = (TorrentDetails)t.Value.Clone();
-
-                        var streams = TracksDB.Get(_t.magnet, _t.types);
+                        var streams = TracksDB.Get(t.Value.magnet, t.Value.types, onlydb: true);
                         if (streams != null)
                         {
+                            var _t = (TorrentDetails)t.Value.Clone();
                             _t.ffprobe = streams;
                             _t.languages = TracksDB.Languages(_t, streams);
+                            torrent.TryAdd(t.Key, _t);
                         }
-
-                        torrent.TryAdd(t.Key, _t);
+                        else
+                        {
+                            torrent.TryAdd(t.Key, t.Value);
+                        }
                     }
                     else
                     {
@@ -137,19 +141,6 @@ namespace JacRed.Controllers
 
             int take = 2_000;
             var torrents = new List<Models.Sync.v1.Torrent>(take+1);
-
-            // Use static cache updated every 10 minutes
-            if (masterDbCache == null || (DateTime.Now - masterDbCacheUpdated) > TimeSpan.FromMinutes(10))
-            {
-                lock (masterDbCacheLock)
-                {
-                    if (masterDbCache == null || (DateTime.Now - masterDbCacheUpdated) > TimeSpan.FromMinutes(10))
-                    {
-                        masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value);
-                        masterDbCacheUpdated = DateTime.Now;
-                    }
-                }
-            }
             
             foreach (var item in masterDbCache.Where(i => i.Value.fileTime > time))
             {
@@ -158,7 +149,7 @@ namespace JacRed.Controllers
                     var _t = (TorrentDetails)torrent.Value.Clone();
                     _t.updateTime = item.Value.updateTime;
 
-                    var streams = TracksDB.Get(_t.magnet, _t.types);
+                    var streams = TracksDB.Get(_t.magnet, _t.types, onlydb: true);
                     if (streams != null)
                     {
                         _t.ffprobe = streams;
