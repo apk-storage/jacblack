@@ -140,7 +140,7 @@ namespace JacRed.Controllers.CRON
                 {
                     try
                     {
-                        if (taskParse.Find(i => i.page == page) == null)
+                        if (taskParse.FirstOrDefault(i => i.page == page) == null)
                             taskParse.Add(new TaskParse(page));
                     }
                     catch { }

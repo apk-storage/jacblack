@@ -195,7 +195,7 @@ namespace JacRed.Controllers.CRON
                                 taskParse.Add(cat, new List<TaskParse>());
 
                             var val = taskParse[cat];
-                            if (val.Find(i => i.page == page) == null)
+                            if (val.FirstOrDefault(i => i.page == page) == null)
                                 val.Add(new TaskParse(page));
                         }
                     }
@@ -205,7 +205,7 @@ namespace JacRed.Controllers.CRON
                             taskParse.Add(cat, new List<TaskParse>());
 
                         var val = taskParse[cat];
-                        if (val.Find(i => i.page == 1) == null)
+                        if (val.FirstOrDefault(i => i.page == 1) == null)
                             val.Add(new TaskParse(1));
                     }
                 }

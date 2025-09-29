@@ -187,7 +187,7 @@ namespace JacRed.Controllers.CRON
                                     catVal.Add(arg, new List<TaskParse>());
 
                                 var val = catVal[arg];
-                                if (val.Find(i => i.page == page) == null)
+                                if (val.FirstOrDefault(i => i.page == page) == null)
                                     val.Add(new TaskParse(page));
                             }
                             catch { }
