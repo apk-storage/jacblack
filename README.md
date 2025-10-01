@@ -1,3 +1,7 @@
+# AI Документация
+
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/immisterio/jacred-fdb)
+
 # Установка
 curl -s https://raw.githubusercontent.com/immisterio/jacred-fdb/main/install.sh | bash
 
