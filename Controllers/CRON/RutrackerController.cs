@@ -20,6 +20,52 @@ namespace JacRed.Controllers.CRON
     {
         static Dictionary<string, List<TaskParse>> taskParse = new Dictionary<string, List<TaskParse>>();
 
+        static readonly HashSet<string> firstPageCats = new HashSet<string>()
+        { 
+            // 3D Кинофильмы
+            "549",
+
+            // Наше кино
+            "22", "1666", "941",
+
+            // Зарубежное кино
+            "1950", "2090", "2221", "2091", "2092", "2093", "2200", "2540", "934", "505", "252",
+
+            // Арт-хаус и авторское кино
+            "124",
+
+            // 3D Мультфильмы
+            "1213",
+
+            // Мультфильмы
+            "2343",  "930", "2365", "208", "539", "209",
+
+            // Мультсериалы
+            "921", "815", "1460",
+
+            // HD Video
+            "1457", "2199", "313", "312", "1247", "2201", "2339", "140",
+
+            // Зарубежные сериалы
+            "842", "235", "242", "819", "1531", "721", "1102", "1120", "1214", "489", "387",
+
+            // Русские сериалы
+            "9", "81",
+
+            // Корейские и Японские сериалы
+            "915", "1939",
+
+            // Зарубежные сериалы (HD Video)
+            "119", "1803", "266", "193", "1690", "1459", "825", "1248", "1288",
+
+            // Сериалы Латинской Америки, Турции и Индии 
+            "325", "534", "694", "704",
+
+            // Аниме
+            "1105", "2491", "1389"
+        };
+
+
         static RutrackerController()
         {
             if (IO.File.Exists("Data/temp/rutracker_taskParse.json"))
@@ -104,10 +150,10 @@ namespace JacRed.Controllers.CRON
 
             try
             {
-                foreach (string cat in new List<string>() { "1950", "22", "252", "921", "930", "1457", "313", "312", "312", "119", "1803", "266", "81", "9", "1105", "1389" })
+                foreach (string cat in firstPageCats)
                 {
-                    await parsePage(cat, page);
-                    log += $"{cat} - {page}\n";
+                    bool result = await parsePage(cat, page);
+                    log += $"{cat} - {page} - {result}\n";
                 }
             }
             catch { }
@@ -123,46 +169,10 @@ namespace JacRed.Controllers.CRON
         #region UpdateTasksParse
         async public Task<string> UpdateTasksParse()
         {
-            foreach (string cat in new List<string>() 
-            { 
-                // Наше кино
-                "22", "1666", "941",
-
-                // Зарубежное кино
-                "1950", "2090", "2221", "2091", "2092", "2093", "2200", "2540", "934", "505", "252",
-
-                // Арт-хаус и авторское кино
-                "124",
-
-                // Мультфильмы
-                "2343",  "930", "2365", "208", "539", "209",
-
-                // Мультсериалы
-                "921", "815", "1460",
-
-                // HD Video
-                "1457", "2199", "313", "312", "1247", "2201", "2339", "140",
-
-                // Зарубежные сериалы
-                "842", "235", "242", "819", "1531", "721", "1102", "1120", "1214", "489", "387",
-
-                // Русские сериалы
-                "9", "81",
-
-                // Корейские и Японские сериалы
-                "915", "1939",
-
-                // Зарубежные сериалы (HD Video)
-                "119", "1803", "266", "193", "1690", "1459", "825", "1248", "1288",
-
-                // Сериалы Латинской Америки, Турции и Индии 
-                "325", "534", "694", "704",
-
-                // Аниме
-                "1105", "2491", "1389",
-
+            foreach (string cat in new HashSet<string>(firstPageCats)
+            {
                 // Документальные фильмы
-                "709",
+                "709", "2109",
 
                 // Документалистика
                 "46", "671", "2177", "2538", "251", "98", "97", "851", "2178", "821", "2076", "56", "2123", "876", "2139", "1467", "1469", "249", "552", "500", "2112", "1327", "1468", "2168", "2160", "314", "1281", "2110", "979", "2169", "2164", "2166", "2163",
@@ -233,9 +243,6 @@ namespace JacRed.Controllers.CRON
                 {
                     foreach (var val in task.Value.ToArray())
                     {
-                        if (DateTime.Today == val.updateTime)
-                            continue;
-
                         await Task.Delay(AppInit.conf.Rutracker.parseDelay);
 
                         bool res = await parsePage(task.Key, val.page);
@@ -307,7 +314,7 @@ namespace JacRed.Controllers.CRON
                 int relased = 0;
                 string name = null, originalname = null;
 
-                if (cat is "22" or "1666" or "941" or "1950" or "1950" or "2090" or "2221" or "2091" or "2092" or "2093" or "2200" or "2540" or "934" or "505" or "124" or "1457"
+                if (cat is "549" or "1213" or "2109" or "22" or "1666" or "941" or "1950" or "1950" or "2090" or "2221" or "2091" or "2092" or "2093" or "2200" or "2540" or "934" or "505" or "124" or "1457"
                                 or "2199" or "313" or "312" or "1247" or "2201" or "2339" or "140" or "2343" or "930" or "2365" or "208" or "539" or "209" or "709" or "252")
                 {
                     #region Фильмы
@@ -346,6 +353,12 @@ namespace JacRed.Controllers.CRON
                         }
                     }
                     #endregion
+
+                    if (name != null)
+                        name = name.Replace("в 3Д", "").Trim();
+
+                    if (originalname != null)
+                        originalname = originalname.Replace(" in 3D", "").Replace(" 3D", "").Trim();
                 }
                 else if (cat is "842" or "235" or "242" or "819" or "1531" or "721" or "1102" or "1120" or "1214" or "489" or "387" or "9" or "81" or "119" or "1803" or "266" or "193" or "1690" or "1459" or "825" or "1248" or "1288"
                                       or "325" or "534" or "694" or "704" or "921" or "815" or "1460")
@@ -475,6 +488,7 @@ namespace JacRed.Controllers.CRON
                     string[] types = null;
                     switch (cat)
                     {
+                        case "549":
                         case "22":
                         case "1666":
                         case "941":
@@ -506,6 +520,7 @@ namespace JacRed.Controllers.CRON
                         case "208":
                         case "539":
                         case "209":
+                        case "1213":
                             types = new string[] { "multfilm" };
                             break;
                         case "921":
@@ -549,6 +564,7 @@ namespace JacRed.Controllers.CRON
                             types = new string[] { "anime" };
                             break;
                         case "709":
+                        case "2109":
                             types = new string[] { "documovie" };
                             break;
                         case "46":
