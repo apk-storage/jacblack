@@ -4,9 +4,53 @@
 
 ## Установка
 
-curl -s <https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/install.sh> | bash
+Установка одной командой (запускать от любого пользователя, при необходимости запросится sudo):
 
-* ПО УМОЛЧАНИЯ НАСТРОЕНА СИНХРОНИЗАЦИЯ БАЗЫ С ВНЕШНЕГО СЕРВЕРА
+```bash
+curl -s https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/jacred.sh | bash
+```
+
+Скрипт устанавливает приложение в `/home/jacred`, .NET 9.0, systemd-сервис `jacred`, cron для сохранения БД и при первом запуске по желанию скачивает готовую базу.
+
+**Опции:**
+
+| Опция | Описание |
+|-------|----------|
+| `--no-download-db` | Не скачивать и не распаковывать базу (только при установке) |
+| `--update` | Обновить приложение с последнего релиза (сохранить БД, заменить файлы, перезапустить) |
+| `--remove` | Полностью удалить JacRed-FDB (сервис, cron, каталог приложения) |
+| `-h`, `--help` | Показать справку |
+
+**Примеры:**
+
+```bash
+# Обычная установка
+curl -s https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/jacred.sh | bash
+
+# Установка без загрузки базы
+curl -s https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/jacred.sh | bash -s -- --no-download-db
+
+# Обновление уже установленного приложения
+sudo /home/jacred/jacred.sh --update
+# или после загрузки скрипта:
+./jacred.sh --update
+
+# Удаление
+sudo ./jacred.sh --remove
+```
+
+Установка/удаление под конкретным пользователем (cron будет добавлен или удалён для этого пользователя):
+
+```bash
+sudo -u myservice ./jacred.sh
+sudo -u myservice ./jacred.sh --update
+sudo -u myservice ./jacred.sh --remove
+```
+
+После установки: настройте `/home/jacred/init.conf`, перезапуск — `systemctl restart jacred`. Полный crontab для парсинга — `crontab /home/jacred/Data/crontab`.
+
+> [!IMPORTANT]  
+> По умолчанию настроена синхронизация базы с внешнего сервера.
 
 ## Docker
 
