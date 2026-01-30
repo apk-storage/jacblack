@@ -1,43 +1,49 @@
 # AI Документация
 
-[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/immisterio/jacred-fdb)
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pavelpikta/jacred-fdb)
 
-# Установка
-curl -s https://raw.githubusercontent.com/immisterio/jacred-fdb/main/install.sh | bash
+## Установка
+
+curl -s <https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/install.sh> | bash
 
 * ПО УМОЛЧАНИЯ НАСТРОЕНА СИНХРОНИЗАЦИЯ БАЗЫ С ВНЕШНЕГО СЕРВЕРА
 
-# Docker
-https://github.com/pavelpikta/docker-jacred-fdb
+## Docker
 
-# Источники 
+<https://github.com/pavelpikta/docker-jacred-fdb>
+
+## Источники
+
 Kinozal, Nnmclub, Rutor, Torrentby, Bitru, Rutracker, Megapeer, Selezen, Toloka (UKR), Baibako, LostFilm, Animelayer
 
-# Самостоятельный парсинг источников
-1. Настроить init.conf (пример настроек в example.conf)
-2. Перенести в crontab "Data/crontab" или указать сервер "syncapi" в init.conf 
+## Самостоятельный парсинг источников
 
-# Доступ к доменам .onion
+1. Настроить init.conf (пример настроек в example.conf)
+2. Перенести в crontab "Data/crontab" или указать сервер "syncapi" в init.conf
+
+## Доступ к доменам .onion
+
 1. Запустить tor на порту 9050
 2. В init.conf указать .onion домен в host
 
-# Параметры init.conf
+## Параметры init.conf
+
 * apikey - включение авторизации по ключу
-* mergeduplicates - объединять дубликаты в выдаче 
-* openstats - открыть доступ к статистике 
+* mergeduplicates - объединять дубликаты в выдаче
+* openstats - открыть доступ к статистике
 * opensync - разрешить синхронизацию с базой через syncapi
-* syncapi - источник с открытым opensync для синхронизации базы 
-* timeSync - интервал синхронизации с базой syncapi 
-* maxreadfile - максимальное количество открытых файлов за один поисковый запрос 
+* syncapi - источник с открытым opensync для синхронизации базы
+* timeSync - интервал синхронизации с базой syncapi
+* maxreadfile - максимальное количество открытых файлов за один поисковый запрос
 * evercache - хранить открытые файлы в кеше (рекомендуется для общего доступа с высокой нагрузкой)
-* timeStatsUpdate - интервал обновления статистики в минутах 
+* timeStatsUpdate - интервал обновления статистики в минутах
 
+## Пример init.conf
 
-# Пример init.conf
-* Список всех параметров, а так же значения по умолчанию смотреть в example.conf 
+* Список всех параметров, а так же значения по умолчанию смотреть в example.conf
 * В init.conf нужно указывать только те параметры, которые хотите изменить
 
-```
+```json
 {
   "listenport": 9120, // изменили порт
   "NNMClub": {        // изменили домен на адрес из сети tor 
