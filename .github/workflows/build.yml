@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 env:
   DOTNET_VERSION: "9.0.x"
@@ -20,24 +21,37 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: linux-arm64
+            output_dir: linux-arm64
+            artifact_name: jacred-linux-arm64
+          - runtime: linux-x64
+            output_dir: linux-amd64
+            artifact_name: jacred-linux-amd64
+          - runtime: win-x64
+            output_dir: windows-x64
+            artifact_name: jacred-windows-x64
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v5.1.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
         run: dotnet restore --verbosity minimal
 
-      - name: Publish linux-arm64
+      - name: Publish ${{ matrix.artifact_name }}
         run: |
           dotnet publish JacRed.csproj \
             --configuration Release \
-            --runtime linux-arm64 \
-            --output ${{ runner.temp }}/linux-arm64 \
+            --runtime ${{ matrix.runtime }} \
+            --output ${{ runner.temp }}/${{ matrix.output_dir }} \
             --self-contained true \
             -p:PublishTrimmed=false \
             -p:PublishSingleFile=true \
@@ -49,54 +63,8 @@ jobs:
             -p:IlcFoldIdenticalMethodBodies=true \
             --verbosity minimal
 
-      - name: Publish linux-amd64
-        run: |
-          dotnet publish JacRed.csproj \
-            --configuration Release \
-            --runtime linux-x64 \
-            --output ${{ runner.temp }}/linux-amd64 \
-            --self-contained true \
-            -p:PublishTrimmed=false \
-            -p:PublishSingleFile=true \
-            -p:DebugType=None \
-            -p:EnableCompressionInSingleFile=true \
-            -p:OptimizationPreference=Speed \
-            -p:SuppressTrimAnalysisWarnings=true \
-            -p:IlcOptimizationPreference=Speed \
-            -p:IlcFoldIdenticalMethodBodies=true \
-            --verbosity minimal
-
-      - name: Publish windows-x64
-        run: |
-          dotnet publish JacRed.csproj \
-            --configuration Release \
-            --runtime win-x64 \
-            --output ${{ runner.temp }}/windows-x64 \
-            --self-contained true \
-            -p:PublishTrimmed=false \
-            -p:PublishSingleFile=true \
-            -p:DebugType=None \
-            -p:EnableCompressionInSingleFile=true \
-            -p:OptimizationPreference=Speed \
-            -p:SuppressTrimAnalysisWarnings=true \
-            -p:IlcOptimizationPreference=Speed \
-            -p:IlcFoldIdenticalMethodBodies=true \
-            --verbosity minimal
-
-      - name: Upload artifact linux-arm64
-        uses: actions/upload-artifact@v6
+      - name: Upload artifact ${{ matrix.artifact_name }}
+        uses: actions/upload-artifact@v6.0.0
         with:
-          name: jacred-linux-arm64
-          path: ${{ runner.temp }}/linux-arm64
-
-      - name: Upload artifact linux-amd64
-        uses: actions/upload-artifact@v6
-        with:
-          name: jacred-linux-amd64
-          path: ${{ runner.temp }}/linux-amd64
-
-      - name: Upload artifact windows-x64
-        uses: actions/upload-artifact@v6
-        with:
-          name: jacred-windows-x64
-          path: ${{ runner.temp }}/windows-x64
+          name: ${{ matrix.artifact_name }}
+          path: ${{ runner.temp }}/${{ matrix.output_dir }}
