@@ -1,6 +1,6 @@
-# Jacred-FDB
+# JacRed
 
-[![Build](https://github.com/pavelpikta/jacred-fdb/actions/workflows/build.yml/badge.svg)](https://github.com/pavelpikta/jacred-fdb/actions/workflows/build.yml)
+[![Build](https://github.com/jacred-fdb/jacred/actions/workflows/build.yml/badge.svg)](https://github.com/jacred-fdb/jacred/actions/workflows/build.yml)
 
 ## AI Документация
 
@@ -11,7 +11,7 @@
 Установка одной командой (запускать от любого пользователя, при необходимости запросится sudo):
 
 ```bash
-curl -s https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/jacred.sh | bash
+curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bash
 ```
 
 Скрипт устанавливает приложение в `/home/jacred`, .NET 9.0, systemd-сервис `jacred`, cron для сохранения БД и при первом запуске по желанию скачивает готовую базу.
@@ -22,17 +22,17 @@ curl -s https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/jacred.sh |
 |-------|----------|
 | `--no-download-db` | Не скачивать и не распаковывать базу (только при установке) |
 | `--update` | Обновить приложение с последнего релиза (сохранить БД, заменить файлы, перезапустить) |
-| `--remove` | Полностью удалить JacRed-FDB (сервис, cron, каталог приложения) |
+| `--remove` | Полностью удалить JacRed (сервис, cron, каталог приложения) |
 | `-h`, `--help` | Показать справку |
 
 **Примеры:**
 
 ```bash
 # Обычная установка
-curl -s https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/jacred.sh | bash
+curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bash
 
 # Установка без загрузки базы
-curl -s https://raw.githubusercontent.com/pavelpikta/jacred-fdb/main/jacred.sh | bash -s -- --no-download-db
+curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bash -s -- --no-download-db
 
 # Обновление уже установленного приложения
 sudo /home/jacred/jacred.sh --update

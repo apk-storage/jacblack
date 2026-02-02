@@ -12,7 +12,7 @@ ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
 
 # Download zip
 mkdir $DEST -p && cd $DEST
-wget https://github.com/pavelpikta/jacred-fdb/releases/latest/download/publish.zip
+wget https://github.com/jacred-fdb/jacred/releases/latest/download/publish.zip
 unzip -oq publish.zip
 rm -f publish.zip
 

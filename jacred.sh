@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# JacRed-FDB installer
+# JacRed installer
 # Run from any account; will prompt for sudo if not root.
 # Cron is added for the user who invoked sudo (or root if run as root).
 #
@@ -11,7 +11,7 @@ readonly INSTALL_ROOT="/home/jacred"
 readonly SYSTEMD_UNIT_PATH="/etc/systemd/system/jacred.service"
 readonly DOTNET_INSTALL_DIR="/usr/share/dotnet"
 readonly DOTNET_CHANNEL="9.0"
-readonly PUBLISH_URL="https://github.com/pavelpikta/jacred-fdb/releases/latest/download/publish.zip"
+readonly PUBLISH_URL="https://github.com/jacred-fdb/jacred/releases/latest/download/publish.zip"
 readonly DB_URL="http://redb.cfhttp.top/latest.zip"
 readonly CRON_SAVE_LINE='*/40 * * * * curl -s "http://127.0.0.1:9117/jsondb/save"'
 readonly SAVE_URL="http://127.0.0.1:9117/jsondb/save"
@@ -34,12 +34,12 @@ usage() {
   cat << EOF
 Usage: $SCRIPT_NAME [OPTIONS]
 
-Install, update, or remove JacRed-FDB. Run as any user; sudo will be used when needed.
+Install, update, or remove JacRed. Run as any user; sudo will be used when needed.
 
 Options:
   --no-download-db    Do not download or unpack the initial database (install only)
   --update            Update app from latest release (saves DB, replaces files, restarts)
-  --remove            Fully remove JacRed-FDB (service, cron, app directory)
+  --remove            Fully remove JacRed (service, cron, app directory)
   -h, --help          Show this help and exit
 
 Examples:
