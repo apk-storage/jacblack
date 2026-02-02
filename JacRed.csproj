@@ -15,17 +15,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="wwwroot\css\icheck-material.css" />
-    <None Include="wwwroot\css\microtip.min.css" />
-    <None Include="wwwroot\css\styles.css" />
-    <None Include="wwwroot\img\down.svg" />
-    <None Include="wwwroot\img\logo.svg" />
-    <None Include="wwwroot\img\magnet.svg" />
-    <None Include="wwwroot\img\search.svg" />
-    <None Include="wwwroot\img\up.svg" />
+    <Content Include="Data\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="wwwroot\css\*" />
+    <None Include="wwwroot\img\*.svg" />
     <None Include="wwwroot\index.html" />
-    <None Include="wwwroot\js\jquery.quicksearch.min.js" />
-    <None Include="wwwroot\js\script.js" />
+    <None Include="wwwroot\js\*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,8 +30,8 @@
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
-  
-   <!--<PropertyGroup>
+
+  <!--<PropertyGroup>
     <ServerGarbageCollection>false</ServerGarbageCollection>
   </PropertyGroup>-->
 
