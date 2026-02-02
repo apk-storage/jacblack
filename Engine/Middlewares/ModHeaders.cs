@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -10,6 +11,28 @@ namespace JacRed.Engine.Middlewares
         public ModHeaders(RequestDelegate next)
         {
             _next = next;
+        }
+
+        private static bool IsLocalOrPrivate(IPAddress remoteIp)
+        {
+            if (remoteIp == null) return false;
+            var bytes = remoteIp.GetAddressBytes();
+            if (remoteIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                if (bytes.Length >= 1 && bytes[0] == 127) return true;                    // 127.0.0.0/8
+                if (bytes.Length >= 1 && bytes[0] == 10) return true;                     // 10.0.0.0/8
+                if (bytes.Length >= 2 && bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true; // 172.16.0.0/12
+                if (bytes.Length >= 2 && bytes[0] == 192 && bytes[1] == 168) return true; // 192.168.0.0/16
+                return false;
+            }
+            if (remoteIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            {
+                if (IPAddress.IPv6Loopback.Equals(remoteIp)) return true;
+                if (bytes.Length >= 2 && bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80) return true; // fe80::/10 link-local
+                if (bytes.Length >= 1 && (bytes[0] & 0xfe) == 0xfc) return true;                      // fc00::/7 unique local
+                return false;
+            }
+            return false;
         }
 
         public Task Invoke(HttpContext httpContext)
@@ -26,17 +49,22 @@ namespace JacRed.Engine.Middlewares
             else
                 httpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
 
-            if (httpContext.Connection.RemoteIpAddress.ToString() != "127.0.0.1")
+            bool fromLocalNetwork = IsLocalOrPrivate(httpContext.Connection.RemoteIpAddress);
+
+            if (!fromLocalNetwork)
             {
+                // External: restrict /cron/, /jsondb, /dev/ to local only
                 if (httpContext.Request.Path.Value.StartsWith("/cron/") || httpContext.Request.Path.Value.StartsWith("/jsondb") || httpContext.Request.Path.Value.StartsWith("/dev/"))
                     return Task.CompletedTask;
 
+                // External: require API key when configured
                 if (!string.IsNullOrEmpty(AppInit.conf.apikey))
                 {
                     if (httpContext.Request.Path.Value == "/" || Regex.IsMatch(httpContext.Request.Path.Value, "^/(api/v1\\.0/conf|stats/|sync/)"))
                         return _next(httpContext);
 
-                    if (AppInit.conf.apikey != Regex.Match(httpContext.Request.QueryString.Value, "(\\?|&)apikey=([^&]+)").Groups[2].Value)
+                    var match = Regex.Match(httpContext.Request.QueryString.Value ?? "", "(\\?|&)apikey=([^&]+)");
+                    if (!match.Success || AppInit.conf.apikey != match.Groups[2].Value)
                         return Task.CompletedTask;
                 }
             }
