@@ -45,33 +45,30 @@ build_for() {
 echo "==> Restoring packages..."
 dotnet restore --verbosity minimal
 
-# Linux ARM64
-build_for "linux-arm64" "$BUILD_ROOT/linux-arm64" "linux-arm64"
+PLATFORMS=(
+  linux-arm64
+  linux-amd64
+  windows-x64
+  osx-arm64
+  osx-amd64
+)
 
-# Linux AMD64 (x64)
-build_for "linux-x64" "$BUILD_ROOT/linux-amd64" "linux-amd64"
-
-# Windows x64
-build_for "win-x64" "$BUILD_ROOT/windows-x64" "windows-x64"
-
-# MacOS ARM64
-build_for "osx-arm64" "$BUILD_ROOT/osx-arm64" "osx-arm64"
-
-# MacOS AMD64 (x64)
-build_for "osx-x64" "$BUILD_ROOT/osx-amd64" "osx-amd64"
+for platform in "${PLATFORMS[@]}"; do
+  build_for "$platform" "$BUILD_ROOT/$platform" "$platform"
+done
 
 # Replace dist with build result (avoids dist/ from project being copied into publish output)
 echo "==> Writing to $OUTPUT_BASE ..."
-OUTPUT_NEW="${OUTPUT_BASE}.new.$$"
+OUTPUT_NEW="$(mktemp -d "${OUTPUT_BASE}.new.XXXXXX")"
 mkdir -p "$OUTPUT_NEW"
-mv "$BUILD_ROOT"/linux-arm64 "$BUILD_ROOT"/linux-amd64 "$BUILD_ROOT"/windows-x64 "$BUILD_ROOT"/osx-arm64 "$BUILD_ROOT"/osx-amd64 "$OUTPUT_NEW/"
+for platform in "${PLATFORMS[@]}"; do
+  mv "$BUILD_ROOT/$platform" "$OUTPUT_NEW/"
+done
 rm -rf "$OUTPUT_BASE"
 mv "$OUTPUT_NEW" "$OUTPUT_BASE"
 
 echo ""
 echo "Build complete. Outputs:"
-echo "  $OUTPUT_BASE/linux-arm64/   (Linux ARM64)"
-echo "  $OUTPUT_BASE/linux-amd64/   (Linux AMD64)"
-echo "  $OUTPUT_BASE/windows-x64/   (Windows x64)"
-echo "  $OUTPUT_BASE/osx-arm64/   (MacOS ARM64)"
-echo "  $OUTPUT_BASE/osx-amd64/   (MacOS AMD64)"
+for platform in "${PLATFORMS[@]}"; do
+  echo "  $OUTPUT_BASE/$platform/   ($platform)"
+done
