@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   build:
+    name: ${{ matrix.artifact_name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -34,6 +35,12 @@ jobs:
           - runtime: win-x64
             output_dir: windows-x64
             artifact_name: jacred-windows-x64
+          - runtime: osx-arm64
+            output_dir: osx-arm64
+            artifact_name: jacred-osx-arm64
+          - runtime: osx-x64
+            output_dir: osx-amd64
+            artifact_name: jacred-osx-amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
