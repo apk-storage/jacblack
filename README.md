@@ -1,4 +1,8 @@
-# AI Документация
+# Jacred-FDB
+
+[![Build](https://github.com/pavelpikta/jacred-fdb/actions/workflows/build.yml/badge.svg)](https://github.com/pavelpikta/jacred-fdb/actions/workflows/build.yml)
+
+## AI Документация
 
 [![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pavelpikta/jacred-fdb)
 

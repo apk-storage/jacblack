@@ -8,6 +8,15 @@ on:
     branches:
       - main
 
+env:
+  DOTNET_VERSION: "9.0.x"
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,7 +27,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
         run: dotnet restore --verbosity minimal
@@ -75,19 +84,19 @@ jobs:
             --verbosity minimal
 
       - name: Upload artifact linux-arm64
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: jacred-linux-arm64
           path: ${{ runner.temp }}/linux-arm64
 
       - name: Upload artifact linux-amd64
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: jacred-linux-amd64
           path: ${{ runner.temp }}/linux-amd64
 
       - name: Upload artifact windows-x64
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: jacred-windows-x64
           path: ${{ runner.temp }}/windows-x64
