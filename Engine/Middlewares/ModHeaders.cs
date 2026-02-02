@@ -38,17 +38,17 @@ namespace JacRed.Engine.Middlewares
 
         public async Task Invoke(HttpContext httpContext)
         {
-            httpContext.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
-            httpContext.Response.Headers.Add("Access-Control-Allow-Private-Network", "true");
-            httpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Accept, Origin, Content-Type");
-            httpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+            httpContext.Response.Headers["Access-Control-Allow-Credentials"] = "true";
+            httpContext.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+            httpContext.Response.Headers["Access-Control-Allow-Headers"] = "Accept, Origin, Content-Type";
+            httpContext.Response.Headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS";
 
             if (httpContext.Request.Headers.TryGetValue("origin", out var origin))
-                httpContext.Response.Headers.Add("Access-Control-Allow-Origin", origin.ToString());
+                httpContext.Response.Headers["Access-Control-Allow-Origin"] = origin.ToString();
             else if (httpContext.Request.Headers.TryGetValue("referer", out var referer))
-                httpContext.Response.Headers.Add("Access-Control-Allow-Origin", referer.ToString());
+                httpContext.Response.Headers["Access-Control-Allow-Origin"] = referer.ToString();
             else
-                httpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                httpContext.Response.Headers["Access-Control-Allow-Origin"] = "*";
 
             bool fromLocalNetwork = IsLocalOrPrivate(httpContext.Connection.RemoteIpAddress);
 
