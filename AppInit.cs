@@ -71,6 +71,7 @@ namespace JacRed
                 case "selezen": return conf.Selezen.log;
                 case "toloka": return conf.Toloka.log;
                 case "torrentby": return conf.TorrentBy.log;
+                case "lostfilm": return conf.Lostfilm.log;
                 default: return false;
             }
         }
