@@ -1,9 +1,11 @@
 using JacRed.Models;
 using JacRed.Models.AppConf;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,6 +13,56 @@ namespace JacRed
 {
     public class AppInit
     {
+        private static readonly HashSet<string> SensitiveKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "apikey", "cookie", "u", "p", "username", "password"
+        };
+
+        /// <summary>
+        /// Returns current configuration as JSON with sensitive values (apikey, cookie, login, proxy auth) redacted.
+        /// </summary>
+        public static string GetSafeConfigJson()
+        {
+            var c = conf;
+            if (c == null) return "{}";
+            var jo = JObject.FromObject(c);
+            RedactSensitive(jo);
+            return jo.ToString(Formatting.Indented);
+        }
+
+        private static void RedactSensitive(JToken token)
+        {
+            if (token is JObject obj)
+            {
+                foreach (var prop in obj.Properties().ToList())
+                {
+                    if (SensitiveKeys.Contains(prop.Name) && prop.Value != null && prop.Value.Type != JTokenType.Null && prop.Value.Type != JTokenType.Undefined)
+                    {
+                        var val = prop.Value.ToString();
+                        if (!string.IsNullOrEmpty(val))
+                            prop.Value = "***";
+                    }
+                    else
+                        RedactSensitive(prop.Value);
+                }
+            }
+            else if (token is JArray arr)
+            {
+                foreach (var item in arr)
+                    RedactSensitive(item);
+            }
+        }
+
+        private static void LogSafeConfig(string label)
+        {
+            try
+            {
+                Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {label} applied (sensitive data redacted):");
+                Console.WriteLine(GetSafeConfigJson());
+            }
+            catch { }
+        }
+
         #region AppInit
         static AppInit()
         {
@@ -23,6 +75,7 @@ namespace JacRed
                         if (!File.Exists("init.conf"))
                         {
                             cacheconf.Item1 = new AppInit();
+                            LogSafeConfig("config (default)");
                             return;
                         }
                     }
@@ -31,8 +84,10 @@ namespace JacRed
 
                     if (cacheconf.Item2 != lastWriteTime)
                     {
+                        bool isReload = cacheconf.Item2 != default;
                         cacheconf.Item1 = JsonConvert.DeserializeObject<AppInit>(File.ReadAllText("init.conf"));
                         cacheconf.Item2 = lastWriteTime;
+                        LogSafeConfig(isReload ? "config (reload)" : "config (start)");
                     }
                 }
                 catch { }
