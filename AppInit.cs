@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using YamlDotNet.Serialization;
 
 namespace JacRed
 {
@@ -53,14 +54,45 @@ namespace JacRed
             }
         }
 
-        private static void LogSafeConfig(string label)
+        private static void LogSafeConfig(string label, string source = null)
         {
             try
             {
-                Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {label} applied (sensitive data redacted):");
+                var src = string.IsNullOrEmpty(source) ? "" : $" from {source}";
+                Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {label}{src} applied (sensitive data redacted):");
                 Console.WriteLine(GetSafeConfigJson());
             }
             catch { }
+        }
+
+        private const string ConfigFileYaml = "init.yaml";
+        private const string ConfigFileJson = "init.conf";
+
+        /// <summary>
+        /// Config file priority: init.yaml wins over init.conf. If both exist, init.yaml is used.
+        /// </summary>
+        private static (string path, DateTime lastWrite) GetConfigSource()
+        {
+            var hasYaml = File.Exists(ConfigFileYaml);
+            var hasJson = File.Exists(ConfigFileJson);
+            if (hasYaml)
+                return (ConfigFileYaml, File.GetLastWriteTimeUtc(ConfigFileYaml));
+            if (hasJson)
+                return (ConfigFileJson, File.GetLastWriteTimeUtc(ConfigFileJson));
+            return (null, default);
+        }
+
+        private static AppInit LoadConfigFromFile(string path)
+        {
+            var text = File.ReadAllText(path);
+            if (path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
+            {
+                var deserializer = new DeserializerBuilder().Build();
+                var yamlObj = deserializer.Deserialize<object>(new StringReader(text));
+                var json = JsonConvert.SerializeObject(yamlObj);
+                return JsonConvert.DeserializeObject<AppInit>(json);
+            }
+            return JsonConvert.DeserializeObject<AppInit>(text);
         }
 
         #region AppInit
@@ -70,24 +102,35 @@ namespace JacRed
             {
                 try
                 {
+                    var (path, lastWrite) = GetConfigSource();
+
                     if (cacheconf.Item1 == null)
                     {
-                        if (!File.Exists("init.conf"))
+                        if (path == null)
                         {
                             cacheconf.Item1 = new AppInit();
+                            cacheconf.Item2 = null;
+                            cacheconf.Item3 = default;
                             LogSafeConfig("config (default)");
                             return;
                         }
+                        cacheconf.Item1 = LoadConfigFromFile(path);
+                        cacheconf.Item2 = path;
+                        cacheconf.Item3 = lastWrite;
+                        LogSafeConfig("config (start)", path);
+                        return;
                     }
 
-                    var lastWriteTime = File.GetLastWriteTime("init.conf");
+                    if (path == null)
+                        return;
 
-                    if (cacheconf.Item2 != lastWriteTime)
+                    if (cacheconf.Item2 != path || cacheconf.Item3 != lastWrite)
                     {
-                        bool isReload = cacheconf.Item2 != default;
-                        cacheconf.Item1 = JsonConvert.DeserializeObject<AppInit>(File.ReadAllText("init.conf"));
-                        cacheconf.Item2 = lastWriteTime;
-                        LogSafeConfig(isReload ? "config (reload)" : "config (start)");
+                        bool isReload = cacheconf.Item2 != null;
+                        cacheconf.Item1 = LoadConfigFromFile(path);
+                        cacheconf.Item2 = path;
+                        cacheconf.Item3 = lastWrite;
+                        LogSafeConfig(isReload ? "config (reload)" : "config (start)", path);
                     }
                 }
                 catch { }
@@ -105,7 +148,7 @@ namespace JacRed
             });
         }
 
-        static (AppInit, DateTime) cacheconf = default;
+        static (AppInit, string path, DateTime lastWrite) cacheconf = default;
 
         public static AppInit conf => cacheconf.Item1;
 

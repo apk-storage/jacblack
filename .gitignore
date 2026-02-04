@@ -397,3 +397,6 @@ FodyWeavers.xsd
 
 # Publish directory
 publish/*
+
+# Temporary files
+temp/*
