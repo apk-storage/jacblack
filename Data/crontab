@@ -34,6 +34,7 @@
 *    */4 *   *   *    curl -s "http://127.0.0.1:9117/cron/toloka/parseMagnet"
 
 */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/lostfilm/parse"
+# curl "http://127.0.0.1:9117/cron/lostfilm/ParsePages?pageFrom=1&pageTo=10"
 
 # Bitru: старый парсинг по HTML (browse.php)
 # */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/bitru/parse"
