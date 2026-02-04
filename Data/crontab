@@ -1,11 +1,5 @@
 */5  *   *   *   *    curl -s "http://127.0.0.1:9117/jsondb/save"
 
-*/2  *   *   *   *    curl -s "http://127.0.0.1:9117/cron/torrents/UpdateSizeInfo"
-1    1   *   *   *    curl -s "http://127.0.0.1:9117/cron/torrents/UpdateSizeInfo?forced=true"
-*/2  *   *   *   *    curl -s "http://127.0.0.1:9117/cron/torrents/UpdateDetails"
-1    1   *   *   *    curl -s "http://127.0.0.1:9117/cron/torrents/UpdateDetails?forced=true"
-*/5  *   *   *   *    curl -s "http://127.0.0.1:9117/cron/torrents/UpdateTorrMediaCache"
-
 */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/rutor/parse"
 *    */4 *   *   *    curl -s "http://127.0.0.1:9117/cron/rutor/UpdateTasksParse"
 */5  *   *   *   *    curl -s "http://127.0.0.1:9117/cron/rutor/ParseAllTask"
@@ -28,9 +22,9 @@
 *    */4 *   *   *    curl -s "http://127.0.0.1:9117/cron/selezen/UpdateTasksParse"
 */5  *   *   *   *    curl -s "http://127.0.0.1:9117/cron/selezen/ParseAllTask"
 
-*/15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/megapeer/parse"
+*/30 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/megapeer/parse"
 *    */4 *   *   *    curl -s "http://127.0.0.1:9117/cron/megapeer/UpdateTasksParse"
-*/5  *   *   *   *    curl -s "http://127.0.0.1:9117/cron/megapeer/ParseAllTask"
+*/15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/megapeer/ParseAllTask"
 
 */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/torrentby/parse"
 *    */4 *   *   *    curl -s "http://127.0.0.1:9117/cron/torrentby/UpdateTasksParse"
@@ -38,6 +32,8 @@
 
 */40 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/toloka/parse"
 *    */4 *   *   *    curl -s "http://127.0.0.1:9117/cron/toloka/parseMagnet"
+
+*/15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/lostfilm/parse"
 
 # */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/bitru/parse"
 # *    */4 *   *   *    curl -s "http://127.0.0.1:9117/cron/bitru/UpdateTasksParse"
@@ -59,5 +55,3 @@
 # */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/hamsterstudio/parse"
 
 # */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/hdrezka/parse"
-
-# */15 *   *   *   *    curl -s "http://127.0.0.1:9117/cron/lostfilm/parse"
