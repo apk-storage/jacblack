@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -50,12 +51,20 @@ namespace JacRed.Controllers
             {
                 using (var fdb = FileDB.OpenWrite(item.Key))
                 {
+                    var keysToRemove = new List<string>();
                     foreach (var torrent in fdb.Database)
                     {
+                        if (torrent.Value == null)
+                        {
+                            keysToRemove.Add(torrent.Key);
+                            continue;
+                        }
                         torrent.Value.size = getSizeInfo(torrent.Value.sizeName);
                         torrent.Value.updateTime = DateTime.UtcNow;
                         FileDB.masterDb[item.Key] = new Models.TorrentInfo() { updateTime = torrent.Value.updateTime, fileTime = torrent.Value.updateTime.ToFileTimeUtc() };
                     }
+                    foreach (var k in keysToRemove)
+                        fdb.Database.Remove(k);
 
                     fdb.savechanges = true;
                 }
@@ -74,10 +83,18 @@ namespace JacRed.Controllers
             {
                 using (var fdb = FileDB.OpenWrite(item.Key))
                 {
+                    var keysToRemove = new List<string>();
                     foreach (var torrent in fdb.Database)
                     {
+                        if (torrent.Value == null)
+                        {
+                            keysToRemove.Add(torrent.Key);
+                            continue;
+                        }
                         torrent.Value.checkTime = DateTime.Today.AddDays(-1);
                     }
+                    foreach (var k in keysToRemove)
+                        fdb.Database.Remove(k);
 
                     fdb.savechanges = true;
                 }
@@ -96,14 +113,22 @@ namespace JacRed.Controllers
             {
                 using (var fdb = FileDB.OpenWrite(item.Key))
                 {
+                    var keysToRemove = new List<string>();
                     foreach (var torrent in fdb.Database)
                     {
+                        if (torrent.Value == null)
+                        {
+                            keysToRemove.Add(torrent.Key);
+                            continue;
+                        }
                         FileDB.updateFullDetails(torrent.Value);
                         torrent.Value.languages = null;
 
                         torrent.Value.updateTime = DateTime.UtcNow;
                         FileDB.masterDb[item.Key] = new Models.TorrentInfo() { updateTime = torrent.Value.updateTime, fileTime = torrent.Value.updateTime.ToFileTimeUtc() };
                     }
+                    foreach (var k in keysToRemove)
+                        fdb.Database.Remove(k);
 
                     fdb.savechanges = true;
                 }
@@ -122,11 +147,24 @@ namespace JacRed.Controllers
             {
                 using (var fdb = FileDB.OpenWrite(item.Key))
                 {
+                    var keysToRemove = new List<string>();
                     foreach (var torrent in fdb.Database)
                     {
+                        if (torrent.Value == null)
+                        {
+                            keysToRemove.Add(torrent.Key);
+                            continue;
+                        }
+                        // Repair missing name/originalname from title so structure is valid
+                        if (string.IsNullOrWhiteSpace(torrent.Value.name))
+                            torrent.Value.name = torrent.Value.title ?? "";
+                        if (string.IsNullOrWhiteSpace(torrent.Value.originalname))
+                            torrent.Value.originalname = torrent.Value.title ?? torrent.Value.name ?? "";
                         torrent.Value._sn = StringConvert.SearchName(torrent.Value.name);
                         torrent.Value._so = StringConvert.SearchName(torrent.Value.originalname);
                     }
+                    foreach (var k in keysToRemove)
+                        fdb.Database.Remove(k);
 
                     fdb.savechanges = true;
                 }

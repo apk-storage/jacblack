@@ -112,10 +112,22 @@ namespace JacRed.Engine
                     t._sn = StringConvert.SearchName(t.name);
                     upt();
                 }
+                else if (string.IsNullOrWhiteSpace(t.name) && !string.IsNullOrWhiteSpace(torrent.title))
+                {
+                    t.name = torrent.title;
+                    t._sn = StringConvert.SearchName(t.name);
+                    upt();
+                }
 
                 if (!string.IsNullOrWhiteSpace(torrent.originalname) && torrent.originalname != t.originalname)
                 {
                     t.originalname = torrent.originalname;
+                    t._so = StringConvert.SearchName(t.originalname);
+                    upt();
+                }
+                else if (string.IsNullOrWhiteSpace(t.originalname) && !string.IsNullOrWhiteSpace(torrent.title))
+                {
+                    t.originalname = torrent.title;
                     t._so = StringConvert.SearchName(t.originalname);
                     upt();
                 }
@@ -146,6 +158,8 @@ namespace JacRed.Engine
                 if (string.IsNullOrWhiteSpace(torrent.magnet) || torrent.types == null || torrent.types.Length == 0)
                     return;
 
+                var name = torrent.name ?? torrent.title ?? "";
+                var originalname = torrent.originalname ?? torrent.title ?? "";
                 t = new TorrentDetails()
                 {
                     url = torrent.url,
@@ -154,8 +168,8 @@ namespace JacRed.Engine
                     createTime = torrent.createTime,
                     updateTime = torrent.updateTime,
                     title = torrent.title,
-                    name = torrent.name,
-                    originalname = torrent.originalname,
+                    name = name,
+                    originalname = originalname,
                     pir = torrent.pir,
                     sid = torrent.sid,
                     relased = torrent.relased,
@@ -163,6 +177,8 @@ namespace JacRed.Engine
                     magnet = torrent.magnet,
                     ffprobe = torrent.ffprobe
                 };
+                t._sn = StringConvert.SearchName(t.name);
+                t._so = StringConvert.SearchName(t.originalname);
 
                 savechanges = true;
                 updateFullDetails(t);
