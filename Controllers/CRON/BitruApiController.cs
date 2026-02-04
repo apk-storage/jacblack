@@ -232,12 +232,14 @@ namespace JacRed.Controllers.CRON
 
             string name = info.Name ?? "";
             string originalname = template.OrigName;
-            int relased = info.Year;
+            string yearDisplay = BitruYearToDisplayString(info.Year);
+            int relased = BitruYearToReleased(info.Year);
 
             string titlePart = name;
             if (!string.IsNullOrWhiteSpace(originalname))
                 titlePart += " / " + originalname;
-            titlePart += " (" + info.Year + ")";
+            if (!string.IsNullOrEmpty(yearDisplay))
+                titlePart += " (" + yearDisplay + ")";
             if (template.Video?.Quality != null)
                 titlePart += " " + template.Video.Quality;
             if (!string.IsNullOrWhiteSpace(template.Other))
@@ -262,6 +264,28 @@ namespace JacRed.Controllers.CRON
                 relased = relased,
                 _sn = torrent.File
             };
+        }
+
+        /// <summary>Год из API может быть number (2020) или string ("2011-2015"). Для отображения в title — как есть.</summary>
+        static string BitruYearToDisplayString(object year)
+        {
+            if (year == null) return "";
+            if (year is long l) return l.ToString();
+            if (year is int i) return i.ToString();
+            return year.ToString()?.Trim() ?? "";
+        }
+
+        /// <summary>Год для relased (int): из диапазона "2011-2015" берётся первый год, иначе парсится число.</summary>
+        static int BitruYearToReleased(object year)
+        {
+            if (year == null) return 0;
+            if (year is long l) return (int)l;
+            if (year is int i) return i;
+            var s = year.ToString()?.Trim();
+            if (string.IsNullOrEmpty(s)) return 0;
+            var dash = s.IndexOf('-');
+            var firstPart = dash > 0 ? s.Substring(0, dash).Trim() : s;
+            return int.TryParse(firstPart, NumberStyles.None, CultureInfo.InvariantCulture, out int y) ? y : 0;
         }
 
         static string FormatSize(long bytes)

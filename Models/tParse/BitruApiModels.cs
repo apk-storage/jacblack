@@ -73,8 +73,9 @@ namespace JacRed.Models.tParse
         [JsonProperty("name")]
         public string Name { get; set; }
 
+        /// <summary>Год выхода: число (2020) или строка-диапазон ("2011-2015"). В API приходит как int или string.</summary>
         [JsonProperty("year")]
-        public int Year { get; set; }
+        public object Year { get; set; }
 
         [JsonProperty("country")]
         public List<string> Country { get; set; }
