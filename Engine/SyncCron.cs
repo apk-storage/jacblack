@@ -49,7 +49,7 @@ namespace JacRed.Engine
                         var cycleStart = DateTime.Now;
                         var cycleTotal = 0;
 
-                        Console.WriteLine($"\n\nsync: start / {DateTime.Now.ToString(TimeFormat)}");
+                        Console.WriteLine($"sync: start / {DateTime.Now.ToString(TimeFormat)}");
 
                         if (lastsync == -1 && File.Exists(LastSyncPath))
                             lastsync = long.Parse(File.ReadAllText(LastSyncPath));
@@ -126,7 +126,6 @@ namespace JacRed.Engine
                                         File.WriteAllText(LastSyncPath, lastsync.ToString());
                                         Console.WriteLine($"sync: saved state (lastsync.txt)");
                                     }
-                                    Console.WriteLine();
                                     goto next;
                                 }
 
@@ -221,7 +220,7 @@ namespace JacRed.Engine
                             var cycleTotal = 0;
                             int batchIndex = 0;
 
-                            Console.WriteLine($"\n\nsync_spidr: start / {DateTime.Now.ToString(TimeFormat)}");
+                            Console.WriteLine($"sync_spidr: start / {DateTime.Now.ToString(TimeFormat)}");
 
                         next: batchIndex++;
                             var batchStart = DateTime.Now;
@@ -248,7 +247,6 @@ namespace JacRed.Engine
 
                                 if (root.nextread)
                                 {
-                                    Console.WriteLine();
                                     goto next;
                                 }
                             }
