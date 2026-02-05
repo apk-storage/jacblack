@@ -198,9 +198,9 @@ Anifilm, AniLibria, HDRezka.
 ## API
 
 - **`GET /`** — веб-интерфейс (если `web: true`).
-- **`GET /health`** — проверка работы (возвращает `{"status":"OK"}`).
-- **`GET /version`** — версия приложения.
-- **`GET /lastupdatedb`** — дата/время последнего обновления БД.
+- **`GET /health`** — проверка работы. Ответ JSON: `{"status":"OK"}`.
+- **`GET /version`** — версия приложения. Ответ JSON: `{"version":"1.0.0"}`.
+- **`GET /lastupdatedb`** — дата/время последнего обновления БД (UTC). Ответ JSON: `{"lastupdatedb":"dd.MM.yyyy HH:mm"}`.
 - **`GET /api/v1.0/conf`** — проверка apikey (`?apikey=...`).
 - **`GET /api/v2.0/indexers/{status}/results`** — поиск в формате Jackett (query, title, category и т.д.).
 - **`GET /api/v1.0/torrents`** — поиск торрентов (собственный API).
