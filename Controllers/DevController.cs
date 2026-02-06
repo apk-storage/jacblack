@@ -157,9 +157,10 @@ namespace JacRed.Controllers
                             keysToRemove.Add(torrent.Key);
                             continue;
                         }
-                        // Repair missing name/originalname from title so structure is valid
+
                         if (string.IsNullOrWhiteSpace(torrent.Value.name))
                             torrent.Value.name = torrent.Value.title ?? "";
+
                         if (string.IsNullOrWhiteSpace(torrent.Value.originalname))
                             torrent.Value.originalname = torrent.Value.title ?? torrent.Value.name ?? "";
                         torrent.Value._sn = StringConvert.SearchName(torrent.Value.name);
@@ -295,6 +296,118 @@ namespace JacRed.Controllers
 
             FileDB.SaveChangesToFile();
             return Json(new { ok = true, removed = totalRemoved, affectedFiles });
+        }
+
+        /// <summary>
+        /// Find duplicate keys X:X (name == originalname after normalization), for example ponies:ponies. Only localhost.
+        /// ?tracker=lostfilm — only buckets with torrents of this tracker.
+        /// </summary>
+        public JsonResult FindDuplicateKeys(string tracker = null)
+        {
+            if (HttpContext.Connection.RemoteIpAddress?.ToString() != "127.0.0.1")
+                return Json(new { badip = true });
+
+            var duplicateKeys = new List<object>();
+            foreach (var item in FileDB.masterDb.ToArray())
+            {
+                string key = item.Key;
+                int colon = key.IndexOf(':');
+                if (colon <= 0 || colon >= key.Length - 1)
+                    continue;
+                string part1 = key.Substring(0, colon);
+                string part2 = key.Substring(colon + 1);
+                if (!string.Equals(part1, part2, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                int count = 0;
+                try
+                {
+                    var db = FileDB.OpenRead(key, cache: false);
+                    count = db.Count;
+                    if (!string.IsNullOrWhiteSpace(tracker))
+                    {
+                        bool hasTracker = db.Values.Any(t => t != null && string.Equals(t.trackerName, tracker.Trim(), StringComparison.OrdinalIgnoreCase));
+                        if (!hasTracker)
+                            continue;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+
+                duplicateKeys.Add(new { key, count });
+            }
+
+            return Json(new { ok = true, count = duplicateKeys.Count, keys = duplicateKeys });
+        }
+
+        /// <summary>
+        /// Remove bucket by key (e.g. old ponies:ponies). Only localhost.
+        /// ?key=ponies:ponies — simply remove all records and key.
+        /// ?key=ponies:ponies&amp;migrateName=Пони&amp;migrateOriginalname=Ponies — move all torrents to bucket ponies:ponies and remove old key.
+        /// </summary>
+        public JsonResult RemoveBucket(string key, string migrateName = null, string migrateOriginalname = null)
+        {
+            if (HttpContext.Connection.RemoteIpAddress?.ToString() != "127.0.0.1")
+                return Json(new { badip = true });
+
+            if (string.IsNullOrWhiteSpace(key) || key.IndexOf(':') < 0)
+                return Json(new { error = "key required, format: name:originalname (e.g. ponies:ponies)" });
+
+            key = key.Trim();
+            if (!FileDB.masterDb.ContainsKey(key))
+                return Json(new { error = "key not found", key });
+
+            bool doMigrate = !string.IsNullOrWhiteSpace(migrateName) && !string.IsNullOrWhiteSpace(migrateOriginalname);
+            string newKey = doMigrate ? FileDB.KeyForTorrent(migrateName, migrateOriginalname) : null;
+
+            int migrated = 0, removed = 0;
+            using (var fdb = FileDB.OpenWrite(key))
+            {
+                var toMigrate = new List<(string url, TorrentDetails t)>();
+                var toRemove = new List<string>();
+                foreach (var kv in fdb.Database.ToList())
+                {
+                    if (kv.Value == null)
+                    {
+                        toRemove.Add(kv.Key);
+                        continue;
+                    }
+                    if (doMigrate)
+                    {
+                        kv.Value.name = migrateName;
+                        kv.Value.originalname = migrateOriginalname;
+                        kv.Value._sn = StringConvert.SearchName(migrateName);
+                        kv.Value._so = StringConvert.SearchName(migrateOriginalname);
+                        toMigrate.Add((kv.Key, kv.Value));
+                    }
+                    else
+                        toRemove.Add(kv.Key);
+                }
+                removed = toRemove.Count;
+                foreach (var url in toRemove)
+                    fdb.Database.Remove(url);
+                foreach (var (url, t) in toMigrate)
+                {
+                    fdb.Database.Remove(url);
+                    FileDB.MigrateTorrentToNewKey(t, newKey);
+                    migrated++;
+                }
+                if (fdb.Database.Count == 0)
+                    FileDB.RemoveKeyFromMasterDb(key);
+                fdb.savechanges = true;
+            }
+
+            FileDB.SaveChangesToFile();
+            return Json(new
+            {
+                ok = true,
+                key,
+                migrated,
+                removed,
+                newKey = doMigrate ? newKey : (string)null
+            });
         }
     }
 }
