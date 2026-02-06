@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Статистика трекеров - мониторинг и аналитика" />
   <title>Статистика трекеров</title>
+  <link rel="icon" type="image/png" href="./img/jacred.png" />
   <link rel="icon" type="image/x-icon" href="./img/favicon.ico" />
-
-  <!-- Preconnect for fonts -->
+  <link rel="apple-touch-icon" href="./img/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
@@ -43,7 +43,6 @@
   </script>
 
   <style>
-    /* Custom scrollbar */
     ::-webkit-scrollbar {
       width: 10px;
       height: 10px;
@@ -62,7 +61,6 @@
       background: #6b7280;
     }
 
-    /* Light mode scrollbar */
     ::-webkit-scrollbar-track {
       background: #f3f4f6;
     }
@@ -76,7 +74,6 @@
       background: #9ca3af;
     }
 
-    /* Skeleton loading animation */
     @keyframes skeleton-loading {
       0% {
         background-position: -200px 0;
@@ -97,36 +94,30 @@
       background: linear-gradient(90deg, #374151 0px, #4b5563 40px, #374151 80px);
     }
 
-    /* Smooth transitions */
     * {
       transition-property: background-color, border-color, color, fill, stroke;
       transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
       transition-duration: 150ms;
     }
 
-    /* Focus visible styles */
     *:focus-visible {
       outline: 2px solid #3b82f6;
       outline-offset: 2px;
     }
 
-    /* Number animation */
     .stat-number {
       font-variant-numeric: tabular-nums;
     }
 
-    /* Grid auto-fit optimization */
     .stats-grid {
       display: grid;
       gap: 1rem;
     }
 
-    /* Fade in animation for cards */
     .stat-card {
       animation: fade-in 0.3s ease-in-out;
     }
 
-    /* Loading spinner */
     @keyframes spin {
       to {
         transform: rotate(360deg);
@@ -137,24 +128,30 @@
       animation: spin 1s linear infinite;
     }
 
-    /* Light theme backgrounds */
+    :root.dark {
+      --bg-dark: #0a0a0f;
+    }
+
+    :root {
+      --bg-light: #f9fafb;
+    }
+
     body {
-      background-color: #0a0a0f;
+      background-color: var(--bg-dark);
     }
 
     :root:not(.dark) body {
-      background-color: #f9fafb;
+      background-color: var(--bg-light);
     }
 
-    /* Search and sort: same look */
     .toolbar-field {
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     }
+
     .dark .toolbar-field {
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
 
-    /* Mobile: tap targets, table scroll */
     @media (max-width: 767px) {
       #app {
         padding-left: 0.75rem;
@@ -162,23 +159,31 @@
         padding-top: 0.75rem;
         padding-bottom: 1rem;
       }
-      input, select, button, a[href="/"] {
+
+      input,
+      select,
+      button,
+      a[href="/"] {
         min-height: 44px;
       }
+
       #statsTable {
-        -webkit-overflow-scrolling: touch;
         margin-left: -0.75rem;
         margin-right: -0.75rem;
         border-radius: 0;
         border-left: none;
         border-right: none;
       }
+
       #statsTable table {
         min-width: 640px;
       }
     }
+
     @media (min-width: 768px) {
-      #statsTable { border-radius: 0.75rem; }
+      #statsTable {
+        border-radius: 0.75rem;
+      }
     }
   </style>
 </head>
@@ -186,7 +191,6 @@
 <body class="text-gray-100 dark:text-gray-100 font-sans min-h-screen antialiased">
   <div id="app" class="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-[1600px]">
 
-    <!-- Header -->
     <header class="mb-4 sm:mb-8 animate-slide-up">
       <div class="flex items-center justify-between gap-3">
         <div class="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -198,10 +202,12 @@
             </svg>
           </div>
           <div class="min-w-0">
-            <h1 class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent truncate">
+            <h1
+              class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent truncate">
               Статистика трекеров
             </h1>
-            <p class="text-xs sm:text-sm text-gray-500 mt-0.5 hidden sm:block">Мониторинг и аналитика в реальном времени</p>
+            <p class="text-xs sm:text-sm text-gray-500 mt-0.5 hidden sm:block">Мониторинг и аналитика в реальном времени
+            </p>
           </div>
         </div>
 
@@ -223,23 +229,25 @@
       </div>
     </header>
 
-    <!-- Toolbar: мобильная — 3 ряда (поиск → сортировка+счётчик → переключатели); ПК — 2 ряда -->
-    <div class="mb-4 sm:mb-6 animate-slide-up rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/80 shadow-sm overflow-hidden" style="animation-delay: 0.1s;">
-      <!-- Ряд 1 (мобильная): только поиск. ПК: поиск + разделитель + сортировка + разделитель + счётчик -->
+    <div
+      class="mb-4 sm:mb-6 animate-slide-up rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/80 shadow-sm overflow-hidden"
+      style="animation-delay: 0.1s;">
       <div class="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-800">
         <div class="flex flex-col sm:flex-row sm:flex-wrap items-stretch gap-2 sm:gap-3">
-          <!-- Поиск: на мобильной на всю ширину, под заголовком -->
           <div class="relative flex-1 min-w-0 flex w-full sm:flex-1" style="min-width: 0;">
             <label for="searchTracker" class="sr-only">Поиск трекера</label>
             <input type="text" id="searchTracker"
               class="toolbar-field w-full h-11 pl-10 pr-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 dark:focus:border-blue-500 text-sm transition-shadow"
               placeholder="Поиск по имени трекера..." aria-label="Поиск трекера по имени" autocomplete="off" />
-            <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <svg
+              class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500 pointer-events-none"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-          <div class="h-6 w-px flex-shrink-0 self-center bg-gray-300 dark:bg-gray-600 rounded-full hidden sm:block" aria-hidden="true"></div>
-          <!-- Ряд 2 (мобильная): сортировка + разделитель + число трекеров. ПК: в одну линию с поиском -->
+          <div class="h-6 w-px flex-shrink-0 self-center bg-gray-300 dark:bg-gray-600 rounded-full hidden sm:block"
+            aria-hidden="true"></div>
           <div class="flex flex-row items-stretch gap-2 sm:gap-3 flex-1 min-w-0 sm:flex-initial">
             <div class="relative flex-1 sm:flex-initial flex-shrink-0 min-w-0">
               <label for="sortSelect" class="sr-only">Сортировка</label>
@@ -254,26 +262,33 @@
                 <option value="wait">Ожидает ↓</option>
                 <option value="skip">Пропущено ↓</option>
               </select>
-              <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500 pointer-events-none"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
-            <div class="h-6 w-px flex-shrink-0 self-center bg-gray-300 dark:bg-gray-600 rounded-full" aria-hidden="true"></div>
-            <div class="flex items-center h-11 px-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/50 shrink-0">
-              <span class="stat-number text-sm font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap" id="cardsCounter" aria-live="polite">—</span>
+            <div class="h-6 w-px flex-shrink-0 self-center bg-gray-300 dark:bg-gray-600 rounded-full"
+              aria-hidden="true"></div>
+            <div
+              class="flex items-center h-11 px-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/50 shrink-0">
+              <span class="stat-number text-sm font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap"
+                id="cardsCounter" aria-live="polite">—</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Ряд 3: переключатели (Главная, Обновить, Краткие числа и т.д.) -->
       <div class="flex flex-wrap items-center gap-2 sm:gap-3 p-3 sm:p-4">
         <div class="flex flex-nowrap sm:flex-wrap items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-initial">
           <a href="/"
             class="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 min-w-[44px] px-2.5 sm:px-3 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium no-underline transition-colors group shrink-0"
             aria-label="На главную страницу">
-            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            <svg
+              class="w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 shrink-0"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
             <span>Главная</span>
           </a>
@@ -281,7 +296,8 @@
             class="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-9 min-w-[44px] px-2.5 sm:px-3 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium shadow shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors group shrink-0"
             type="button" aria-label="Обновить статистику">
             <svg class="w-4 h-4 group-disabled:spinner shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             <span id="refreshBtnText">Обновить</span>
           </button>
@@ -299,9 +315,11 @@
             type="button" aria-label="Переключить вид отображения"><span>Карточки</span></button>
         </div>
         <div class="w-full sm:w-auto sm:flex-1 sm:min-w-0 flex justify-end order-last sm:order-none">
-          <span class="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-medium" id="lastUpdate" aria-live="polite">
+          <span class="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-medium"
+            id="lastUpdate" aria-live="polite">
             <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span>—</span>
           </span>
@@ -309,7 +327,6 @@
       </div>
     </div>
 
-    <!-- Loading State -->
     <div id="loading" class="hidden text-center py-16 animate-fade-in" role="status" aria-live="polite">
       <div class="inline-flex flex-col items-center gap-4">
         <div class="relative">
@@ -322,7 +339,6 @@
       </div>
     </div>
 
-    <!-- Error State -->
     <div id="error"
       class="hidden bg-red-950/50 border-2 border-red-800 rounded-xl p-6 text-center animate-fade-in backdrop-blur-sm"
       role="alert" aria-live="assertive">
@@ -337,17 +353,13 @@
       </button>
     </div>
 
-    <!-- Aggregate Summary Card -->
     <div id="aggregateHost" class="mb-6 animate-slide-up" style="animation-delay: 0.2s;"
       aria-label="Сводная статистика по всем трекерам"></div>
 
-    <!-- View Container: cards on mobile, table on desktop/tablet -->
     <div id="viewContainer" class="animate-slide-up" style="animation-delay: 0.3s;">
-      <!-- Stats Grid (default on mobile) -->
       <div id="statsGrid" class="hidden stats-grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         aria-live="polite" role="region" aria-label="Статистика трекеров"></div>
 
-      <!-- Stats Table (default on desktop/tablet) -->
       <div id="statsTable" class="overflow-x-auto rounded-xl border border-gray-300 dark:border-gray-800"
         aria-live="polite" role="region" aria-label="Таблица статистики трекеров">
         <table class="w-full text-sm">
@@ -368,7 +380,6 @@
       </div>
     </div>
 
-    <!-- Empty State -->
     <div id="emptyState" class="hidden text-center py-16 animate-fade-in" role="status" aria-live="polite">
       <svg class="w-16 h-16 text-gray-400 dark:text-gray-700 mx-auto mb-4" fill="none" stroke="currentColor"
         viewBox="0 0 24 24">
@@ -381,7 +392,6 @@
 
   </div>
 
-  <!-- Back to Top Button -->
   <button id="backToTop"
     class="fixed bottom-6 right-6 p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl shadow-blue-900/50 opacity-0 pointer-events-none transition-all duration-300 z-50 group hover:scale-110 active:scale-95"
     aria-label="Вернуться к началу страницы">
@@ -395,7 +405,6 @@
       (function () {
         'use strict';
 
-        // Configuration
         const CONFIG = {
           API_URL: '/stats/torrents',
           LAST_UPDATE_URL: '/lastupdatedb',
@@ -404,12 +413,10 @@
           RETRY_DELAY: 1000
         };
 
-        // Mobile breakpoint: cards below, table from this width up
         const VIEW_BREAKPOINT = 768;
 
         const isDesktopViewport = () => typeof window !== 'undefined' && window.matchMedia(`(min-width: ${VIEW_BREAKPOINT}px)`).matches;
 
-        // State management
         const state = {
           data: [],
           fullNumbers: true,
@@ -418,7 +425,6 @@
           isLoading: false
         };
 
-        // DOM Elements cache
         const elements = {
           searchInput: null,
           sortSelect: null,
@@ -444,7 +450,6 @@
           viewContainer: null
         };
 
-        // Utility functions
         const debounce = (func, wait) => {
           let timeout;
           return function executedFunction(...args) {
@@ -458,7 +463,7 @@
         };
 
         const formatNum = (n) => {
-          if (n == null || n === undefined) return '0';
+          if (n == null) return '0';
           n = Number(n);
           if (state.fullNumbers) return n.toLocaleString('ru-RU');
           if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -496,7 +501,6 @@
           skip: item.tracks?.skip ?? 0
         });
 
-        // Rendering functions
         const renderCard = (item) => {
           const tracks = getTracksData(item);
           const ico = `./img/ico/${(item.trackerName || '').toLowerCase()}.ico`;
@@ -621,7 +625,6 @@
         `;
         };
 
-        // Sorting and filtering
         const getSortKey = (item, key) => {
           if (key === 'name') return (item.trackerName || '').toLowerCase();
           if (key === 'newtor') return Number(item.newtor) || 0;
@@ -656,13 +659,11 @@
           return list;
         };
 
-        // Main render function
         const render = () => {
           const list = applyFilterAndSort();
 
-          // Update grid classes
           elements.statsGrid.className = 'stats-grid';
-          let gridClasses = 'grid-cols-1 sm:grid-cols-2';
+          let gridClasses;
 
           if (state.wideMode) {
             gridClasses = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4';
@@ -672,7 +673,6 @@
 
           elements.statsGrid.className = `stats-grid ${gridClasses}`;
 
-          // Show/hide views
           if (state.tableView) {
             elements.statsGrid.classList.add('hidden');
             elements.statsTable.classList.remove('hidden');
@@ -681,7 +681,6 @@
             elements.statsTable.classList.add('hidden');
           }
 
-          // Handle empty state
           if (list.length === 0) {
             elements.aggregateHost.innerHTML = '';
             elements.statsGrid.innerHTML = '';
@@ -694,10 +693,8 @@
           elements.emptyState.classList.add('hidden');
           elements.cardsCounter.textContent = `${list.length} ${list.length === 1 ? 'трекер' : list.length < 5 ? 'трекера' : 'трекеров'}`;
 
-          // Render aggregate
           elements.aggregateHost.innerHTML = renderAggregate(list);
 
-          // Render grid or table
           if (state.tableView) {
             elements.statsTableBody.innerHTML = list.map(renderTableRow).join('');
           } else {
@@ -779,7 +776,6 @@
           }
         };
 
-        // Theme management
         const updateThemeIcons = (isDark) => {
           if (isDark) {
             elements.iconMoon.classList.remove('hidden');
@@ -822,9 +818,8 @@
           }
         };
 
-        // Back to top functionality
         const handleScroll = () => {
-          const scrolled = window.pageYOffset || document.documentElement.scrollTop;
+          const scrolled = window.scrollY || document.documentElement.scrollTop;
           if (scrolled > 300) {
             elements.backToTop.classList.remove('opacity-0', 'pointer-events-none');
             elements.backToTop.classList.add('opacity-100');
@@ -834,7 +829,6 @@
           }
         };
 
-        // Event handlers
         const handleSearch = debounce(() => {
           render();
         }, CONFIG.DEBOUNCE_DELAY);
@@ -861,9 +855,7 @@
           render();
         };
 
-        // Initialize
         const init = () => {
-          // Cache DOM elements
           elements.searchInput = document.getElementById('searchTracker');
           elements.sortSelect = document.getElementById('sortSelect');
           elements.cardsCounter = document.getElementById('cardsCounter');
@@ -887,14 +879,11 @@
           elements.backToTop = document.getElementById('backToTop');
           elements.viewContainer = document.getElementById('viewContainer');
 
-          // Initialize theme
           initTheme();
 
-          // Default view: cards on mobile, table on desktop/tablet (≥768px)
           state.tableView = isDesktopViewport();
           updateViewToggleLabel();
 
-          // Attach event listeners
           elements.searchInput.addEventListener('input', handleSearch);
           elements.sortSelect.addEventListener('change', render);
           elements.refreshBtn.addEventListener('click', load);
@@ -910,11 +899,9 @@
 
           window.addEventListener('scroll', debounce(handleScroll, 100));
 
-          // Initial load
           load();
         };
 
-        // Start the application when DOM is ready
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', init);
         } else {
