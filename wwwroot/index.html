@@ -742,7 +742,7 @@
         const STORAGE_ENC_IV_LEN = 12;
 
         async function getStorageEncryptionKey() {
-          let keyB64 = sessionStorage.getItem(STORAGE_ENC_SESSION_KEY);
+          let keyB64 = sessionStorage.getItem(STORAGE_ENC_SESSION_KEY) || localStorage.getItem(STORAGE_ENC_SESSION_KEY);
           if (!keyB64) {
             const key = await crypto.subtle.generateKey(
               { name: 'AES-GCM', length: 256 },
@@ -752,6 +752,7 @@
             const raw = await crypto.subtle.exportKey('raw', key);
             keyB64 = btoa(String.fromCharCode.apply(null, new Uint8Array(raw)));
             sessionStorage.setItem(STORAGE_ENC_SESSION_KEY, keyB64);
+            try { localStorage.setItem(STORAGE_ENC_SESSION_KEY, keyB64); } catch (e) { }
           }
           const keyBytes = Uint8Array.from(atob(keyB64), c => c.charCodeAt(0));
           return crypto.subtle.importKey(
@@ -794,7 +795,7 @@
             );
             return new TextDecoder().decode(dec);
           } catch (e) {
-            return cipherText;
+            return '';
           }
         }
 
@@ -1504,7 +1505,7 @@
             if (!magnet) return;
             let baseUrl = (localStorage.getItem('jacredTorServerUrl') || '').trim();
             const login = (localStorage.getItem('jacredTorServerLogin') || '').trim();
-            const password = await getSecureStorage('jacredTorServerPassword');
+            const password = (await getSecureStorage('jacredTorServerPassword') || '').trim();
             const $btn = $(this);
             const origTitle = $btn.attr('title');
             const setFeedback = (msg) => {
@@ -1552,7 +1553,7 @@
               } else {
                 const text = await res.text();
                 setFeedback('Ошибка ' + res.status + (text ? ': ' + text.slice(0, 80) : ''));
-                if (res.status === 401) setFeedback('Ошибка авторизации: проверьте логин и пароль');
+                if (res.status === 401) setFeedback('Ошибка авторизации: проверьте логин и пароль (или заново сохраните их в настройках TorrServer)');
                 if (res.status === 403 || (text && text.toLowerCase().includes('cors'))) setFeedback('CORS: разрешите запросы с этого сайта в настройках TorrServer');
                 setButtonState('idle');
               }
