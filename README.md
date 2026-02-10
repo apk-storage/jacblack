@@ -36,6 +36,7 @@ curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bas
 | Опция | Описание |
 |-------|----------|
 | `--no-download-db` | Не скачивать и не распаковывать базу (только при установке) |
+| `--pre-release` | Установить или обновить из последнего pre-release (например, 2.0.0-dev1) |
 | `--update` | Обновить приложение с последнего релиза (сохранить БД, заменить файлы, перезапустить) |
 | `--remove` | Полностью удалить JacRed (сервис, cron, каталог приложения) |
 | `-h`, `--help` | Показать справку |
@@ -43,14 +44,30 @@ curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bas
 **Примеры:**
 
 ```bash
-# Обычная установка
+# Обычная установка (одна команда)
 curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bash
 
-# Установка без загрузки базы
+# Установка без загрузки базы (одна команда)
 curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bash -s -- --no-download-db
+
+# Скачать скрипт и запустить с аргументами
+curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh -o jacred.sh
+chmod +x jacred.sh
+sudo ./jacred.sh --no-download-db
+
+# Установка pre-release версии
+curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bash -s -- --pre-release
+
+# Или скачать и запустить pre-release
+curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh -o jacred.sh
+chmod +x jacred.sh
+sudo ./jacred.sh --pre-release
 
 # Обновление уже установленного приложения
 sudo /opt/jacred/jacred.sh --update
+
+# Обновление до pre-release версии
+sudo /opt/jacred/jacred.sh --update --pre-release
 
 # Удаление
 sudo /opt/jacred/jacred.sh --remove
