@@ -210,6 +210,55 @@ namespace JacRed.Controllers.CRON
         }
         #endregion
 
+        #region ParseLatest
+        static readonly SemaphoreSlim _parseLatestSemaphore = new SemaphoreSlim(1, 1);
+
+        async public Task<string> ParseLatest(int pages = 5)
+        {
+            if (AppInit.conf?.disable_trackers != null && AppInit.conf.disable_trackers.Contains("megapeer", StringComparer.OrdinalIgnoreCase))
+                return "disabled";
+            if (!await _parseLatestSemaphore.WaitAsync(0))
+                return "work";
+
+            var log = new StringBuilder();
+
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                ParserLog.Write("megapeer", $"Starting ParseLatest pages={pages}");
+
+                foreach (var task in taskParse.ToArray())
+                {
+                    // Get first N pages sorted by page number
+                    var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
+
+                    foreach (var val in pagesToParse)
+                    {
+                        bool res = await parsePage(task.Key, val.page);
+                        if (res)
+                        {
+                            val.updateTime = DateTime.Today;
+                            log.AppendLine($"{task.Key} - {val.page}");
+                        }
+                    }
+                }
+
+                ParserLog.Write("megapeer", $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
+            }
+            catch (Exception ex)
+            {
+                ParserLog.Write("megapeer", $"ParseLatest Error: {ex.Message}");
+            }
+            finally
+            {
+                _parseLatestSemaphore.Release();
+            }
+
+            var logText = log.ToString();
+            return string.IsNullOrWhiteSpace(logText) ? "ok" : logText;
+        }
+        #endregion
+
 
         #region parsePage
         async Task<bool> parsePage(string cat, int page)

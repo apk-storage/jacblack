@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Microsoft.AspNetCore.Mvc;
@@ -139,6 +140,55 @@ namespace JacRed.Controllers.CRON
 
             _parseAllTaskWork = false;
             return "ok";
+        }
+        #endregion
+
+        #region ParseLatest
+        static readonly SemaphoreSlim _parseLatestSemaphore = new SemaphoreSlim(1, 1);
+
+        async public Task<string> ParseLatest(int pages = 5)
+        {
+            if (!await _parseLatestSemaphore.WaitAsync(0))
+                return "work";
+
+            var log = new System.Text.StringBuilder();
+
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                ParserLog.Write("torrentby", $"Starting ParseLatest pages={pages}");
+
+                foreach (var task in taskParse.ToArray())
+                {
+                    // Get first N pages sorted by page number
+                    var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
+
+                    foreach (var val in pagesToParse)
+                    {
+                        await Task.Delay(AppInit.conf.TorrentBy.parseDelay);
+
+                        bool res = await parsePage(task.Key, val.page);
+                        if (res)
+                        {
+                            val.updateTime = DateTime.Today;
+                            log.AppendLine($"{task.Key} - {val.page}");
+                        }
+                    }
+                }
+
+                ParserLog.Write("torrentby", $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
+            }
+            catch (Exception ex)
+            {
+                ParserLog.Write("torrentby", $"ParseLatest Error: {ex.Message}");
+            }
+            finally
+            {
+                _parseLatestSemaphore.Release();
+            }
+
+            var logText = log.ToString();
+            return string.IsNullOrWhiteSpace(logText) ? "ok" : logText;
         }
         #endregion
 
