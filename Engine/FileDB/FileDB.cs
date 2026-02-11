@@ -191,10 +191,15 @@ namespace JacRed.Engine
                     upt();
                 }
                 // Убеждаемся, что _sn всегда заполнен, даже если name не изменился
-                else if (string.IsNullOrWhiteSpace(t._sn) && !string.IsNullOrWhiteSpace(t.name))
+                if (string.IsNullOrWhiteSpace(t._sn))
                 {
-                    t._sn = StringConvert.SearchName(t.name);
-                    upt();
+                    if (!string.IsNullOrWhiteSpace(t.name))
+                        t._sn = StringConvert.SearchName(t.name);
+                    else if (!string.IsNullOrWhiteSpace(torrent.title))
+                        t._sn = StringConvert.SearchName(torrent.title);
+                    
+                    if (!string.IsNullOrWhiteSpace(t._sn))
+                        upt();
                 }
 
                 if (!string.IsNullOrWhiteSpace(torrent.originalname) && torrent.originalname != t.originalname)
@@ -212,10 +217,17 @@ namespace JacRed.Engine
                     upt();
                 }
                 // Убеждаемся, что _so всегда заполнен, даже если originalname не изменился
-                else if (string.IsNullOrWhiteSpace(t._so) && !string.IsNullOrWhiteSpace(t.originalname))
+                if (string.IsNullOrWhiteSpace(t._so))
                 {
-                    t._so = StringConvert.SearchName(t.originalname);
-                    upt();
+                    if (!string.IsNullOrWhiteSpace(t.originalname))
+                        t._so = StringConvert.SearchName(t.originalname);
+                    else if (!string.IsNullOrWhiteSpace(t.name))
+                        t._so = StringConvert.SearchName(t.name);
+                    else if (!string.IsNullOrWhiteSpace(torrent.title))
+                        t._so = StringConvert.SearchName(torrent.title);
+                    
+                    if (!string.IsNullOrWhiteSpace(t._so))
+                        upt();
                 }
 
                 if (torrent.relased > 0 && torrent.relased != t.relased)
@@ -265,6 +277,13 @@ namespace JacRed.Engine
                 // For Russian content where originalname is null, use name instead of title
                 // to avoid creating keys with full title (including season/episode info)
                 var originalname = torrent.originalname ?? name ?? "";
+                
+                // Убеждаемся, что name и originalname не пустые
+                if (string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(torrent.title))
+                    name = torrent.title;
+                if (string.IsNullOrWhiteSpace(originalname))
+                    originalname = name ?? torrent.title ?? "";
+                
                 t = new TorrentDetails()
                 {
                     url = torrent.url,
@@ -282,8 +301,22 @@ namespace JacRed.Engine
                     magnet = torrent.magnet,
                     ffprobe = torrent.ffprobe
                 };
+                
+                // Всегда заполняем _sn и _so, даже если name или originalname пустые
+                // Используем fallback на title если нужно
                 t._sn = StringConvert.SearchName(t.name);
+                if (string.IsNullOrWhiteSpace(t._sn) && !string.IsNullOrWhiteSpace(t.title))
+                    t._sn = StringConvert.SearchName(t.title);
+                
                 t._so = StringConvert.SearchName(t.originalname);
+                if (string.IsNullOrWhiteSpace(t._so))
+                {
+                    // Если originalname пустое, используем name или title
+                    if (!string.IsNullOrWhiteSpace(t.name))
+                        t._so = StringConvert.SearchName(t.name);
+                    else if (!string.IsNullOrWhiteSpace(t.title))
+                        t._so = StringConvert.SearchName(t.title);
+                }
 
                 savechanges = true;
                 updateFullDetails(t);
