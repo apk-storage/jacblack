@@ -162,6 +162,12 @@ namespace JacRed.Engine
                         FileDB.SaveChangesToFile();
                         File.WriteAllText(LastSyncPath, lastsync.ToString());
 
+                        // Пересобираем fastdb после синхронизации, чтобы новые торренты были доступны для поиска
+                        if (cycleTotal > 0)
+                        {
+                            try { Controllers.ApiController.getFastdb(update: true); } catch { }
+                        }
+
                         var cycleElapsed = DateTime.Now - cycleStart;
                         Console.WriteLine($"sync: end / {DateTime.Now.ToString(TimeFormat)} (cycle added {cycleTotal} torrents in {FormatElapsed(cycleElapsed)})");
                     }
@@ -249,6 +255,12 @@ namespace JacRed.Engine
                                 {
                                     goto next;
                                 }
+                            }
+
+                            // Пересобираем fastdb после синхронизации, чтобы новые торренты были доступны для поиска
+                            if (cycleTotal > 0)
+                            {
+                                try { Controllers.ApiController.getFastdb(update: true); } catch { }
                             }
 
                             var cycleElapsed = DateTime.Now - cycleStart;
