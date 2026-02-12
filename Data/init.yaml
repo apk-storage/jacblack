@@ -29,6 +29,7 @@ synctrackers:
   - torrentby
   - selezen
   - animelayer
+  - anidub
 disable_trackers:
   - hdrezka
   - anifilm
