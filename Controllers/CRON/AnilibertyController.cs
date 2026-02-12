@@ -268,10 +268,13 @@ namespace JacRed.Controllers.CRON
                 if (updateTime == default)
                     updateTime = createTime;
 
-                // Fallback to API endpoint if alias is missing
-                string torrentUrl = !string.IsNullOrWhiteSpace(release.Alias)
+                // Build URL: use release page URL for user-facing links, but append hash as query parameter for uniqueness
+                string baseUrl = !string.IsNullOrWhiteSpace(release.Alias)
                     ? $"{AppInit.conf.Aniliberty.host}/anime/releases/release/{release.Alias}"
                     : $"{AppInit.conf.Aniliberty.host}/api/v1/anime/torrents/{apiTorrent.Hash}";
+
+                // Append hash as query parameter to ensure uniqueness for FileDB while keeping user-friendly URL
+                string torrentUrl = $"{baseUrl}?hash={apiTorrent.Hash}";
 
                 // Format size - FileDB expects format: "Mb|МБ|GB|ГБ|TB|ТБ"
                 string sizeName = FormatSize(apiTorrent.Size);
