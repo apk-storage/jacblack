@@ -31,10 +31,7 @@ synctrackers:
   - animelayer
   - anidub
   - aniliberty
-disable_trackers:
-  - hdrezka
-  - anifilm
-  - anilibria
+disable_trackers: []
 syncsport: true
 syncspidr: true
 maxreadfile: 250
