@@ -1450,20 +1450,6 @@
           if (!magnet) return;
           copyToClipboardWithFeedback(magnet, '.btn-copy-magnet', '<i class="fas fa-check text-green-600"></i>');
         };
-        const fallbackCopy = (text) => {
-          const ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          try {
-            document.execCommand('copy');
-            const $btn = $(document.activeElement).closest('.btn-copy-magnet');
-            if ($btn.length) { const oldHtml = $btn.html(); $btn.html('<i class="fas fa-check text-green-600"></i>'); setTimeout(() => { $btn.html(oldHtml); }, 1500); }
-          } catch (e) { }
-          document.body.removeChild(ta);
-        };
 
         const handleScroll = debounce(() => {
           const scrolled = window.pageYOffset || document.documentElement.scrollTop;
