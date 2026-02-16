@@ -31,7 +31,6 @@
           animation: {
             'fade-in': 'fadeIn 0.2s ease-out',
             'slide-up': 'slideUp 0.25s ease-out',
-            'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
           },
           keyframes: {
             fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
@@ -661,13 +660,6 @@
 
     </div>
 
-    <div id="loadMoreWrap" class="hidden text-center mt-5">
-      <button type="button" id="loadMoreBtn"
-        class="tap-target min-h-[48px] px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 font-medium rounded-xl transition-all duration-150">
-        Загрузить ещё
-      </button>
-    </div>
-
     <div id="loadMoreSentinel" class="text-center py-8">
       <div id="loadMoreIndicator" class="hidden inline-flex flex-col items-center gap-3">
         <div class="w-10 h-10 border-2 border-gray-300 dark:border-gray-700 border-t-red-600 rounded-full spinner">
@@ -871,9 +863,6 @@
           filterToggle: null,
           filterToggleIcon: null,
           filterContainer: null,
-          sortSize: null,
-          sortDate: null,
-          sortUpdate: null,
           forcedSearch: null,
           toggleTheme: null,
           iconMoon: null,
@@ -1475,9 +1464,6 @@
           elements.filterToggle = document.getElementById('filterToggle');
           elements.filterToggleIcon = document.getElementById('filterToggleIcon');
           elements.filterContainer = document.getElementById('filterContainer');
-          elements.sortSize = document.getElementById('sortSize');
-          elements.sortDate = document.getElementById('sortDate');
-          elements.sortUpdate = document.getElementById('sortUpdate');
           elements.forcedSearch = document.getElementById('forcedSearch');
           elements.toggleTheme = document.getElementById('toggleTheme');
           elements.iconMoon = document.getElementById('iconMoon');
