@@ -12,7 +12,7 @@ readonly JACRED_USER="jacred"
 readonly SERVICE_NAME="jacred"
 readonly SYSTEMD_UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly RELEASE_BASE="https://github.com/jacred-fdb/jacred/releases/latest/download"
-readonly DB_URL="https://sync.jacred.stream/latest.tar.zst"
+readonly DB_URL="https://sync.jacred.stream/latest.tar.zst.zip"
 readonly CRON_JACRED_MARKER="127.0.0.1:9117"
 readonly SAVE_URL="http://127.0.0.1:9117/jsondb/save"
 
@@ -306,14 +306,14 @@ install_database() {
   fi
   log_info "Downloading database..."
   cd "$INSTALL_ROOT"
-  if ! wget -q "$DB_URL" -O latest.tar.zst || [[ ! -s latest.tar.zst ]]; then
+  if ! wget -q "$DB_URL" -O latest.tar.zst.zip || [[ ! -s latest.tar.zst.zip ]]; then
     log_err "Database download failed: $DB_URL"
     exit 1
   fi
   log_info "Unpacking database..."
   mkdir -p Data
-  zstd -d latest.tar.zst -c | tar -xf - -C Data
-  rm -f latest.tar.zst
+  zstd -d latest.tar.zst.zip -c | tar -xf - -C Data
+  rm -f latest.tar.zst.zip
   log_info "Database installed"
 }
 

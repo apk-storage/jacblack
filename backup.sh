@@ -117,10 +117,10 @@ create_archive() {
   mkdir -p "$WWWROOT_DIR"
 
   log_info "Using zstd (multi-threaded, level: $ZSTD_LEVEL)..."
-  tar -C "${BACKUP_DIR}/daily" -cf - . | zstd -T0 $ZSTD_LEVEL -o "${WWWROOT_DIR}/latest.tar.zst.tmp"
+  tar -C "${BACKUP_DIR}/daily" -cf - . | zstd -T0 $ZSTD_LEVEL -o "${WWWROOT_DIR}/latest.tar.zst.zip.tmp"
 
-  mv "${WWWROOT_DIR}/latest.tar.zst.tmp" "${WWWROOT_DIR}/latest.tar.zst"
-  log_info "Archive created: ${WWWROOT_DIR}/latest.tar.zst"
+  mv "${WWWROOT_DIR}/latest.tar.zst.zip.tmp" "${WWWROOT_DIR}/latest.tar.zst.zip"
+  log_info "Archive created: ${WWWROOT_DIR}/latest.tar.zst.zip"
 }
 
 main() {
