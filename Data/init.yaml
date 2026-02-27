@@ -7,14 +7,15 @@ listenport: 9117
 apikey: ""
 mergeduplicates: true
 openstats: true
-opensync: true
+opensync: false
 log: false
 logFdb: false
 logFdbRetentionDays: 7
 logFdbMaxSizeMb: 0
 logFdbMaxFiles: 0
 logParsers: false
-syncapi: https://sync.jacred.stream
+# Sync disabled: DB is downloaded by installer and parsed via cron (Data/crontab)
+syncapi: ""
 synctrackers:
   - rutracker
   - rutor
@@ -32,8 +33,8 @@ synctrackers:
   - anidub
   - aniliberty
 disable_trackers: []
-syncsport: true
-syncspidr: true
+syncsport: false
+syncspidr: false
 maxreadfile: 250
 tracks: false
 tracksdelay: 20000
