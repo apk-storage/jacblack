@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Daily hardlink snapshot and zip backup for JacRed
-# Creates a space-efficient backup using hardlinks and generates latest.tar.zst
+# Creates a space-efficient backup using hardlinks and generates latest.tar.zst.zip
+# (zstd-compressed tarball; .zip extension for server delivery)
 #
 # Usage:
 #   ./backup.sh [OPTIONS]
@@ -117,7 +118,7 @@ create_archive() {
   mkdir -p "$WWWROOT_DIR"
 
   log_info "Using zstd (multi-threaded, level: $ZSTD_LEVEL)..."
-  tar -C "${BACKUP_DIR}/daily" -cf - . | zstd -T0 $ZSTD_LEVEL -o "${WWWROOT_DIR}/latest.tar.zst.zip.tmp"
+  tar -C "${BACKUP_DIR}/daily" -cf - . | zstd -T0 "$ZSTD_LEVEL" -o "${WWWROOT_DIR}/latest.tar.zst.zip.tmp"
 
   mv "${WWWROOT_DIR}/latest.tar.zst.zip.tmp" "${WWWROOT_DIR}/latest.tar.zst.zip"
   log_info "Archive created: ${WWWROOT_DIR}/latest.tar.zst.zip"
