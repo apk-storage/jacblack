@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="ru">
 
 <head>
   <meta charset="UTF-8" />
@@ -12,6 +12,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+
+  <script>
+    (function () {
+      try {
+        var storedTheme = window.localStorage ? localStorage.getItem('theme') : null;
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = storedTheme === 'dark' || (storedTheme === null && prefersDark);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.classList.add('dark');
+        }
+      }
+    })();
+  </script>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -201,7 +220,7 @@
   </style>
 </head>
 
-<body class="text-gray-100 dark:text-gray-100 font-sans min-h-screen antialiased">
+<body class="text-gray-900 dark:text-gray-100 font-sans min-h-screen antialiased">
   <div id="app" class="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-[1600px]">
 
     <header class="mb-4 sm:mb-8 animate-slide-up">
@@ -891,7 +910,20 @@
         const initTheme = () => {
           try {
             const savedTheme = localStorage.getItem('statsTheme');
-            const isDark = savedTheme !== 'light';
+            let isDark;
+
+            if (savedTheme === 'dark') {
+              isDark = true;
+            } else if (savedTheme === 'light') {
+              isDark = false;
+            } else {
+              // No explicit preference saved: respect system preference if available
+              if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                isDark = true;
+              } else {
+                isDark = false;
+              }
+            }
 
             if (isDark) {
               document.documentElement.classList.add('dark');
