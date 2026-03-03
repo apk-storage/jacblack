@@ -1,20 +1,19 @@
----
-# Minimal config (init.yaml). Same as init.conf in YAML.
-# If both init.yaml and init.conf exist, init.yaml is used.
-
 listenip: any
 listenport: 9117
 apikey: ""
+devkey: ""
 mergeduplicates: true
+mergenumduplicates: true
 openstats: true
 opensync: false
+opensync_v1: false
+web: true
 log: false
 logFdb: false
 logFdbRetentionDays: 7
 logFdbMaxSizeMb: 0
 logFdbMaxFiles: 0
 logParsers: false
-# Sync disabled: DB is downloaded by installer and parsed via cron (Data/crontab)
 syncapi: ""
 synctrackers:
   - rutracker
@@ -36,8 +35,16 @@ disable_trackers: []
 syncsport: false
 syncspidr: false
 maxreadfile: 250
+fdbPathLevels: 2
 tracks: false
+trackslog: false
+trackscategory: jacred
 tracksdelay: 20000
+tracksatempt: 20
+tracksmod: 0
+tracksinterval:
+  task1: 60
+  task0: 180
 tsuri:
   - http://127.0.0.1:8090
 timeStatsUpdate: 15
