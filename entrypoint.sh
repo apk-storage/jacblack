@@ -4,6 +4,7 @@ set -eu
 set -o pipefail 2>/dev/null || true
 # Apply umask from env var (set in Dockerfile; controls permissions of files created at runtime)
 umask "${UMASK:-0027}"
+# CONFIG_FILE_MODE: permissions for copied config files (default: 600)
 
 # Helper: get the alternate config extension (yaml <-> conf)
 get_alternate_ext() {
@@ -27,6 +28,48 @@ get_canonical_path() {
     echo "$canonical_dir/$base"
 }
 
+# Helper: get canonical path and capture exit status into named variable
+# _status_var must contain only alphanumeric and underscore (validates against injection)
+get_canonical_path_capture() {
+    path="$1"
+    _status_var="$2"
+    case "$_status_var" in
+        *[!a-zA-Z0-9_]*)
+            echo "ERROR: Invalid status variable name (must be alphanumeric and underscore only)" >&2
+            return 1
+            ;;
+    esac
+    _output="$(get_canonical_path "$path")"
+    _ec=$?
+    eval "$_status_var=$_ec"
+    echo "$_output"
+}
+
+# Helper: copy src to dest if comparison paths differ
+copy_if_different() {
+    src_path="$1"
+    dest_path="$2"
+    cmp_left="$3"
+    cmp_right="$4"
+
+    if [ "$cmp_left" != "$cmp_right" ]; then
+        _mode="${CONFIG_FILE_MODE:-600}"
+        install -m "$_mode" "$src_path" "$dest_path" || { echo "ERROR: Failed to copy config to $dest_path" >&2; return 1; }
+    fi
+}
+
+# Helper: copy config to both dest_config and dest_app using given comparison paths
+copy_config_files() {
+    src_path="$1"
+    dest_config_path="$2"
+    dest_app_path="$3"
+    cmp_left="$4"
+    cmp_right_config="$5"
+    cmp_right_app="$6"
+    copy_if_different "$src_path" "$dest_config_path" "$cmp_left" "$cmp_right_config" || return 1
+    copy_if_different "$src_path" "$dest_app_path" "$cmp_left" "$cmp_right_app" || return 1
+}
+
 # Helper: apply config from given source path for given extension
 # Copies to config/ and app root, sets permissions, removes alternate file.
 apply_config() {
@@ -44,28 +87,22 @@ apply_config() {
     dest_config_dir="$(dirname "$dest_config")"
     dest_app_dir="$(dirname "$dest_app")"
     if [ -d "$src_dir" ] && [ -d "$dest_config_dir" ] && [ -d "$dest_app_dir" ]; then
-        if src_canon="$(get_canonical_path "$src")"; then src_status=0; else src_status=$?; fi
-        if dest_config_canon="$(get_canonical_path "$dest_config")"; then dest_config_status=0; else dest_config_status=$?; fi
-        if dest_app_canon="$(get_canonical_path "$dest_app")"; then dest_app_status=0; else dest_app_status=$?; fi
+        src_status=0
+        dest_config_status=0
+        dest_app_status=0
+        src_canon="$(get_canonical_path_capture "$src" src_status)"
+        dest_config_canon="$(get_canonical_path_capture "$dest_config" dest_config_status)"
+        dest_app_canon="$(get_canonical_path_capture "$dest_app" dest_app_status)"
         # If canonicalization failed for any path, fall back to string-guarded copies to prevent self-copy.
-        if [ $src_status -ne 0 ] || [ $dest_config_status -ne 0 ] || [ $dest_app_status -ne 0 ]; then
-            [ "$src" != "$dest_config" ] && { cp "$src" "$dest_config" || { echo "ERROR: Failed to copy config to $dest_config" >&2; return 1; }; }
-            [ "$src" != "$dest_app" ] && { cp "$src" "$dest_app" || { echo "ERROR: Failed to copy config to $dest_app" >&2; return 1; }; }
+        if [ "$src_status" -ne 0 ] || [ "$dest_config_status" -ne 0 ] || [ "$dest_app_status" -ne 0 ]; then
+            copy_config_files "$src" "$dest_config" "$dest_app" "$src" "$dest_config" "$dest_app" || return 1
         else
-            if [ "$src_canon" != "$dest_config_canon" ]; then
-                cp "$src" "$dest_config" || { echo "ERROR: Failed to copy config to $dest_config" >&2; return 1; }
-            fi
-            if [ "$src_canon" != "$dest_app_canon" ]; then
-                cp "$src" "$dest_app" || { echo "ERROR: Failed to copy config to $dest_app" >&2; return 1; }
-            fi
+            copy_config_files "$src" "$dest_config" "$dest_app" "$src_canon" "$dest_config_canon" "$dest_app_canon" || return 1
         fi
     else
         # Parent dirs not fully present; use string comparison as best-effort self-copy guard.
-        [ "$src" != "$dest_config" ] && { cp "$src" "$dest_config" || { echo "ERROR: Failed to copy config to $dest_config" >&2; return 1; }; }
-        [ "$src" != "$dest_app" ] && { cp "$src" "$dest_app" || { echo "ERROR: Failed to copy config to $dest_app" >&2; return 1; }; }
+        copy_config_files "$src" "$dest_config" "$dest_app" "$src" "$dest_config" "$dest_app" || return 1
     fi
-    # 600 = owner read/write only; safe here since entrypoint and app both run as JacRed user
-    chmod 600 "$dest_config" "$dest_app" || { echo "ERROR: Failed to set permissions on config files" >&2; return 1; }
 
     for f in "$alt_app" "$alt_config"; do
         if [ -f "$f" ]; then
@@ -98,10 +135,16 @@ use_existing_config() {
 # Config priority: init.yaml > init.conf (same as application)
 if [ -f /app/config/init.yaml ]; then
     echo "Using existing configuration (init.yaml)..."
-    use_existing_config yaml
+    use_existing_config yaml || {
+        echo "ERROR: Failed to apply existing configuration (init.yaml)" >&2
+        exit 1
+    }
 elif [ -f /app/config/init.conf ]; then
     echo "Using existing configuration (init.conf)..."
-    use_existing_config conf
+    use_existing_config conf || {
+        echo "ERROR: Failed to apply existing configuration (init.conf)" >&2
+        exit 1
+    }
 else
     echo "Initializing configuration..."
     # Prefer Data (populated with named volumes), fallback to defaults (when Data is bind-mounted empty)
@@ -113,24 +156,23 @@ else
 fi
 
 # Config file paths (extend this list if additional formats are added)
-# 0 = not found/not readable, 1 = found/readable
-config_file_found=0
-config_file_readable=0
+config_file_found=false
+config_file_readable=false
 for f in /app/init.yaml /app/init.conf; do
     if [ -f "$f" ]; then
-        config_file_found=1
+        config_file_found=true
         if [ -r "$f" ]; then
-            config_file_readable=1
+            config_file_readable=true
             break
         fi
     fi
 done
-if [ "$config_file_found" -eq 0 ]; then
+if [ "$config_file_found" = false ]; then
     echo "ERROR: Configuration file not found (init.yaml or init.conf)" >&2
     echo "Ensure /app/init.yaml or /app/init.conf exists" >&2
     exit 1
 fi
-if [ "$config_file_readable" -eq 0 ]; then
+if [ "$config_file_readable" = false ]; then
     echo "ERROR: Configuration file exists but is not readable" >&2
     echo "Check file permissions and ownership of /app/init.yaml or /app/init.conf" >&2
     exit 1
