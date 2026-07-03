@@ -133,7 +133,7 @@ sudo -u myservice ./jacred.sh --remove
 | ---------- | ---------- | -------------- |
 | `listenip` | IP для прослушивания (`any` — все интерфейсы) | `any` |
 | `listenport` | Порт HTTP | `9117` |
-| `apikey` | Ключ авторизации API (пусто — без проверки). Передаётся через `?apikey=...`, заголовок `X-Api-Key` или `Authorization: Bearer`. Без ключа доступны: `/`, `/stats`, `/health`, `/version`, `/lastupdatedb`, `/api/v1.0/conf`, `/sync/*` | — |
+| `apikey` | Ключ авторизации API (пусто — без проверки). Передаётся через `?apikey=...`, заголовок `X-Api-Key` или `Authorization: Bearer`. Без ключа доступны: `/`, `/stats`, `/health`, `/version`, `/lastupdatedb`, `/swagger`, `/api/v1.0/conf`, `/sync/*` | — |
 | `devkey` | Ключ для доступа к `/dev/`, `/cron/`, `/jsondb` за туннелем/прокси (пусто — только локальная сеть). Передаётся через заголовок `X-Dev-Key` или параметр `?devkey=...` | — |
 | `mergeduplicates` | Объединять дубликаты в выдаче | `true` |
 | `mergenumduplicates` | Объединять дубликаты по номеру (серии и т.п.) | `true` |
@@ -325,6 +325,15 @@ Anifilm, AniLibria, HDRezka.
 
 ## API
 
+### OpenAPI / Swagger
+
+- **`GET /swagger`** — интерактивная документация (Swagger UI).
+- **`GET /swagger/v1/swagger.json`** — OpenAPI 3.0 спецификация (JSON).
+
+В спецификацию входят публичные эндпоинты (`/api/*`, `/stats/*`, `/sync/*`, `/health`, …). Внутренние `/cron/*`, `/dev/*`, `/jsondb/*` скрыты.
+
+При настроенном `apikey` пути `/swagger` и `/swagger/*` доступны без ключа (как `/health`). Схемы авторизации в UI: `apikey` (query), `X-Api-Key`, `Authorization: Bearer`.
+
 ### Основные эндпоинты
 
 - **`GET /`** — веб-интерфейс (если `web: true`).
@@ -392,7 +401,7 @@ Anifilm, AniLibria, HDRezka.
 | В конфиге задан **`apikey`** | Для `/cron/*` (как и для поиска и остальных путей **вне** белого списка) нужен **`apikey`**: `?apikey=...`, заголовок `X-Api-Key` или `Authorization: Bearer` (иначе **401**). **`apikey` не заменяет `devkey`** — при необходимости передавайте оба. |
 | В конфиге **не** заданы ни `apikey`, ни `devkey` | Для `/cron/*` достаточно, чтобы клиент был в локальной/приватной сети (по IP). |
 
-Белый список путей **без** `apikey` (если ключ задан): `/`, `/stats`, `/health`, `/version`, `/lastupdatedb`, `/api/v1.0/conf`, `/sync/*`. Путь **`/cron/*` в этот список не входит.**
+Белый список путей **без** `apikey` (если ключ задан): `/`, `/stats`, `/health`, `/version`, `/lastupdatedb`, `/swagger`, `/api/v1.0/conf`, `/sync/*`. Путь **`/cron/*` в этот список не входит.**
 
 **Пример `curl` при включённых `apikey` и `devkey`:**
 

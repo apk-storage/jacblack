@@ -8,6 +8,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Text.Json.Serialization;
+using JacRed.Engine;
 using JacRed.Engine.Middlewares;
 
 namespace JacRed
@@ -57,6 +58,8 @@ namespace JacRed
                 //options.JsonSerializerOptions.PropertyNameCaseInsensitive = false;
                 //options.JsonSerializerOptions.WriteIndented = true;
             });
+
+            services.AddJacRedSwagger();
         }
         #endregion
 
@@ -82,6 +85,14 @@ namespace JacRed
 
             app.UseRouting();
             app.UseResponseCompression();
+
+            app.UseSwagger();
+            app.UseSwaggerUI(options =>
+            {
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "JacRed API v1");
+                options.RoutePrefix = "swagger";
+                options.DocumentTitle = "JacRed API";
+            });
 
             if (AppInit.conf.web)
                 app.UseStaticFiles();

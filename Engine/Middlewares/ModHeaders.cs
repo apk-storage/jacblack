@@ -134,6 +134,7 @@ namespace JacRed.Engine.Middlewares
                 || path.Equals("/health", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/version", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/lastupdatedb", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase)
                 || PathWhitelistRegex().IsMatch(path);
         }
 
