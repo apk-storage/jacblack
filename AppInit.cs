@@ -311,13 +311,6 @@ namespace JacRed
 
         public ProxySettings proxy = new ProxySettings();
 
-        public List<ProxySettings> globalproxy = new List<ProxySettings>()
-        {
-            new ProxySettings()
-            {
-                pattern = "\\.onion",
-                list = new List<string>() { "socks5://127.0.0.1:9050" }
-            }
-        };
+        public List<ProxySettings> globalproxy;
     }
 }

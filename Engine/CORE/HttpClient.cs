@@ -37,15 +37,62 @@ namespace JacRed.Engine.CORE
             return new WebProxy(proxyip, AppInit.conf.proxy.BypassOnLocal, null, credentials);
         }
 
-
-        static WebProxy webProxy(ProxySettings p)
+        static WebProxy CreateWebProxy(string proxyUrl, ProxySettings settings)
         {
             ICredentials credentials = null;
 
-            if (p.useAuth)
-                credentials = new NetworkCredential(p.username, p.password);
+            if (settings != null && settings.useAuth)
+                credentials = new NetworkCredential(settings.username, settings.password);
 
-            return new WebProxy(p.list.OrderBy(a => Guid.NewGuid()).First(), p.BypassOnLocal, null, credentials);
+            return new WebProxy(proxyUrl, settings?.BypassOnLocal ?? false, null, credentials);
+        }
+
+        static List<WebProxy> ResolveProxies(string url, bool useproxy, WebProxy proxyOverride)
+        {
+            if (proxyOverride != null)
+                return new List<WebProxy> { proxyOverride };
+
+            if (AppInit.conf.globalproxy != null)
+            {
+                foreach (var p in AppInit.conf.globalproxy)
+                {
+                    if (p.list == null || p.list.Count == 0)
+                        continue;
+
+                    if (!Regex.IsMatch(url, p.pattern, RegexOptions.IgnoreCase))
+                        continue;
+
+                    return p.list
+                        .Where(u => !string.IsNullOrWhiteSpace(u))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(_ => Guid.NewGuid())
+                        .Select(u => CreateWebProxy(u, p))
+                        .ToList();
+                }
+            }
+
+            if (AppInit.conf.proxy.list != null && AppInit.conf.proxy.list.Count > 0 && useproxy)
+                return new List<WebProxy> { webProxy() };
+
+            return new List<WebProxy>();
+        }
+
+        static HttpClientHandler CreateHandler(WebProxy proxy, DecompressionMethods decompression)
+        {
+            var handler = new HttpClientHandler()
+            {
+                AutomaticDecompression = decompression
+            };
+
+            handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, sslPolicyErrors) => true;
+
+            if (proxy != null)
+            {
+                handler.UseProxy = true;
+                handler.Proxy = proxy;
+            }
+
+            return handler;
         }
         #endregion
 
@@ -81,97 +128,76 @@ namespace JacRed.Engine.CORE
         #region BaseGetAsync
         async public static ValueTask<(string content, HttpResponseMessage response)> BaseGetAsync(string url, Encoding encoding = default, string cookie = null, string referer = null, int timeoutSeconds = 15, long MaxResponseContentBufferSize = 0, List<(string name, string val)> addHeaders = null, bool useproxy = false, WebProxy proxy = null, int httpversion = 1)
         {
-            try
+            var proxies = ResolveProxies(url, useproxy, proxy);
+            if (proxies.Count == 0)
+                proxies.Add(null);
+
+            foreach (var px in proxies)
             {
-                HttpClientHandler handler = new HttpClientHandler()
+                try
                 {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                };
-
-                handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, sslPolicyErrors) => true;
-
-                #region proxy
-                if (AppInit.conf.proxy.list != null && AppInit.conf.proxy.list.Count > 0 && useproxy)
-                {
-                    handler.UseProxy = true;
-                    handler.Proxy = proxy ?? webProxy();
-                }
-
-                if (AppInit.conf.globalproxy != null && AppInit.conf.globalproxy.Count > 0)
-                {
-                    foreach (var p in AppInit.conf.globalproxy)
+                    using (var handler = CreateHandler(px, DecompressionMethods.GZip | DecompressionMethods.Deflate))
+                    using (var client = new System.Net.Http.HttpClient(handler))
                     {
-                        if (p.list == null || p.list.Count == 0)
-                            continue;
+                        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+                        client.MaxResponseContentBufferSize = MaxResponseContentBufferSize == 0 ? 10_000_000 : MaxResponseContentBufferSize; // 10MB
+                        client.DefaultRequestHeaders.Add("user-agent", useragent);
 
-                        if (Regex.IsMatch(url, p.pattern, RegexOptions.IgnoreCase))
+                        if (cookie != null)
+                            client.DefaultRequestHeaders.Add("cookie", cookie);
+
+                        if (referer != null)
+                            client.DefaultRequestHeaders.Add("referer", referer);
+
+                        if (addHeaders != null)
                         {
-                            handler.UseProxy = true;
-                            handler.Proxy = webProxy(p);
-                            break;
+                            foreach (var item in addHeaders)
+                                client.DefaultRequestHeaders.Add(item.name, item.val);
                         }
-                    }
-                }
-                #endregion
 
-                using (var client = new System.Net.Http.HttpClient(handler))
-                {
-                    client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                    client.MaxResponseContentBufferSize = MaxResponseContentBufferSize == 0 ? 10_000_000 : MaxResponseContentBufferSize; // 10MB
-                    client.DefaultRequestHeaders.Add("user-agent", useragent);
-
-                    if (cookie != null)
-                        client.DefaultRequestHeaders.Add("cookie", cookie);
-
-                    if (referer != null)
-                        client.DefaultRequestHeaders.Add("referer", referer);
-
-                    if (addHeaders != null)
-                    {
-                        foreach (var item in addHeaders)
-                            client.DefaultRequestHeaders.Add(item.name, item.val);
-                    }
-
-                    var req = new HttpRequestMessage(HttpMethod.Get, url)
-                    {
-                        Version = new Version(httpversion, 0)
-                    };
-
-                    using (HttpResponseMessage response = await client.SendAsync(req))
-                    {
-                        if (response.StatusCode != HttpStatusCode.OK)
-                            return (null, response);
-
-                        using (HttpContent content = response.Content)
+                        var req = new HttpRequestMessage(HttpMethod.Get, url)
                         {
-                            if (encoding != default)
-                            {
-                                string res = encoding.GetString(await content.ReadAsByteArrayAsync());
-                                if (string.IsNullOrWhiteSpace(res))
-                                    return (null, response);
+                            Version = new Version(httpversion, 0)
+                        };
 
-                                return (res, response);
-                            }
-                            else
-                            {
-                                string res = await content.ReadAsStringAsync();
-                                if (string.IsNullOrWhiteSpace(res))
-                                    return (null, response);
+                        using (HttpResponseMessage response = await client.SendAsync(req))
+                        {
+                            if (response.StatusCode != HttpStatusCode.OK)
+                                continue;
 
-                                return (res, response);
+                            using (HttpContent content = response.Content)
+                            {
+                                if (encoding != default)
+                                {
+                                    string res = encoding.GetString(await content.ReadAsByteArrayAsync());
+                                    if (string.IsNullOrWhiteSpace(res))
+                                        continue;
+
+                                    return (res, response);
+                                }
+                                else
+                                {
+                                    string res = await content.ReadAsStringAsync();
+                                    if (string.IsNullOrWhiteSpace(res))
+                                        continue;
+
+                                    return (res, response);
+                                }
                             }
                         }
                     }
                 }
-            }
-            catch
-            {
-                return (null, new HttpResponseMessage()
+                catch
                 {
-                    StatusCode = HttpStatusCode.InternalServerError,
-                    RequestMessage = new HttpRequestMessage()
-                });
+                    continue;
+                }
             }
+
+            return (null, new HttpResponseMessage()
+            {
+                StatusCode = HttpStatusCode.InternalServerError,
+                RequestMessage = new HttpRequestMessage()
+            });
         }
         #endregion
 
@@ -184,85 +210,64 @@ namespace JacRed.Engine.CORE
 
         async public static ValueTask<string> Post(string url, HttpContent data, Encoding encoding = default, string cookie = null, int MaxResponseContentBufferSize = 0, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, WebProxy proxy = null)
         {
-            try
+            var proxies = ResolveProxies(url, useproxy, proxy);
+            if (proxies.Count == 0)
+                proxies.Add(null);
+
+            foreach (var px in proxies)
             {
-                HttpClientHandler handler = new HttpClientHandler()
+                try
                 {
-                    AutomaticDecompression = DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate
-                };
-
-                handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, sslPolicyErrors) => true;
-
-                #region proxy
-                if (AppInit.conf.proxy.list != null && AppInit.conf.proxy.list.Count > 0 && useproxy)
-                {
-                    handler.UseProxy = true;
-                    handler.Proxy = proxy ?? webProxy();
-                }
-
-                if (AppInit.conf.globalproxy != null && AppInit.conf.globalproxy.Count > 0)
-                {
-                    foreach (var p in AppInit.conf.globalproxy)
+                    using (var handler = CreateHandler(px, DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate))
+                    using (var client = new System.Net.Http.HttpClient(handler))
                     {
-                        if (p.list == null || p.list.Count == 0)
-                            continue;
+                        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+                        client.MaxResponseContentBufferSize = MaxResponseContentBufferSize != 0 ? MaxResponseContentBufferSize : 10_000_000; // 10MB
 
-                        if (Regex.IsMatch(url, p.pattern, RegexOptions.IgnoreCase))
+                        client.DefaultRequestHeaders.Add("user-agent", useragent);
+                        if (cookie != null)
+                            client.DefaultRequestHeaders.Add("cookie", cookie);
+
+                        if (addHeaders != null)
                         {
-                            handler.UseProxy = true;
-                            handler.Proxy = webProxy(p);
-                            break;
+                            foreach (var item in addHeaders)
+                                client.DefaultRequestHeaders.Add(item.name, item.val);
                         }
-                    }
-                }
-                #endregion
 
-                using (var client = new System.Net.Http.HttpClient(handler))
-                {
-                    client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                    client.MaxResponseContentBufferSize = MaxResponseContentBufferSize != 0 ? MaxResponseContentBufferSize : 10_000_000; // 10MB
-
-                    client.DefaultRequestHeaders.Add("user-agent", useragent);
-                    if (cookie != null)
-                        client.DefaultRequestHeaders.Add("cookie", cookie);
-
-                    if (addHeaders != null)
-                    {
-                        foreach (var item in addHeaders)
-                            client.DefaultRequestHeaders.Add(item.name, item.val);
-                    }
-
-                    using (HttpResponseMessage response = await client.PostAsync(url, data))
-                    {
-                        if (response.StatusCode != HttpStatusCode.OK)
-                            return null;
-
-                        using (HttpContent content = response.Content)
+                        using (HttpResponseMessage response = await client.PostAsync(url, data))
                         {
-                            if (encoding != default)
-                            {
-                                string res = encoding.GetString(await content.ReadAsByteArrayAsync());
-                                if (string.IsNullOrWhiteSpace(res))
-                                    return null;
+                            if (response.StatusCode != HttpStatusCode.OK)
+                                continue;
 
-                                return res;
-                            }
-                            else
+                            using (HttpContent content = response.Content)
                             {
-                                string res = await content.ReadAsStringAsync();
-                                if (string.IsNullOrWhiteSpace(res))
-                                    return null;
+                                if (encoding != default)
+                                {
+                                    string res = encoding.GetString(await content.ReadAsByteArrayAsync());
+                                    if (string.IsNullOrWhiteSpace(res))
+                                        continue;
 
-                                return res;
+                                    return res;
+                                }
+                                else
+                                {
+                                    string res = await content.ReadAsStringAsync();
+                                    if (string.IsNullOrWhiteSpace(res))
+                                        continue;
+
+                                    return res;
+                                }
                             }
                         }
                     }
                 }
+                catch
+                {
+                    continue;
+                }
             }
-            catch
-            {
-                return null;
-            }
+
+            return null;
         }
         #endregion
 
@@ -296,78 +301,59 @@ namespace JacRed.Engine.CORE
         #region Download
         async public static ValueTask<byte[]> Download(string url, string cookie = null, string referer = null, int timeoutSeconds = 30, long MaxResponseContentBufferSize = 0, List<(string name, string val)> addHeaders = null, bool useproxy = false, WebProxy proxy = null)
         {
-            try
+            var proxies = ResolveProxies(url, useproxy, proxy);
+            if (proxies.Count == 0)
+                proxies.Add(null);
+
+            foreach (var px in proxies)
             {
-                HttpClientHandler handler = new HttpClientHandler()
+                try
                 {
-                    AllowAutoRedirect = true,
-                    AutomaticDecompression = DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate
-                };
+                    var handler = CreateHandler(px, DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate);
+                    handler.AllowAutoRedirect = true;
 
-                handler.ServerCertificateCustomValidationCallback += (sender, cert, chain, sslPolicyErrors) => true;
-
-                #region proxy
-                if (AppInit.conf.proxy.list != null && AppInit.conf.proxy.list.Count > 0 && useproxy)
-                {
-                    handler.UseProxy = true;
-                    handler.Proxy = proxy ?? webProxy();
-                }
-
-                if (AppInit.conf.globalproxy != null && AppInit.conf.globalproxy.Count > 0)
-                {
-                    foreach (var p in AppInit.conf.globalproxy)
+                    using (handler)
+                    using (var client = new System.Net.Http.HttpClient(handler))
                     {
-                        if (p.list == null || p.list.Count == 0)
-                            continue;
+                        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+                        client.MaxResponseContentBufferSize = MaxResponseContentBufferSize == 0 ? 10_000_000 : MaxResponseContentBufferSize; // 10MB
+                        client.DefaultRequestHeaders.Add("user-agent", useragent);
 
-                        if (Regex.IsMatch(url, p.pattern, RegexOptions.IgnoreCase))
+                        if (cookie != null)
+                            client.DefaultRequestHeaders.Add("cookie", cookie);
+
+                        if (referer != null)
+                            client.DefaultRequestHeaders.Add("referer", referer);
+
+                        if (addHeaders != null)
                         {
-                            handler.UseProxy = true;
-                            handler.Proxy = webProxy(p);
-                            break;
+                            foreach (var item in addHeaders)
+                                client.DefaultRequestHeaders.Add(item.name, item.val);
+                        }
+
+                        using (HttpResponseMessage response = await client.GetAsync(url))
+                        {
+                            if (response.StatusCode != HttpStatusCode.OK)
+                                continue;
+
+                            using (HttpContent content = response.Content)
+                            {
+                                byte[] res = await content.ReadAsByteArrayAsync();
+                                if (res.Length == 0)
+                                    continue;
+
+                                return res;
+                            }
                         }
                     }
                 }
-                #endregion
-
-                using (var client = new System.Net.Http.HttpClient(handler))
+                catch
                 {
-                    client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                    client.MaxResponseContentBufferSize = MaxResponseContentBufferSize == 0 ? 10_000_000 : MaxResponseContentBufferSize; // 10MB
-                    client.DefaultRequestHeaders.Add("user-agent", useragent);
-
-                    if (cookie != null)
-                        client.DefaultRequestHeaders.Add("cookie", cookie);
-
-                    if (referer != null)
-                        client.DefaultRequestHeaders.Add("referer", referer);
-
-                    if (addHeaders != null)
-                    {
-                        foreach (var item in addHeaders)
-                            client.DefaultRequestHeaders.Add(item.name, item.val);
-                    }
-
-                    using (HttpResponseMessage response = await client.GetAsync(url))
-                    {
-                        if (response.StatusCode != HttpStatusCode.OK)
-                            return null;
-
-                        using (HttpContent content = response.Content)
-                        {
-                            byte[] res = await content.ReadAsByteArrayAsync();
-                            if (res.Length == 0)
-                                return null;
-
-                            return res;
-                        }
-                    }
+                    continue;
                 }
             }
-            catch
-            {
-                return null;
-            }
+
+            return null;
         }
         #endregion
     }
