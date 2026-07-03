@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System;
 using System.Web;
 using MonoTorrent;
+using JacRed.Engine.Indexers;
 using JacRed.Models.Details;
 using JacRed.Models.Tracks;
 using JacRed.Models.Api;
@@ -76,10 +77,31 @@ namespace JacRed.Controllers
 
         #region Jackett
         [Route("/api/v2.0/indexers/{status}/results")]
-        public ActionResult Jackett(string apikey, string query, string title, string title_original, int year, Dictionary<string, string> category, int is_serial = -1)
+        async public Task<ActionResult> Jackett(string apikey, string query, string title, string title_original, int year, Dictionary<string, string> category, int is_serial = -1)
         {
-            bool rqnum = !HttpContext.Request.QueryString.Value.Contains("&is_serial=") && HttpContext.Request.Headers.UserAgent.ToString() == "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36";
-            var results = JackettSearchResults(apikey, query, title, title_original, year, category, is_serial, rqnum, memoryCache);
+            var q = HttpContext.Request.Query;
+            bool rqnum = !HttpContext.Request.QueryString.Value.Contains("&is_serial=")
+                && HttpContext.Request.Headers.UserAgent.ToString() == "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36";
+
+            List<Result> results;
+
+            if (IndexerSearchHelper.CombinedSearchEnabled)
+            {
+                if (string.IsNullOrWhiteSpace(query))
+                    query = IndexerRequestParams.ResolveSearchQuery(q);
+
+                if (string.IsNullOrWhiteSpace(query) && string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(title_original))
+                    return Json(new RootObject() { Results = new List<Result>() });
+
+                var req = IndexerSearchHelper.BuildRequest(q, apikey, rqnum, query, title, title_original, year, is_serial);
+                results = await IndexerSearchEngine.SearchCombinedAsync(req, memoryCache);
+                results = IndexerSearchHelper.ApplyPostFilters(results, q, req);
+            }
+            else
+            {
+                results = JackettSearchResults(apikey, query, title, title_original, year, category, is_serial, rqnum, memoryCache);
+            }
+
             return Json(new RootObject() { Results = results });
         }
 

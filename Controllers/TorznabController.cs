@@ -4,9 +4,7 @@ using JacRed.Models.Api;
 using JacRed.Models.AppConf;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace JacRed.Controllers
@@ -49,43 +47,16 @@ namespace JacRed.Controllers
             if (string.IsNullOrWhiteSpace(resolvedQuery) && string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(titleOriginal))
                 return XmlSearchResult(new List<Result>(), t, query, origin);
 
-            int year = IndexerRequestParams.YearFromQuery(query);
-            int isSerial = IndexerRequestParams.IsSerialFromTorznabAction(t);
-            if (query.ContainsKey("is_serial") && int.TryParse(query["is_serial"], out int parsedSerial))
-                isSerial = parsedSerial;
-
-            var categories = IndexerRequestParams.CategoriesFromQuery(query);
-            bool cardMode = IndexerRequestParams.IsCardMetadataSearch(
-                title, titleOriginal,
-                query.ContainsKey("is_serial") ? isSerial : (int?)null,
-                categories, query["genres"]);
-
-            var req = new IndexerSearchRequest
-            {
-                Query = resolvedQuery,
-                Title = title,
-                TitleOriginal = titleOriginal,
-                Year = year,
-                IsSerial = isSerial,
-                Genres = query["genres"],
-                Categories = categories,
-                Season = IndexerRequestParams.SeasonFromQuery(query),
-                Episode = IndexerRequestParams.EpisodeFromQuery(query),
-                Tracker = query["tracker"],
-                CardMode = cardMode,
-                ApiKey = apikey,
-                RqNum = false
-            };
-
+            var req = IndexerSearchHelper.BuildRequest(query, apikey, rqnum: false, boundQuery: resolvedQuery);
             var results = await IndexerSearchEngine.SearchCombinedAsync(req, memoryCache);
-            results = ApplyPostFilters(results, t, query, year, cardMode, req.Season, req.Episode);
+            results = IndexerSearchHelper.ApplyPostFilters(results, query, req, t);
             return XmlSearchResult(results, t, query, origin);
         }
 
         IActionResult XmlSearchResult(List<Result> results, string t, IQueryCollection query, string origin)
         {
             string assignedCat = "";
-            string catParam = query["cat"].ToString();
+            string catParam = IndexerSearchHelper.CategoryParam(query);
             if (t == "tvsearch" || t == "tv") assignedCat = "5000";
             else if (t == "moviesearch" || t == "movie") assignedCat = "2000";
             else if (!string.IsNullOrWhiteSpace(catParam)) assignedCat = catParam.Split(',')[0].Trim();
@@ -93,27 +64,6 @@ namespace JacRed.Controllers
             bool enrich = AppInit.conf.torznab?.enrichTitles ?? true;
             string items = TorznabXmlFormatter.ItemsXml(results, assignedCat, enrich, catParam);
             return Content(TorznabXmlFormatter.WrapRss(items, origin), "application/xml; charset=utf-8");
-        }
-
-        static List<Result> ApplyPostFilters(List<Result> results, string t, IQueryCollection query, int year, bool cardMode, int? season, int? episode)
-        {
-            var settings = AppInit.conf.torznab ?? new TorznabSettings();
-            string catParam = query["cat"].ToString();
-            int isSerial = IndexerRequestParams.IsSerialFromTorznabAction(t);
-            if (query.ContainsKey("is_serial") && int.TryParse(query["is_serial"], out int parsedSerial))
-                isSerial = parsedSerial;
-
-            if (isSerial < 0 && !string.IsNullOrWhiteSpace(catParam) && !cardMode && !settings.skipCatFilter)
-                results = IndexerResultFilters.FilterByCategory(results, catParam);
-
-            if (year > 0 && !cardMode)
-                results = IndexerResultFilters.FilterByYear(results, year);
-
-            if (season.HasValue)
-                results = SeasonEpisodeFilter.Filter(results, season.Value, episode);
-
-            var (limit, offset) = IndexerRequestParams.LimitOffsetFromQuery(query);
-            return IndexerResultFilters.Paginate(results, limit, offset);
         }
     }
 

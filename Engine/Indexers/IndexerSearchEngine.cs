@@ -35,7 +35,7 @@ namespace JacRed.Engine.Indexers
 
             if (imdbMode)
             {
-                batches.Add(await V1SearchAsync(query, null, exact: true, settings.v1Sort, req.Tracker, req.Season, cache));
+                batches.Add(await V1SearchAsync(query, null, exact: true, settings.v1Sort, req.Tracker, req.Season, cache, req.RqNum));
                 return IndexerResultMerger.MergeAndSort(batches.ToArray());
             }
 
@@ -59,7 +59,7 @@ namespace JacRed.Engine.Indexers
             }
 
             foreach (var pair in V1Pairs(query, titleRu, titleEn, settings, req.CardMode))
-                batches.Add(await V1SearchAsync(pair.search, pair.altname, exact: false, settings.v1Sort, req.Tracker, req.Season, cache));
+                batches.Add(await V1SearchAsync(pair.search, pair.altname, exact: false, settings.v1Sort, req.Tracker, req.Season, cache, req.RqNum));
 
             return IndexerResultMerger.MergeAndSort(batches.ToArray());
         }
@@ -155,7 +155,7 @@ namespace JacRed.Engine.Indexers
             return pairs;
         }
 
-        static async Task<List<Result>> V1SearchAsync(string search, string altname, bool exact, string sort, string tracker, int? season, IMemoryCache cache)
+        static async Task<List<Result>> V1SearchAsync(string search, string altname, bool exact, string sort, string tracker, int? season, IMemoryCache cache, bool rqnum)
         {
             if (string.IsNullOrWhiteSpace(search)) return new List<Result>();
 
@@ -214,7 +214,7 @@ namespace JacRed.Engine.Indexers
             if (season.HasValue && season.Value > 0)
                 query = query.Where(i => i.seasons != null && i.seasons.Contains(season.Value));
 
-            return query.Take(2000).Select(MapV1).ToList();
+            return query.Take(2000).Select(i => MapV1(i, rqnum)).ToList();
         }
 
         static async Task<(string search, string altname)> ResolveImdbSearchAsync(string search, string altname, IMemoryCache cache)
@@ -241,7 +241,7 @@ namespace JacRed.Engine.Indexers
             return (c.original_name ?? c.name ?? search, altname);
         }
 
-        static Result MapV1(TorrentDetails i)
+        static Result MapV1(TorrentDetails i, bool rqnum)
         {
             var cats = new HashSet<int>();
             string catDesc = null;
@@ -270,7 +270,9 @@ namespace JacRed.Engine.Indexers
                 Seeders = i.sid,
                 Peers = i.pir,
                 MagnetUri = i.magnet,
-                info = new TorrentInfo
+                ffprobe = rqnum || !AppInit.conf.tracks ? null : i.ffprobe,
+                languages = i.languages,
+                info = rqnum ? null : new TorrentInfo
                 {
                     name = i.name,
                     originalname = i.originalname,

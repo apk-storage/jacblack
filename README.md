@@ -369,9 +369,10 @@ Anifilm, AniLibria, HDRezka.
 
 ### API поиска
 
-- **`GET /api/v2.0/indexers/{status}/results`** — поиск в формате Jackett (совместимость с Jackett API).
-  - Параметры: `Query` (поисковый запрос), `Category` (категория), `Tracker` (трекер), `apikey` (если настроен).
-  - Ответ включает `"jacred": true`.
+- **`GET /api/v2.0/indexers/{status}/results`** — поиск в формате Jackett (Lampa, Prowlarr и др.).
+  - Combined search: v2 card/fuzzy + v1 merge + IMDB (`Query=tt…` / `kp…`) + card fallback.
+  - Параметры Lampa: `Query`, `title`, `title_original`, `year`, `is_serial`, `genres`, `Category[]`, `season`, `ep`, `limit`, `offset`, `apikey`.
+  - Ответ: `{ "Results": [...], "jacred": true }` с `ffprobe`, `languages`, `info` при `tracks: true`.
 - **`GET /api/v2.0/indexers`** — список индексаторов (Jackett/Prowlarr).
 - **`GET /api/v1/indexer`** — заглушка для Prowlarr.
 - **`GET /api`** — Torznab XML (`t=search|tvsearch|moviesearch|caps|indexers`).

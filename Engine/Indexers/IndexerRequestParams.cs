@@ -78,7 +78,11 @@ namespace JacRed.Engine.Indexers
         public static List<int> CategoriesFromQuery(IQueryCollection query)
         {
             var cats = new List<int>();
-            foreach (var key in query.Keys.Where(k => k.StartsWith("Category[", StringComparison.OrdinalIgnoreCase) || k.Equals("cat", StringComparison.OrdinalIgnoreCase) || k.Equals("Category", StringComparison.OrdinalIgnoreCase)))
+            foreach (var key in query.Keys.Where(k =>
+                k.StartsWith("Category[", StringComparison.OrdinalIgnoreCase) ||
+                k.Equals("Category[]", StringComparison.OrdinalIgnoreCase) ||
+                k.Equals("cat", StringComparison.OrdinalIgnoreCase) ||
+                k.Equals("Category", StringComparison.OrdinalIgnoreCase)))
             {
                 foreach (var val in query[key])
                 {
