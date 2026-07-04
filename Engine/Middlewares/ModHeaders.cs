@@ -21,7 +21,7 @@ namespace JacRed.Engine.Middlewares
     /// | Path group | LAN client | Same-host proxy (CF Tunnel / local nginx) | Remote proxy / internet |
     /// |------------|------------|-------------------------------------------|-------------------------|
     /// | /dev/, /cron/, /jsondb | ✓ | devkey if set, else ✗ | devkey if set, else ✗ |
-    /// | /api/v1.0/config | ✓ | ✓ | openconfig or devkey |
+    /// | /api/v1.0/config | ✓ | ✓ без devkey; devkey если задан | devkey |
     /// | Search etc. | apikey if configured | apikey if configured | apikey if configured |
     /// </summary>
     public partial class ModHeaders
@@ -157,19 +157,19 @@ namespace JacRed.Engine.Middlewares
         }
 
         /// <summary>
-        /// /api/v1.0/config: LAN, same-host proxy (CF Tunnel / local nginx), openconfig, or devkey.
-        /// Remote nginx on another host → openconfig or devkey.
+        /// /api/v1.0/config: LAN; same-host proxy (CF Tunnel / local nginx) без devkey;
+        /// из интернета или через туннель при заданном devkey — с ключом.
         /// </summary>
         private static bool IsConfigApiAccessAllowed(HttpContext httpContext)
         {
-            if (IsDirectLocalClient(httpContext) || IsViaLocalPeer(httpContext))
+            if (IsDirectLocalClient(httpContext))
                 return true;
 
-            if (AppInit.conf?.openconfig == true)
+            if (IsViaLocalPeer(httpContext))
             {
-                if (!string.IsNullOrEmpty(AppInit.conf?.devkey))
-                    return DevKeyMatches(httpContext);
-                return true;
+                if (string.IsNullOrEmpty(AppInit.conf?.devkey))
+                    return true;
+                return DevKeyMatches(httpContext);
             }
 
             if (!string.IsNullOrEmpty(AppInit.conf?.devkey) && DevKeyMatches(httpContext))

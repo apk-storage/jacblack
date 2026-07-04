@@ -19,10 +19,10 @@ info:
     | `apikey` query | Search, stats (when `apikey` is set in config) |
     | `X-Api-Key` header | Same as query apikey |
     | `Authorization: Bearer` | Same as apikey |
-    | `X-Dev-Key` header | Config API behind tunnel when `devkey` is set |
+    | `X-Dev-Key` header | /settings (config API), /dev/, /cron/, /jsondb из интернета или через туннель |
 
-    Config endpoints (`/api/v1.0/config/*`): local network, Cloudflare Tunnel (cloudflared on the same host),
-    `openconfig: true`, or valid `X-Dev-Key` when `devkey` is set.
+    Config endpoints (`/api/v1.0/config/*`): LAN; same-host Cloudflare Tunnel / nginx без devkey;
+    из интернета или при заданном devkey — заголовок `X-Dev-Key`.
 
     ## Config files
 

@@ -133,7 +133,7 @@ namespace JacRed.Engine
                     Type = SecuritySchemeType.ApiKey,
                     In = ParameterLocation.Header,
                     Name = "X-Dev-Key",
-                    Description = "Dev key for /api/v1.0/config (when devkey is set in init.yaml)"
+                    Description = "Dev key for /api/v1.0/config, /dev/, /cron/, /jsondb from internet or tunnel"
                 });
 
                 options.AddSecurityRequirement(new OpenApiSecurityRequirement

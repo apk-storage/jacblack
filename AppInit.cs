@@ -196,7 +196,7 @@ namespace JacRed
 
         public string apikey = null;
 
-        /// <summary>Если задан — доступ к /dev/, /cron/, /jsondb только с заголовком X-Dev-Key или параметром devkey (нужно за туннелем/прокси, когда все запросы выглядят локальными).</summary>
+        /// <summary>Если задан — доступ к /dev/, /cron/, /jsondb и /api/v1.0/config/* из интернета и через туннель (заголовок X-Dev-Key или ?devkey=). В LAN без ключа не нужен.</summary>
         public string devkey = null;
 
         public bool mergeduplicates = true;
@@ -204,9 +204,6 @@ namespace JacRed
         public bool mergenumduplicates = true;
 
         public bool openstats = true;
-
-        /// <summary>Разрешить /api/v1.0/config/* с любого IP (при заданном devkey — только с ключом).</summary>
-        public bool openconfig = false;
 
         public bool opensync = true;
 

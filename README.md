@@ -138,8 +138,7 @@ sudo -u myservice ./jacred.sh --remove
 | `listenip` | IP для прослушивания (`any` — все интерфейсы) | `any` |
 | `listenport` | Порт HTTP | `9117` |
 | `apikey` | Ключ авторизации API (пусто — без проверки). Передаётся через `?apikey=...`, заголовок `X-Api-Key` или `Authorization: Bearer`. Без ключа доступны: `/`, `/stats`, `/settings`, `/health`, `/version`, `/lastupdatedb`, `/openapi.yaml`, `/swagger`, `/api/v1.0/conf`, `/sync/*` | — |
-| `devkey` | Ключ для `/dev/`, `/cron/`, `/jsondb` из интернета или через Cloudflare Tunnel / nginx. В LAN без ключа не нужен. Передаётся через `X-Dev-Key` или `?devkey=...` | — |
-| `openconfig` | Разрешить `/api/v1.0/config/*` с любого IP (через CF Tunnel / локальный nginx на том же хосте работает и без этого) | `false` |
+| `devkey` | Ключ для `/settings` (config API), `/dev/`, `/cron/`, `/jsondb` из интернета или через туннель. В LAN и через CF Tunnel **на этом хосте** без ключа не нужен. `X-Dev-Key` или `?devkey=...` | — |
 | `mergeduplicates` | Объединять дубликаты в выдаче | `true` |
 | `mergenumduplicates` | Объединять дубликаты по номеру (серии и т.п.) | `true` |
 | `openstats` | Открыть доступ к `/stats/*` | `true` |
@@ -461,7 +460,7 @@ Swagger UI по умолчанию загружает **`/openapi.yaml`**; в в
 
 REST API и страница **`/settings`** для редактирования **`init.yaml`** / **`init.conf`**.
 
-**Доступ:** LAN; same-host Cloudflare Tunnel / nginx; `openconfig: true`; или `devkey`. При `apikey` — также ключ API.
+**Доступ:** LAN; same-host Cloudflare Tunnel / nginx (без devkey); из интернета — **`devkey`**. При `apikey` — также ключ API.
 
 | Метод | Путь | Описание |
 |-------|------|----------|
@@ -549,14 +548,14 @@ ModHeaders различает **IP клиента** (после `X-Forwarded-For
 | Путь | LAN / localhost (клиент) | CF Tunnel / nginx **на этом же хосте** | Интернет / nginx **на другом хосте** |
 |------|--------------------------|------------------------------------------|--------------------------------------|
 | `/dev/*`, `/cron/*`, `/jsondb/*` | ✓ | **403** (или **401** с `devkey`) | **403** (или **401** с `devkey`) |
-| `/api/v1.0/config/*` | ✓ | ✓ | `openconfig: true` или `devkey` |
+| `/api/v1.0/config/*` | ✓ | ✓ (без devkey) | **`devkey`** |
 | Поиск, `/stats/*` (не в белом списке) | `apikey` если задан | `apikey` если задан | `apikey` если задан |
 
 | Условие | Поведение |
 | -------- | ----------- |
 | Клиент в **LAN** (RFC1918 / loopback), ключи не заданы | `/cron/*`, `/dev/*`, `/jsondb/*` — доступны; `/api/v1.0/config/*` — доступен |
 | Запрос через **Cloudflare Tunnel** или **локальный nginx** (peer = 127.0.0.1 / Docker-сеть) | `/settings` и config API — доступны; **`/dev/*`, `/cron/*`, `/jsondb/*` — закрыты** без `devkey` |
-| Клиент из **интернета** напрямую или через удалённый прокси | `/dev/*`, `/cron/*`, `/jsondb/*` — только с **`devkey`**; config API — с **`openconfig: true`** или **`devkey`** |
+| Клиент из **интернета** напрямую или через удалённый прокси | `/dev/*`, `/cron/*`, `/jsondb/*` и config API — только с **`devkey`** |
 | В конфиге задан **`devkey`** | Для dev-путей из интернета/туннеля: заголовок `X-Dev-Key` или `?devkey=...` (иначе **401**) |
 | В конфиге задан **`apikey`** | Для путей **вне** белого списка нужен **`apikey`**: `?apikey=...`, `X-Api-Key` или `Authorization: Bearer` (иначе **401**). **`apikey` не заменяет `devkey`** |
 
@@ -573,7 +572,7 @@ curl -s -H "X-Api-Key: YOUR_API_KEY" -H "X-Dev-Key: YOUR_DEV_KEY" \
 
 > - Для использования API с авторизацией укажите `apikey` в конфиге. Ключ можно передать: `?apikey=...`, заголовок `X-Api-Key` или `Authorization: Bearer`. Пути `/`, `/stats`, `/settings`, `/health`, `/version`, `/lastupdatedb`, `/openapi.yaml`, `/swagger`, `/api/v1.0/conf`, `/sync/*` доступны без ключа.
 > - Эндпоинты `/dev/*`, `/cron/*`, `/jsondb/*` — только **реальный LAN-клиент** или **`devkey`**. Туннель/прокси на том же хосте **не открывает** dev-пути.
-> - `/api/v1.0/config/*` — LAN, same-host proxy (CF Tunnel / local nginx), **`openconfig: true`**, или **`devkey`**. Затем при необходимости проверка **`apikey`**.
+> - `/api/v1.0/config/*` — LAN, same-host proxy (CF Tunnel / local nginx) без devkey; из интернета — **`devkey`**. Затем при необходимости проверка **`apikey`**.
 
 ---
 
@@ -779,7 +778,7 @@ JacRed построен на **ASP.NET Core** (.NET 9.0) и использует
 
 ### Основные компоненты
 
-- **ModHeaders** — middleware: раздельный доступ к dev-путям (LAN/devkey) и config API (LAN/same-host proxy/openconfig/devkey), проверка `apikey`, CORS PNA, логирование cron
+- **ModHeaders** — middleware: dev-пути (LAN/devkey), config API (LAN/same-host proxy/devkey), проверка `apikey`, CORS PNA, логирование cron
 - **FileDB** — управление файловой базой данных
 - **SyncCron** — синхронизация с удалёнными серверами
 - **TrackersCron** — планирование и выполнение парсинга трекеров
