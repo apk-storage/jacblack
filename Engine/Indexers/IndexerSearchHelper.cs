@@ -43,9 +43,8 @@ namespace JacRed.Engine.Indexers
                 categories,
                 query["genres"]);
 
-            string tracker = query["Tracker"].ToString();
-            if (string.IsNullOrWhiteSpace(tracker))
-                tracker = query["tracker"].ToString();
+            var trackers = IndexerRequestParams.TrackersFromQuery(query);
+            string tracker = trackers.Count > 0 ? trackers[0] : null;
 
             return new IndexerSearchRequest
             {
@@ -59,6 +58,7 @@ namespace JacRed.Engine.Indexers
                 Season = IndexerRequestParams.SeasonFromQuery(query),
                 Episode = IndexerRequestParams.EpisodeFromQuery(query),
                 Tracker = tracker,
+                Trackers = trackers,
                 CardMode = cardMode,
                 ApiKey = apikey,
                 RqNum = rqnum
@@ -133,6 +133,8 @@ namespace JacRed.Engine.Indexers
 
             if (req.Season.HasValue)
                 results = SeasonEpisodeFilter.Filter(results, req.Season.Value, req.Episode);
+
+            results = IndexerResultFilters.FilterByTrackers(results, req.Trackers);
 
             var (limit, offset) = IndexerRequestParams.LimitOffsetFromQuery(query);
             return IndexerResultFilters.Paginate(results, limit, offset);

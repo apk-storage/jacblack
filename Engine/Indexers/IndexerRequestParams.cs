@@ -96,6 +96,32 @@ namespace JacRed.Engine.Indexers
             return cats.Distinct().ToList();
         }
 
+        /// <summary>Jackett-style tracker filter: Tracker[], Tracker, tracker.</summary>
+        public static List<string> TrackersFromQuery(IQueryCollection query)
+        {
+            var trackers = new List<string>();
+            foreach (var key in query.Keys.Where(k =>
+                k.StartsWith("Tracker[", StringComparison.OrdinalIgnoreCase) ||
+                k.Equals("Tracker[]", StringComparison.OrdinalIgnoreCase) ||
+                k.Equals("Tracker", StringComparison.OrdinalIgnoreCase) ||
+                k.Equals("tracker", StringComparison.OrdinalIgnoreCase)))
+            {
+                foreach (var val in query[key])
+                {
+                    foreach (var part in (val ?? "").Split(','))
+                    {
+                        var trimmed = part.Trim();
+                        if (!string.IsNullOrEmpty(trimmed))
+                            trackers.Add(trimmed);
+                    }
+                }
+            }
+
+            return trackers
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         public static int? SeasonFromQuery(IQueryCollection query)
         {
             if (!query.TryGetValue("season", out var v) || !int.TryParse(v, out int n) || n <= 0) return null;

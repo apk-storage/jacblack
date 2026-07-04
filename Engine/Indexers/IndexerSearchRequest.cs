@@ -24,6 +24,8 @@ namespace JacRed.Engine.Indexers
 
         public string Tracker { get; set; }
 
+        public List<string> Trackers { get; set; }
+
         public bool CardMode { get; set; }
 
         public string ApiKey { get; set; }

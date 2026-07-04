@@ -35,7 +35,7 @@ namespace JacRed.Engine.Indexers
 
             if (imdbMode)
             {
-                batches.Add(await V1SearchAsync(query, null, exact: true, settings.v1Sort, req.Tracker, req.Season, cache, req.RqNum));
+                batches.Add(await V1SearchAsync(query, null, exact: true, settings.v1Sort, req.Trackers, req.Season, cache, req.RqNum));
                 return IndexerResultMerger.MergeAndSort(batches.ToArray());
             }
 
@@ -59,7 +59,7 @@ namespace JacRed.Engine.Indexers
             }
 
             foreach (var pair in V1Pairs(query, titleRu, titleEn, settings, req.CardMode))
-                batches.Add(await V1SearchAsync(pair.search, pair.altname, exact: false, settings.v1Sort, req.Tracker, req.Season, cache, req.RqNum));
+                batches.Add(await V1SearchAsync(pair.search, pair.altname, exact: false, settings.v1Sort, req.Trackers, req.Season, cache, req.RqNum));
 
             return IndexerResultMerger.MergeAndSort(batches.ToArray());
         }
@@ -155,7 +155,7 @@ namespace JacRed.Engine.Indexers
             return pairs;
         }
 
-        static async Task<List<Result>> V1SearchAsync(string search, string altname, bool exact, string sort, string tracker, int? season, IMemoryCache cache, bool rqnum)
+        static async Task<List<Result>> V1SearchAsync(string search, string altname, bool exact, string sort, List<string> trackers, int? season, IMemoryCache cache, bool rqnum)
         {
             if (string.IsNullOrWhiteSpace(search)) return new List<Result>();
 
@@ -166,6 +166,7 @@ namespace JacRed.Engine.Indexers
             {
                 if (AppInit.conf.synctrackers != null && !AppInit.conf.synctrackers.Contains(t.trackerName)) return;
                 if (AppInit.conf.disable_trackers != null && AppInit.conf.disable_trackers.Contains(t.trackerName)) return;
+                if (!MatchesTrackerFilter(t.trackerName, trackers)) return;
                 if (!torrents.TryGetValue(t.url, out var val) || t.updateTime > val.updateTime)
                     torrents[t.url] = t;
             }
@@ -212,12 +213,29 @@ namespace JacRed.Engine.Indexers
                 default: query = query.OrderByDescending(i => i.sid); break;
             }
 
-            if (!string.IsNullOrWhiteSpace(tracker))
-                query = query.Where(i => i.trackerName == tracker);
             if (season.HasValue && season.Value > 0)
                 query = query.Where(i => i.seasons != null && i.seasons.Contains(season.Value));
 
             return query.Take(2000).Select(i => MapV1(i, rqnum)).ToList();
+        }
+
+        static bool MatchesTrackerFilter(string trackerName, List<string> trackers)
+        {
+            if (trackers == null || trackers.Count == 0)
+                return true;
+            if (string.IsNullOrWhiteSpace(trackerName))
+                return false;
+
+            foreach (var part in trackerName.Split(','))
+            {
+                foreach (var allowed in trackers)
+                {
+                    if (part.Trim().Equals(allowed, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         static async Task<(string search, string altname)> ResolveImdbSearchAsync(string search, string altname, IMemoryCache cache)

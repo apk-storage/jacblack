@@ -48,6 +48,27 @@ namespace JacRed.Engine.Indexers
             }).ToList();
         }
 
+        public static List<Result> FilterByTrackers(List<Result> items, List<string> trackers)
+        {
+            if (trackers == null || trackers.Count == 0)
+                return items;
+
+            var allowed = new HashSet<string>(trackers, StringComparer.OrdinalIgnoreCase);
+            return items.Where(t =>
+            {
+                if (string.IsNullOrWhiteSpace(t.Tracker))
+                    return false;
+
+                foreach (var part in t.Tracker.Split(','))
+                {
+                    if (allowed.Contains(part.Trim()))
+                        return true;
+                }
+
+                return false;
+            }).ToList();
+        }
+
         public static List<Result> Paginate(List<Result> items, int? limit, int? offset)
         {
             int off = Math.Max(0, offset ?? 0);

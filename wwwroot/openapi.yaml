@@ -155,6 +155,18 @@ paths:
           schema:
             type: integer
             description: '-1 unknown, 1 movie, 2 serial, 3 tvshow, 4 doc, 5 anime'
+        - name: Tracker[]
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: Jackett-style filter by internal tracker id (e.g. kinozal, rutracker)
+        - name: tracker
+          in: query
+          schema:
+            type: string
+          description: Single-tracker alias for Tracker[]
       responses:
         '200':
           description: Search results
@@ -367,6 +379,32 @@ paths:
                   $ref: '#/components/schemas/ProwlarrIndexer'
         '404':
           description: Torznab disabled
+
+  /api/v1/indexer/{indexerId}:
+    get:
+      tags: [Torznab]
+      summary: Prowlarr indexer detail
+      description: |
+        Prowlarr-compatible indexer detail for qui tracker domain resolution (backend=prowlarr).
+        JacRed exposes a single aggregate indexer with `id=1`.
+      operationId: prowlarrIndexerDetail
+      parameters:
+        - name: indexerId
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - $ref: '#/components/parameters/ApiKeyQuery'
+      responses:
+        '200':
+          description: Indexer detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProwlarrIndexerDetail'
+        '404':
+          description: Torznab disabled or unknown indexer id
 
   /api/v1/indexer/{indexerId}/newznab:
     get:
@@ -972,6 +1010,32 @@ components:
           type: string
           enum: [unknown, usenet, torrent]
           example: torrent
+
+    ProwlarrIndexerDetail:
+      type: object
+      description: Prowlarr /api/v1/indexer/{id} detail response
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+        description:
+          type: string
+        implementation:
+          type: string
+        implementationName:
+          type: string
+        enable:
+          type: boolean
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value: {}
 
     ErrorResponse:
       type: object

@@ -16,12 +16,12 @@ namespace JacRed.Engine.Indexers
         static readonly Regex Latin = new Regex(@"[a-zA-Z]");
         static readonly Regex InfoHashFromMagnet = new Regex(@"btih:([a-fA-F0-9]+)", RegexOptions.IgnoreCase);
 
-        public static string CapsXml(string baseUrl)
+        public static string CapsXml(string apiUrl)
         {
-            var baseEsc = EscapeXml(baseUrl.TrimEnd('/'));
+            var apiEsc = EscapeXml(apiUrl.TrimEnd('/'));
             return $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <caps>
-  <server version=""1.0"" title=""JacRed"" strapline=""Native Torznab API"" email=""info@localhost"" url=""{baseEsc}/torznab/api""/>
+  <server version=""1.0"" title=""JacRed"" strapline=""Native Torznab API"" email=""info@localhost"" url=""{apiEsc}""/>
   <limits max=""1000"" default=""100""/>
   <searching>
     <search available=""yes"" supportedParams=""q,imdbid""/>
@@ -47,16 +47,17 @@ namespace JacRed.Engine.Indexers
   </indexer>
 </indexers>";
 
-        public static string WrapRss(string itemsXml, string channelLink)
+        public static string WrapRss(string itemsXml, string siteOrigin, string torznabApiUrl)
         {
-            var link = EscapeXml(channelLink.TrimEnd('/'));
+            var site = EscapeXml(siteOrigin.TrimEnd('/'));
+            var api = EscapeXml(torznabApiUrl.TrimEnd('/'));
             return $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <rss version=""2.0"" xmlns:atom=""http://www.w3.org/2005/Atom"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
     <channel>
-        <atom:link href=""{link}/torznab/api"" rel=""self"" type=""application/rss+xml"" />
+        <atom:link href=""{api}"" rel=""self"" type=""application/rss+xml"" />
         <title>JacRed</title>
         <description>Torznab API</description>
-        <link>{link}/</link>
+        <link>{site}/</link>
         <language>en-us</language>
         <category>search</category>
         {itemsXml}

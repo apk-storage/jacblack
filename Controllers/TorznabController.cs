@@ -4,6 +4,7 @@ using JacRed.Models.Api;
 using JacRed.Models.AppConf;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -29,12 +30,13 @@ namespace JacRed.Controllers
 
             var query = HttpContext.Request.Query;
             var origin = $"{Request.Scheme}://{Request.Host}";
+            var torznabApiUrl = TorznabApiUrl(Request, origin);
 
             if (Request.Method == "HEAD")
                 return Content("", "application/xml; charset=utf-8");
 
             if (t == "caps")
-                return Content(TorznabXmlFormatter.CapsXml(origin), "application/xml; charset=utf-8");
+                return Content(TorznabXmlFormatter.CapsXml(torznabApiUrl), "application/xml; charset=utf-8");
 
             if (t == "indexers")
             {
@@ -46,20 +48,28 @@ namespace JacRed.Controllers
 
             string resolvedQuery = IndexerRequestParams.ResolveSearchQuery(query);
             if (IndexerRequestParams.TvdbIdOnly(query, resolvedQuery))
-                return XmlSearchResult(new List<Result>(), t, query, origin);
+                return XmlSearchResult(new List<Result>(), t, query, origin, torznabApiUrl);
 
             string title = query["title"].ToString();
             string titleOriginal = query["title_original"].ToString();
             if (string.IsNullOrWhiteSpace(resolvedQuery) && string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(titleOriginal))
-                return XmlSearchResult(new List<Result>(), t, query, origin);
+                return XmlSearchResult(new List<Result>(), t, query, origin, torznabApiUrl);
 
             var req = IndexerSearchHelper.BuildRequest(query, apikey, rqnum: false, boundQuery: resolvedQuery);
             var results = await IndexerSearchEngine.SearchCombinedAsync(req, memoryCache);
             results = IndexerSearchHelper.ApplyPostFilters(results, query, req, t);
-            return XmlSearchResult(results, t, query, origin);
+            return XmlSearchResult(results, t, query, origin, torznabApiUrl);
         }
 
-        IActionResult XmlSearchResult(List<Result> results, string t, IQueryCollection query, string origin)
+        static string TorznabApiUrl(HttpRequest request, string origin)
+        {
+            var path = (request.PathBase + request.Path).Value?.TrimEnd('/');
+            if (string.IsNullOrEmpty(path))
+                path = "/torznab/api";
+            return origin.TrimEnd('/') + path;
+        }
+
+        IActionResult XmlSearchResult(List<Result> results, string t, IQueryCollection query, string origin, string torznabApiUrl)
         {
             string assignedCat = "";
             string catParam = IndexerSearchHelper.CategoryParam(query);
@@ -69,7 +79,7 @@ namespace JacRed.Controllers
 
             bool enrich = AppInit.conf.torznab?.enrichTitles ?? true;
             string items = TorznabXmlFormatter.ItemsXml(results, assignedCat, enrich, catParam);
-            return Content(TorznabXmlFormatter.WrapRss(items, origin), "application/xml; charset=utf-8");
+            return Content(TorznabXmlFormatter.WrapRss(items, origin, torznabApiUrl), "application/xml; charset=utf-8");
         }
     }
 
@@ -115,6 +125,30 @@ namespace JacRed.Controllers
                     enable = true,
                     protocol = "torrent"
                 }
+            });
+        }
+
+        /// <summary>
+        /// Prowlarr REST API: indexer detail (qui tracker domain resolution when backend=prowlarr).
+        /// </summary>
+        [Route("/api/v1/indexer/{id:int}")]
+        public IActionResult ProwlarrIndexerDetail(int id)
+        {
+            if (!TorznabController.IsTorznabEnabled())
+                return NotFound();
+
+            if (id != 1)
+                return NotFound();
+
+            return Json(new
+            {
+                id = 1,
+                name = "JacRed (all trackers)",
+                description = "Aggregated JacRed search across all configured trackers",
+                implementation = "Torznab",
+                implementationName = "Torznab",
+                enable = true,
+                fields = Array.Empty<object>()
             });
         }
     }

@@ -311,6 +311,20 @@ globalproxy:
 |-----|------------|
 | **`GET /torznab/api`** | Основной Torznab endpoint (`t=caps`, `search`, `tvsearch`, `moviesearch`, `indexers`) |
 | **`GET /api/v2.0/indexers/{id}/results/torznab/api`** | Jackett-совместимый путь (алиас, тот же обработчик) |
+| **`GET /api/v1/indexer/{id}/newznab`** | Prowlarr-совместимый путь (алиас, тот же обработчик) |
+
+**Клиент → URL → формат**
+
+| Клиент | URL (относительно `http://host:9117`) | Формат |
+|--------|----------------------------------------|--------|
+| **Lampa** | `/api/v2.0/indexers/all/results` | Jackett JSON (`Results[]`). Тип парсера в Lampa: **Jackett**, не Prowlarr/Torznab |
+| **Sonarr / Radarr** | `/torznab/api` | Torznab XML (Generic Torznab indexer) |
+| **Prowlarr** (ручная настройка Generic Torznab) | `/torznab/api` | Torznab XML |
+| **qui / autobrr** (discover, backend=**jackett**) | `/api/v2.0/indexers/all/results/torznab/api` | Torznab XML + `t=indexers` discover |
+| **qui / autobrr** (discover, backend=**prowlarr**) | `/api/v1/indexer` + `/api/v1/indexer/1/newznab` | Prowlarr REST + Torznab XML |
+| **JacRed native API** | `/api/v1.0/torrents` | Собственный JSON API (не Torznab, не Jackett) |
+
+В ответе `t=caps` поле `<server url="...">` и `<atom:link rel="self">` в RSS указывают на **фактический путь запроса** (например Jackett- или Prowlarr-алиас), а не всегда на `/torznab/api`.
 
 **Sonarr / Radarr / Prowlarr (Generic Torznab):**
 
@@ -318,7 +332,7 @@ globalproxy:
 http://jacred:9117/torznab/api
 ```
 
-API key — значение `apikey` из конфига (query `?apikey=...` или заголовок). В ответе `t=caps` поле `<server url="...">` также указывает на `/torznab/api`.
+API key — значение `apikey` из конфига (query `?apikey=...` или заголовок `X-Api-Key`).
 
 ---
 
@@ -390,12 +404,15 @@ Swagger UI по умолчанию загружает **`/openapi.yaml`**; в в
 
 ### API поиска
 
-- **`GET /api/v2.0/indexers/{status}/results`** — поиск в формате Jackett (Lampa, Prowlarr и др.).
+Сводная таблица «клиент → URL → формат» — в разделе **Torznab / Jackett** выше.
+
+- **`GET /api/v2.0/indexers/{status}/results`** — поиск в формате Jackett JSON (**Lampa** и др.).
   - Combined search: v2 card/fuzzy + v1 merge + IMDB (`Query=tt…` / `kp…`) + card fallback.
-  - Параметры Lampa: `Query`, `title`, `title_original`, `year`, `is_serial`, `genres`, `Category[]`, `season`, `ep`, `limit`, `offset`, `apikey`.
+  - Параметры Lampa: `Query`, `title`, `title_original`, `year`, `is_serial`, `genres`, `Category[]`, `Tracker[]`, `season`, `ep`, `limit`, `offset`, `apikey`.
   - Ответ: `{ "Results": [...], "jacred": true }` с `ffprobe`, `languages`, `info` при `tracks: true`.
 - **`GET /api/v2.0/indexers`** — список индексаторов (Jackett/Prowlarr).
 - **`GET /api/v1/indexer`** — список индексаторов в формате Prowlarr REST API (qui/autobrr discover fallback).
+- **`GET /api/v1/indexer/{id}`** — детали индексатора Prowlarr (`id=1`, для qui backend=prowlarr).
 - **`GET /api/v1/indexer/{id}/newznab`** — Torznab XML через Prowlarr-совместимый путь (`t=caps|search|…`).
 - **`GET /torznab/api`** — Torznab XML, основной endpoint (`t=search|tvsearch|moviesearch|caps|indexers`).
 - **`GET /api/v2.0/indexers/{id}/results/torznab/api`** — Torznab XML (Jackett-алиас, тот же обработчик).
@@ -405,7 +422,7 @@ Swagger UI по умолчанию загружает **`/openapi.yaml`**; в в
   - IMDB/KP ID (`tt…`, `kp…`) → поиск через v1 с `exact=true`.
   - Card mode (Lampa): `title` + `title_original` + `year` + `is_serial` + `genres`.
   - Объединение v1+v2, bilingual `Русский / English`, post-filter по сезону/эпизоду/году/категории.
-- **`GET /api/v1.0/torrents`** — поиск торрентов (собственный API).
+- **`GET /api/v1.0/torrents`** — поиск торрентов (собственный JSON API JacRed, не Torznab и не Jackett).
   - Параметры: `query` (поисковый запрос), `tracker` (трекер), `category` (категория), `quality` (качество).
 - **`GET /api/v1.0/qualitys`** — список доступных качеств.
 
