@@ -280,6 +280,7 @@ namespace JacRed.Engine.Indexers
                     name = i.name,
                     originalname = i.originalname,
                     relased = i.relased,
+                    sizeName = i.sizeName,
                     voices = i.voices,
                     seasons = i.seasons,
                     types = i.types

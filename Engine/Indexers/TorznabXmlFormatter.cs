@@ -1,6 +1,7 @@
 using JacRed.Models.Api;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
@@ -13,6 +14,7 @@ namespace JacRed.Engine.Indexers
     {
         static readonly Regex Cyrillic = new Regex(@"[а-яА-ЯёЁ]");
         static readonly Regex Latin = new Regex(@"[a-zA-Z]");
+        static readonly Regex InfoHashFromMagnet = new Regex(@"btih:([a-fA-F0-9]+)", RegexOptions.IgnoreCase);
 
         public static string CapsXml(string baseUrl)
         {
@@ -49,8 +51,9 @@ namespace JacRed.Engine.Indexers
         {
             var link = EscapeXml(channelLink.TrimEnd('/'));
             return $@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+<rss version=""2.0"" xmlns:atom=""http://www.w3.org/2005/Atom"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
     <channel>
+        <atom:link href=""{link}/torznab/api"" rel=""self"" type=""application/rss+xml"" />
         <title>JacRed</title>
         <description>Torznab API</description>
         <link>{link}/</link>
@@ -78,9 +81,11 @@ namespace JacRed.Engine.Indexers
                 : title;
 
             string magnet = torrent.MagnetUri ?? torrent.Details ?? "";
+            string detailsUrl = torrent.Details;
             string indexer = torrent.Tracker ?? "JacRed";
             int seeders = torrent.Seeders;
-            int peers = torrent.Peers > 0 ? torrent.Seeders + torrent.Peers : torrent.Seeders;
+            int leechers = torrent.Peers;
+            int peers = leechers > 0 ? seeders + leechers : seeders;
             string itemCat = assignedCat;
             if (string.IsNullOrEmpty(itemCat) && torrent.Category != null && torrent.Category.Count > 0)
                 itemCat = torrent.Category.First().ToString();
@@ -88,44 +93,127 @@ namespace JacRed.Engine.Indexers
                 itemCat = catParam.Split(',')[0].Trim();
             if (string.IsNullOrEmpty(itemCat)) itemCat = "2000";
 
-            string infohash = null;
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(magnet) && magnet.Contains("btih:", StringComparison.OrdinalIgnoreCase))
-                {
-                    var m = Regex.Match(magnet, @"btih:([a-fA-F0-9]+)", RegexOptions.IgnoreCase);
-                    if (m.Success) infohash = m.Groups[1].Value;
-                }
-            }
-            catch { }
-
+            string infohash = ExtractInfoHash(magnet);
             string guid = infohash ?? Md5(displayTitle);
             var (season, episode) = SeasonEpisodeFilter.AttrsFromResult(torrent);
-            string seasonAttrs = "";
-            if (season.HasValue) seasonAttrs += $"\n        <torznab:attr name=\"season\" value=\"{season}\" />";
-            if (episode.HasValue) seasonAttrs += $"\n        <torznab:attr name=\"ep\" value=\"{episode}\" />";
+            long sizeBytes = ResolveSizeBytes(torrent);
+            string pubDate = FormatPubDate(torrent.PublishDate);
+            string enclosureType = magnet.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase)
+                ? "application/x-bittorrent;x-scheme-handler/magnet"
+                : "application/x-bittorrent";
+
+            var attrs = new StringBuilder();
+            AppendAttr(attrs, "magneturl", magnet);
+            AppendAttr(attrs, "size", sizeBytes);
+            AppendAttr(attrs, "seeders", seeders);
+            if (leechers > 0)
+                AppendAttr(attrs, "leechers", leechers);
+            AppendAttr(attrs, "peers", peers);
+            AppendAttr(attrs, "infohash", infohash);
+            AppendAttr(attrs, "downloadvolumefactor", "1");
+            AppendAttr(attrs, "uploadvolumefactor", "1");
+            AppendAttr(attrs, "site", indexer);
+            AppendAttr(attrs, "category", itemCat);
 
             string langTag = Cyrillic.IsMatch(title) ? "ru-RU" : (Latin.IsMatch(title) ? "en-US" : "ru-RU");
             string langCode = langTag.StartsWith("en") ? "en" : "ru";
+            AppendAttr(attrs, "language", langTag);
+            AppendAttr(attrs, "lang", langCode);
+
+            if (torrent.info?.relased > 0)
+                AppendAttr(attrs, "year", torrent.info.relased);
+            if (season.HasValue)
+                AppendAttr(attrs, "season", season.Value);
+            if (episode.HasValue)
+            {
+                AppendAttr(attrs, "ep", episode.Value);
+                AppendAttr(attrs, "episode", episode.Value);
+            }
+
+            string comments = !string.IsNullOrWhiteSpace(detailsUrl) && detailsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? $"\n        <comments>{EscapeXml(detailsUrl)}</comments>"
+                : "";
 
             return $@"
     <item>
         <title>{EscapeXml(displayTitle)}</title>
         <guid isPermaLink=""false"">{guid}</guid>
-        <link>{EscapeXml(magnet)}</link>
-        <pubDate>{DateTime.UtcNow:R}</pubDate>
+        <jackettindexer id=""all"">{EscapeXml(indexer)}</jackettindexer>
+        <link>{EscapeXml(magnet)}</link>{comments}
+        <pubDate>{pubDate}</pubDate>
         <category>{itemCat}</category>
-        <enclosure url=""{EscapeXml(magnet)}"" length=""{(long)torrent.Size}"" type=""application/x-bittorrent"" />
-        <torznab:attr name=""magneturl"" value=""{EscapeXml(magnet)}"" />
-        <torznab:attr name=""size"" value=""{(long)torrent.Size}"" />
-        <torznab:attr name=""seeders"" value=""{seeders}"" />
-        <torznab:attr name=""peers"" value=""{peers}"" />
-        <torznab:attr name=""infohash"" value=""{infohash ?? ""}"" />
-        <torznab:attr name=""site"" value=""{EscapeXml(indexer)}"" />
-        <torznab:attr name=""category"" value=""{itemCat}"" />
-        <torznab:attr name=""language"" value=""{langTag}"" />
-        <torznab:attr name=""lang"" value=""{langCode}"" />{seasonAttrs}
-    </item>";
+        <size>{sizeBytes}</size>
+        <enclosure url=""{EscapeXml(magnet)}"" length=""{sizeBytes}"" type=""{enclosureType}"" />
+{attrs}    </item>";
+        }
+
+        static void AppendAttr(StringBuilder sb, string name, object value)
+        {
+            if (value == null)
+                return;
+            string text = value.ToString();
+            if (string.IsNullOrEmpty(text))
+                return;
+            sb.Append("        <torznab:attr name=\"")
+              .Append(name)
+              .Append("\" value=\"")
+              .Append(EscapeXml(text))
+              .Append("\" />\n");
+        }
+
+        static string ExtractInfoHash(string magnet)
+        {
+            if (string.IsNullOrWhiteSpace(magnet))
+                return null;
+
+            try
+            {
+                var m = InfoHashFromMagnet.Match(magnet);
+                if (m.Success)
+                    return m.Groups[1].Value.ToLowerInvariant();
+            }
+            catch { }
+
+            return null;
+        }
+
+        static string FormatPubDate(DateTime publishDate)
+        {
+            if (publishDate == default || publishDate.Year < 2000)
+                publishDate = DateTime.UtcNow;
+            return publishDate.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture);
+        }
+
+        static long ResolveSizeBytes(Result torrent)
+        {
+            if (torrent == null)
+                return 0;
+
+            if (torrent.Size > 0)
+                return (long)torrent.Size;
+
+            return ParseSizeNameToBytes(torrent.info?.sizeName);
+        }
+
+        static long ParseSizeNameToBytes(string sizeName)
+        {
+            if (string.IsNullOrWhiteSpace(sizeName))
+                return 0;
+
+            var match = Regex.Match(sizeName, @"([0-9\.,]+)\s*(Mb|МБ|GB|ГБ|TB|ТБ|KB|КБ|B|Б)?", RegexOptions.IgnoreCase);
+            if (!match.Success || !double.TryParse(match.Groups[1].Value.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out double value) || value <= 0)
+                return 0;
+
+            string unit = match.Groups[2].Value.ToLowerInvariant();
+            return unit switch
+            {
+                "kb" or "кб" => (long)(value * 1024),
+                "mb" or "мб" => (long)(value * 1048576),
+                "gb" or "гб" => (long)(value * 1073741824),
+                "tb" or "тб" => (long)(value * 1099511627776),
+                "b" or "б" or "" => (long)value,
+                _ => (long)(value * 1048576),
+            };
         }
 
         static string EscapeXml(string value)

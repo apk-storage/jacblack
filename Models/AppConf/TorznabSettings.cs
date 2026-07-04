@@ -1,7 +1,7 @@
 namespace JacRed.Models.AppConf
 {
     /// <summary>
-    /// Torznab / Jackett compatibility layer (jacred-proxy feature parity).
+    /// Torznab / Jackett compatibility layer.
     /// </summary>
     public class TorznabSettings
     {

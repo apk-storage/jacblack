@@ -16,7 +16,7 @@
 - 📦 **Файловая БД (fdb)** для быстрого доступа к данным
 - 🔄 **Синхронизация** с удалёнными серверами или самостоятельный парсинг
 - 🎯 **API Jackett** — полная совместимость с форматом Jackett
-- 📡 **Torznab XML** — встроенный Torznab API для Sonarr/Radarr/Prowlarr (без отдельного jacred-proxy)
+- 📡 **Torznab XML** — встроенный Torznab API для Sonarr/Radarr/Prowlarr
 - 🌐 **Веб-интерфейс** — поиск, статистика и редактор конфигурации
 - ⚙️ **Настройки в браузере** — `/settings` (форма, YAML/JSON, валидация, diff перед сохранением)
 - 📖 **OpenAPI / Swagger** — `/openapi.yaml`, интерактивная документация на `/swagger`
@@ -402,7 +402,7 @@ Swagger UI по умолчанию загружает **`/openapi.yaml`**; в в
 
   Параметры и поведение одинаковы для обоих Torznab-путей:
   - Параметры: `q`, `imdbid`, `season`, `ep`, `year`, `cat`, `title`, `title_original`, `is_serial`, `limit`, `offset`, `apikey`.
-  - IMDB/KP ID (`tt…`, `kp…`) → поиск через v1 с `exact=true` (как в jacred-proxy).
+  - IMDB/KP ID (`tt…`, `kp…`) → поиск через v1 с `exact=true`.
   - Card mode (Lampa): `title` + `title_original` + `year` + `is_serial` + `genres`.
   - Объединение v1+v2, bilingual `Русский / English`, post-filter по сезону/эпизоду/году/категории.
 - **`GET /api/v1.0/torrents`** — поиск торрентов (собственный API).

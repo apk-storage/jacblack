@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace JacRed.Controllers
 {
     /// <summary>
-    /// Native Torznab XML API (jacred-proxy compatibility without external worker).
+    /// Native Torznab XML API.
     /// </summary>
     public class TorznabController : BaseController
     {
