@@ -144,7 +144,7 @@ namespace JacRed.Engine
             if (types != null && theBad(types))
                 return null;
 
-            string infohash = MagnetLink.Parse(magnet).InfoHashes.V1OrV2.ToHex();
+            string infohash = NormalizeInfohash(MagnetLink.Parse(magnet).InfoHashes.V1OrV2.ToHex());
             if (Database.TryGetValue(infohash, out FfprobeModel res))
                 return res.streams;
 
@@ -319,7 +319,7 @@ namespace JacRed.Engine
             string infohash;
             try
             {
-                infohash = MagnetLink.Parse(magnet).InfoHashes.V1OrV2.ToHex();
+                infohash = NormalizeInfohash(MagnetLink.Parse(magnet).InfoHashes.V1OrV2.ToHex());
                 if (string.IsNullOrEmpty(infohash))
                 {
                     Log("Ошибка: не удалось извлечь infohash из magnet-ссылки", typetask);
