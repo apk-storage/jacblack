@@ -15,6 +15,8 @@ using JacRed.Models.Details;
 using JacRed.Models.Tracks;
 using JacRed.Models.Api;
 using Microsoft.AspNetCore.Http;
+using System.Text;
+using System.Security;
 
 namespace JacRed.Controllers
 {
@@ -30,6 +32,32 @@ namespace JacRed.Controllers
         public ActionResult Stats()
         {
             return File(System.IO.File.OpenRead("wwwroot/stats.html"), "text/html");
+        }
+
+        [Route("/offline.html")]
+        public ActionResult Offline()
+        {
+            return File(System.IO.File.OpenRead("wwwroot/offline.html"), "text/html");
+        }
+
+        [Route("/opensearch.xml")]
+        public ContentResult OpenSearch()
+        {
+            var baseUrl = $"{Request.Scheme}://{Request.Host}";
+            var searchTemplate = $"{baseUrl}/?s={{searchTerms}}";
+            var iconUrl = $"{baseUrl}/img/jacred.png";
+
+            var xml = string.Join('\n',
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+                "<OpenSearchDescription xmlns=\"http://a9.com/-/spec/opensearch/1.1/\">",
+                "  <ShortName>JacRed</ShortName>",
+                "  <Description>Поиск торрентов JacRed</Description>",
+                "  <InputEncoding>UTF-8</InputEncoding>",
+                $"  <Image width=\"32\" height=\"32\" type=\"image/png\">{SecurityElement.Escape(iconUrl)}</Image>",
+                $"  <Url type=\"text/html\" method=\"get\" template=\"{SecurityElement.Escape(searchTemplate)}\"/>",
+                "</OpenSearchDescription>");
+
+            return Content(xml, "application/opensearchdescription+xml", Encoding.UTF8);
         }
 
         [Route("health")]

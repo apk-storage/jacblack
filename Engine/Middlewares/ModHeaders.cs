@@ -125,6 +125,19 @@ namespace JacRed.Engine.Middlewares
             return null;
         }
 
+        /// <summary>Public web/PWA paths that must stay reachable without apikey (also served from wwwroot when web=true).</summary>
+        private static bool IsPublicWebPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            return path.Equals("/opensearch.xml", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/offline.html", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/manifest.json", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/sw.js", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/css/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/js/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/img/", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool IsPathWhitelisted(string path)
         {
             if (string.IsNullOrEmpty(path)) return false;
@@ -134,6 +147,7 @@ namespace JacRed.Engine.Middlewares
                 || path.Equals("/health", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/version", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/lastupdatedb", StringComparison.OrdinalIgnoreCase)
+                || IsPublicWebPath(path)
                 || path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase)
                 || PathWhitelistRegex().IsMatch(path);
         }
