@@ -55,13 +55,23 @@ namespace JacRed
             ThreadPool.QueueUserWorkItem(async _ => await FileDB.CronFast());
 
             ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(1));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(2));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(3));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(4));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(5));
+            ThreadPool.QueueUserWorkItem(async _ => { await Task.Delay(TimeSpan.FromMinutes(2)); await TracksCron.Run(2); });
+            ThreadPool.QueueUserWorkItem(async _ => { await Task.Delay(TimeSpan.FromMinutes(4)); await TracksCron.Run(3); });
+            ThreadPool.QueueUserWorkItem(async _ => { await Task.Delay(TimeSpan.FromMinutes(6)); await TracksCron.Run(4); });
+            ThreadPool.QueueUserWorkItem(async _ => { await Task.Delay(TimeSpan.FromMinutes(8)); await TracksCron.Run(5); });
 
             CultureInfo.CurrentCulture = new CultureInfo("ru-RU");
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                Console.WriteLine($"[fatal] UnhandledException: {e.ExceptionObject}");
+            };
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                Console.WriteLine($"[fatal] UnobservedTaskException: {e.Exception}");
+                e.SetObserved();
+            };
 
             CreateHostBuilder(args).Build().Run();
         }

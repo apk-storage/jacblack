@@ -340,8 +340,6 @@ namespace JacRed.Engine
         private static JToken NormalizeToken(JToken token)
         {
             if (token == null || token.Type == JTokenType.Null) return JValue.CreateNull();
-            if (token is JValue v && v.Type == JTokenType.String && v.ToString() == AppInit.ConfigRedactedPlaceholder)
-                return JValue.CreateNull();
             return token;
         }
 
@@ -349,11 +347,7 @@ namespace JacRed.Engine
         {
             if (token == null || token.Type == JTokenType.Null) return "—";
             if (token is JValue v)
-            {
-                var s = v.ToString();
-                if (IsSensitiveValue(s)) return AppInit.ConfigRedactedPlaceholder;
-                return s;
-            }
+                return v.ToString();
             return token.ToString(Newtonsoft.Json.Formatting.None);
         }
 
@@ -362,11 +356,6 @@ namespace JacRed.Engine
             if (string.IsNullOrEmpty(path)) return false;
             var last = path.Split('.').LastOrDefault() ?? path;
             return SensitiveFieldNames.Contains(last);
-        }
-
-        private static bool IsSensitiveValue(string value)
-        {
-            return value == AppInit.ConfigRedactedPlaceholder;
         }
     }
 

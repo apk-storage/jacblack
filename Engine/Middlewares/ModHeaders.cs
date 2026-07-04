@@ -179,6 +179,7 @@ namespace JacRed.Engine.Middlewares
                 || path.Equals("/health", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/version", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/lastupdatedb", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/openapi.yaml", StringComparison.OrdinalIgnoreCase)
                 || IsPublicWebPath(path)
                 || path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase)
                 || PathWhitelistRegex().IsMatch(path);

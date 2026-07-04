@@ -155,6 +155,7 @@ namespace JacRed.Engine
         #endregion
 
         #region OpenRead / OpenWrite
+        /// <summary>Always returns a snapshot — never expose live Database to concurrent readers.</summary>
         public static IReadOnlyDictionary<string, TorrentDetails> OpenRead(string key, bool update_lastread = false, bool cache = true)
         {
             if (openWriteTask.TryGetValue(key, out WriteTaskModel val))
@@ -165,24 +166,38 @@ namespace JacRed.Engine
                     val.lastread = DateTime.UtcNow;
                 }
 
-                return val.db.Database;
+                return val.db.GetSnapshot();
             }
 
             var fdb = new FileDB(key);
 
             if (AppInit.conf.evercache.enable && (cache || AppInit.conf.evercache.validHour == 0))
             {
-                var wtm = new WriteTaskModel() { db = fdb, openconnection = 1 };
+                var wtm = new WriteTaskModel() { db = fdb, openconnection = 0 };
                 if (update_lastread)
                 {
                     wtm.countread++;
                     wtm.lastread = DateTime.UtcNow;
                 }
 
-                openWriteTask.TryAdd(key, wtm);
+                if (openWriteTask.TryAdd(key, wtm))
+                    return fdb.GetSnapshot();
+
+                fdb.Dispose();
+                if (openWriteTask.TryGetValue(key, out val))
+                {
+                    if (update_lastread)
+                    {
+                        val.countread++;
+                        val.lastread = DateTime.UtcNow;
+                    }
+                    return val.db.GetSnapshot();
+                }
             }
 
-            return fdb.Database;
+            var snapshot = fdb.GetSnapshot();
+            fdb.Dispose();
+            return snapshot;
         }
 
         public static FileDB OpenWrite(string key)
@@ -258,6 +273,18 @@ namespace JacRed.Engine
 
 
         #region Cron
+        static bool TryEvictCacheEntry(string key)
+        {
+            if (!openWriteTask.TryGetValue(key, out WriteTaskModel wtm) || wtm.openconnection > 0)
+                return false;
+
+            if (!openWriteTask.TryRemove(key, out wtm))
+                return false;
+
+            try { wtm.db.SaveChangesIfNeeded(); } catch { }
+            return true;
+        }
+
         async public static Task Cron()
         {
             while (true)
@@ -270,11 +297,11 @@ namespace JacRed.Engine
                 try
                 {
                     int evicted = 0;
-                    foreach (var i in openWriteTask)
+                    foreach (var i in openWriteTask.ToArray())
                     {
                         if (DateTime.UtcNow > i.Value.lastread.AddHours(AppInit.conf.evercache.validHour))
                         {
-                            if (openWriteTask.TryRemove(i.Key, out _))
+                            if (TryEvictCacheEntry(i.Key))
                                 evicted++;
                         }
                     }
@@ -304,7 +331,7 @@ namespace JacRed.Engine
                         int dropped = 0;
                         foreach (var i in query.Take(AppInit.conf.evercache.dropCacheTake))
                         {
-                            if (openWriteTask.TryRemove(i.Key, out _))
+                            if (TryEvictCacheEntry(i.Key))
                                 dropped++;
                         }
                         if (dropped > 0)

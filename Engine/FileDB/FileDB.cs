@@ -18,6 +18,8 @@ namespace JacRed.Engine
 
         public bool savechanges = false;
 
+        readonly object _dbLock = new object();
+
         FileDB(string key)
         {
             fdbkey = key;
@@ -28,6 +30,21 @@ namespace JacRed.Engine
         }
 
         public Dictionary<string, TorrentDetails> Database = new Dictionary<string, TorrentDetails>();
+
+        internal Dictionary<string, TorrentDetails> GetSnapshot()
+        {
+            lock (_dbLock)
+                return new Dictionary<string, TorrentDetails>(Database);
+        }
+
+        internal void SaveChangesIfNeeded()
+        {
+            lock (_dbLock)
+            {
+                if (Database.Count > 0 && savechanges)
+                    JsonStream.Write(pathDb(fdbkey), Database);
+            }
+        }
         #endregion
 
         #region AddOrUpdate
@@ -82,6 +99,14 @@ namespace JacRed.Engine
         }
 
         public void AddOrUpdate(TorrentBaseDetails torrent)
+        {
+            lock (_dbLock)
+            {
+                AddOrUpdateCore(torrent);
+            }
+        }
+
+        void AddOrUpdateCore(TorrentBaseDetails torrent)
         {
             bool foundById = false;
             if (!Database.TryGetValue(torrent.url, out TorrentDetails t))
@@ -424,8 +449,7 @@ namespace JacRed.Engine
         #region Dispose
         public void Dispose()
         {
-            if (Database.Count > 0 && savechanges)
-                JsonStream.Write(pathDb(fdbkey), Database);
+            SaveChangesIfNeeded();
 
             if (openWriteTask.TryGetValue(fdbkey, out WriteTaskModel val))
             {

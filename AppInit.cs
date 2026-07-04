@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using YamlDotNet.Serialization;
@@ -103,36 +104,38 @@ namespace JacRed
             {
                 try
                 {
-                    var (path, lastWrite) = GetConfigSource();
+                    string logLabel = null;
+                    string logPath = null;
 
-                    if (cacheconf.Item1 == null)
+                    lock (_configLock)
                     {
-                        if (path == null)
+                        var (path, lastWrite) = GetConfigSource();
+
+                        if (cacheconf.Item1 == null)
                         {
-                            cacheconf.Item1 = new AppInit();
-                            cacheconf.Item2 = null;
-                            cacheconf.Item3 = default;
-                            LogSafeConfig("config (default)");
-                            return;
+                            if (path == null)
+                            {
+                                cacheconf = (new AppInit(), null, default);
+                                logLabel = "config (default)";
+                            }
+                            else
+                            {
+                                cacheconf = (LoadConfigFromFile(path), path, lastWrite);
+                                logLabel = "config (start)";
+                                logPath = path;
+                            }
                         }
-                        cacheconf.Item1 = LoadConfigFromFile(path);
-                        cacheconf.Item2 = path;
-                        cacheconf.Item3 = lastWrite;
-                        LogSafeConfig("config (start)", path);
-                        return;
+                        else if (path != null && (cacheconf.Item2 != path || cacheconf.Item3 != lastWrite))
+                        {
+                            bool isReload = cacheconf.Item2 != null;
+                            cacheconf = (LoadConfigFromFile(path), path, lastWrite);
+                            logLabel = isReload ? "config (reload)" : "config (start)";
+                            logPath = path;
+                        }
                     }
 
-                    if (path == null)
-                        return;
-
-                    if (cacheconf.Item2 != path || cacheconf.Item3 != lastWrite)
-                    {
-                        bool isReload = cacheconf.Item2 != null;
-                        cacheconf.Item1 = LoadConfigFromFile(path);
-                        cacheconf.Item2 = path;
-                        cacheconf.Item3 = lastWrite;
-                        LogSafeConfig(isReload ? "config (reload)" : "config (start)", path);
-                    }
+                    if (logLabel != null)
+                        LogSafeConfig(logLabel, logPath);
                 }
                 catch { }
             }
@@ -150,8 +153,12 @@ namespace JacRed
         }
 
         static (AppInit, string path, DateTime lastWrite) cacheconf = default;
+        static readonly object _configLock = new object();
 
-        public static AppInit conf => cacheconf.Item1;
+        public static AppInit conf
+        {
+            get { lock (_configLock) { return cacheconf.Item1; } }
+        }
 
         // Parser log is written only when parser log is enabled and this tracker's log is true.
         public static bool TrackerLogEnabled(string trackerName)
@@ -333,9 +340,6 @@ namespace JacRed
             public List<string> errors { get; set; } = new List<string>();
         }
 
-        private const string RedactedPlaceholder = "***";
-        public const string ConfigRedactedPlaceholder = "***";
-
         public static ConfigSourceInfo GetConfigSourceInfo()
         {
             var (path, lastWrite) = GetConfigSource();
@@ -348,7 +352,7 @@ namespace JacRed
             };
         }
 
-        public static JObject GetConfigData(bool redactSensitive = true)
+        public static JObject GetConfigData(bool redactSensitive = false)
         {
             var c = conf;
             if (c == null) return new JObject();
@@ -358,7 +362,7 @@ namespace JacRed
             return jo;
         }
 
-        public static string GetConfigContent(bool redactSensitive = true, string format = null)
+        public static string GetConfigContent(bool redactSensitive = false, string format = null)
         {
             var c = conf;
             if (c == null) return format == "json" ? "{}" : "---\n";
@@ -370,14 +374,30 @@ namespace JacRed
             return SerializeConfigObject(jo, format ?? GetConfigSourceInfo().format ?? "yaml");
         }
 
+        /// <summary>
+        /// MVC uses System.Text.Json; POST body.data arrives as JsonElement, not JObject.
+        /// JObject.FromObject(JsonElement) loses values — always parse via raw JSON text.
+        /// </summary>
+        public static JObject RequestDataToJObject(object dataObj)
+        {
+            if (dataObj == null) return null;
+            if (dataObj is JObject jo) return jo;
+            if (dataObj is JsonElement el)
+            {
+                if (el.ValueKind != JsonValueKind.Object)
+                    throw new InvalidOperationException("data must be a JSON object");
+                return JObject.Parse(el.GetRawText());
+            }
+            return JObject.FromObject(dataObj);
+        }
+
         public static (JObject data, string error) TryParseRequestToJObject(string content, string format, object dataObj)
         {
             if (dataObj != null)
             {
                 try
                 {
-                    var jo = dataObj is JObject j ? j : JObject.FromObject(dataObj);
-                    return (jo, null);
+                    return (RequestDataToJObject(dataObj), null);
                 }
                 catch (Exception ex)
                 {
@@ -409,6 +429,12 @@ namespace JacRed
             {
                 var parsed = data.ToObject<AppInit>();
                 return ValidateConfigModel(parsed);
+            }
+            catch (JsonSerializationException ex)
+            {
+                result.error = ex.Message;
+                result.errors.Add(ex.Message);
+                return result;
             }
             catch (Exception ex)
             {
@@ -455,11 +481,10 @@ namespace JacRed
             return result;
         }
 
-        public static List<ConfigDiffEntry> ComputeConfigDiff(JObject proposed, bool redactSensitive = true)
+        public static List<ConfigDiffEntry> ComputeConfigDiff(JObject proposed, bool redactSensitive = false)
         {
             var current = JObject.FromObject(conf ?? new AppInit());
             var merged = (JObject)proposed.DeepClone();
-            MergeSensitiveTokens(merged, JObject.FromObject(conf ?? new AppInit()));
 
             if (redactSensitive)
             {
@@ -485,8 +510,7 @@ namespace JacRed
                 if (!validation.ok)
                     return (false, validation.error ?? "Ошибка валидации", null);
 
-                var merged = MergeSensitiveFromCurrent(parsed);
-                var jo = JObject.FromObject(merged);
+                var jo = JObject.FromObject(parsed);
                 return SaveConfigObjectInternal(jo, format);
             }
             catch (Exception ex)
@@ -511,8 +535,7 @@ namespace JacRed
             if (!validation.ok)
                 return (false, validation.error ?? "Ошибка валидации", sourceInfo);
 
-            var merged = MergeSensitiveFromCurrent(parsed);
-            var jo = JObject.FromObject(merged);
+            var jo = JObject.FromObject(parsed);
             return SaveConfigObjectInternal(jo, format);
         }
 
@@ -571,38 +594,6 @@ namespace JacRed
         private static string DetectFormat(string content, string fallback)
             => DetectConfigFormat(content, fallback);
 
-        private static AppInit MergeSensitiveFromCurrent(AppInit incoming)
-        {
-            var current = conf;
-            if (current == null || incoming == null)
-                return incoming;
-
-            var incomingJo = JObject.FromObject(incoming);
-            var currentJo = JObject.FromObject(current);
-            MergeSensitiveTokens(incomingJo, currentJo);
-            return incomingJo.ToObject<AppInit>();
-        }
-
-        private static void MergeSensitiveTokens(JObject incoming, JObject current)
-        {
-            foreach (var prop in incoming.Properties().ToList())
-            {
-                if (prop.Value == null || prop.Value.Type == JTokenType.Null)
-                    continue;
-
-                if (prop.Value.Type == JTokenType.String && prop.Value.ToString() == RedactedPlaceholder)
-                {
-                    var curVal = current[prop.Name];
-                    if (curVal != null && curVal.Type != JTokenType.Null)
-                        prop.Value = curVal.DeepClone();
-                    continue;
-                }
-
-                if (prop.Value is JObject incObj && current[prop.Name] is JObject curObj)
-                    MergeSensitiveTokens(incObj, curObj);
-            }
-        }
-
         private static void CollectValidationWarnings(AppInit config, List<string> warnings)
         {
             if (config == null)
@@ -630,18 +621,44 @@ namespace JacRed
                 warnings.Add("fdbPathLevels: рекомендуется 1–4");
         }
 
+        private static object JTokenToPlain(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            switch (token.Type)
+            {
+                case JTokenType.Object:
+                    return token.Children<JProperty>()
+                        .ToDictionary(p => p.Name, p => JTokenToPlain(p.Value));
+                case JTokenType.Array:
+                    return token.Select(JTokenToPlain).ToList();
+                case JTokenType.Integer:
+                    return token.Value<long>();
+                case JTokenType.Float:
+                    return token.Value<double>();
+                case JTokenType.Boolean:
+                    return token.Value<bool>();
+                case JTokenType.String:
+                    return token.Value<string>();
+                default:
+                    return ((JValue)token).Value;
+            }
+        }
+
         private static string SerializeConfigObject(JObject jo, string format)
         {
             if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
                 return jo.ToString(Formatting.Indented);
 
+            var plain = JTokenToPlain(jo);
             var serializer = new SerializerBuilder()
                 .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
+                .DisableAliases()
                 .Build();
-            var obj = JsonConvert.DeserializeObject<object>(jo.ToString(Formatting.None));
             using var writer = new StringWriter();
             writer.WriteLine("---");
-            serializer.Serialize(writer, obj);
+            serializer.Serialize(writer, plain);
             return writer.ToString();
         }
 
@@ -661,9 +678,10 @@ namespace JacRed
 
         private static void ReloadConfigFromDisk(string path)
         {
-            cacheconf.Item1 = LoadConfigFromFile(path);
-            cacheconf.Item2 = path;
-            cacheconf.Item3 = File.GetLastWriteTimeUtc(path);
+            lock (_configLock)
+            {
+                cacheconf = (LoadConfigFromFile(path), path, File.GetLastWriteTimeUtc(path));
+            }
             LogSafeConfig("config (saved)", path);
         }
         #endregion

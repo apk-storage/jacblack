@@ -377,6 +377,7 @@
     return { ...options, headers };
   };
 
+  const fetchWithApiKey = (url, options = {}) => fetch(url, withApiKeyHeaders(options));
   const fetchWithDevKey = (url, options = {}) => fetch(url, withDevKeyHeaders(options));
 
   const getSafeIconPath = (trackerName) => {

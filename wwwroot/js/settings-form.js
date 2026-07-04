@@ -1,8 +1,6 @@
 (function (global) {
   'use strict';
 
-  const REDACTED = '***';
-
   const getByPath = (obj, path) => {
     if (!obj || !path) return undefined;
     const parts = path.split('.');
@@ -35,6 +33,14 @@
   };
 
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj ?? {}));
+
+  /** STJ used to serialize JObject as [] — ignore scalar arrays from stale/corrupt API payloads. */
+  const normalizeRaw = (raw, field) => {
+    if (raw == null) return raw;
+    if (!Array.isArray(raw)) return raw;
+    if (field.type === 'stringList' || field.type === 'json') return raw;
+    return field.type === 'bool' ? false : field.type === 'int' ? 0 : '';
+  };
 
   const stringListToText = (val) => {
     if (!Array.isArray(val)) return '';
@@ -76,7 +82,7 @@
   const renderField = (field, data, prefix) => {
     const path = prefix ? `${prefix}.${field.key}` : field.key;
     const id = `cfg-${path.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-    const raw = getByPath(data, path);
+    const raw = normalizeRaw(getByPath(data, path), field);
     const wrap = document.createElement('div');
     wrap.className = 'col-md-6 col-lg-4 mb-3';
     wrap.dataset.fieldPath = path;
@@ -98,11 +104,6 @@
     }
 
     let inputValue = raw;
-    let placeholder = '';
-    if (field.type === 'password' && raw === REDACTED) {
-      inputValue = '';
-      placeholder = REDACTED + ' (не изменено)';
-    }
     if (field.type === 'stringList') inputValue = stringListToText(raw);
     if (field.type === 'json') {
       inputValue = raw != null ? JSON.stringify(raw, null, 2) : '[]';
@@ -124,14 +125,14 @@
     } else if (field.type === 'int') {
       const min = field.min != null ? ` min="${field.min}"` : '';
       const max = field.max != null ? ` max="${field.max}"` : '';
+      const numVal = raw != null && raw !== '' ? raw : '';
       inputHtml =
         `<input type="number" class="form-control form-control-sm" id="${id}"` +
-        ` value="${escapeHtml(raw ?? '')}"${min}${max}>`;
+        ` value="${escapeHtml(numVal)}"${min}${max}>`;
     } else if (field.type === 'password') {
       inputHtml =
-        `<input type="password" class="form-control form-control-sm" id="${id}"` +
-        ` value="${escapeHtml(inputValue ?? '')}" placeholder="${escapeHtml(placeholder)}"` +
-        ` autocomplete="new-password">`;
+        `<input type="text" class="form-control form-control-sm font-monospace" id="${id}"` +
+        ` value="${escapeHtml(inputValue ?? '')}" autocomplete="off">`;
     } else {
       inputHtml =
         `<input type="text" class="form-control form-control-sm" id="${id}"` +
@@ -272,11 +273,23 @@
   const collectFormData = (schema, baseData, rootEl) => {
     const result = deepClone(baseData);
 
+    // Repair nested objects if a scalar was corrupted to [] (legacy STJ bug).
+    const ensureObjectPath = (obj, path) => {
+      const parts = path.split('.');
+      if (parts.length < 2) return;
+      let cur = obj;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i];
+        if (cur[p] == null || typeof cur[p] !== 'object' || Array.isArray(cur[p])) {
+          cur[p] = {};
+        }
+        cur = cur[p];
+      }
+    };
+
     const applyField = (path, field, el) => {
       let val = parseFieldValue(field, el);
-      if (field.type === 'password') {
-        if (val === '' && getByPath(baseData, path) === REDACTED) val = REDACTED;
-      }
+      if (path.includes('.')) ensureObjectPath(result, path);
       setByPath(result, path, val);
     };
 
@@ -286,7 +299,8 @@
         setByPath(result, path, collectCheckboxList(rootEl, path));
         return;
       }
-      const input = wrap.querySelector('input, select, textarea');
+      const input = wrap.querySelector('input:not([type="checkbox"]), select, textarea') ||
+        wrap.querySelector('input[type="checkbox"]');
       if (!input) return;
       const fieldMeta = findFieldMeta(schema, path);
       applyField(path, fieldMeta || { type: input.type === 'checkbox' ? 'bool' : 'string' }, input);
@@ -313,7 +327,6 @@
   };
 
   global.JacredSettingsForm = Object.freeze({
-    REDACTED,
     buildForm,
     collectFormData,
     deepClone,

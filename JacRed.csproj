@@ -7,6 +7,8 @@
     <RootNamespace>JacRed</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <!-- .NET 9 CET can crash native/unmanaged interop on some platforms; opt out for stability -->
+    <CETCompat>false</CETCompat>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,14 +33,6 @@
     <!-- Exclude large test data files from being copied during publish -->
     <Content Remove="Data\fdb\**" />
     <Content Remove="Data\masterDb.bz" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="wwwroot\css\*" />
-    <None Include="wwwroot\img\*.svg" />
-    <None Include="wwwroot\img\ico\*" />
-    <None Include="wwwroot\index.html" />
-    <None Include="wwwroot\js\*" />
   </ItemGroup>
 
   <ItemGroup>

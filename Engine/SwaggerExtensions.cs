@@ -17,8 +17,10 @@ namespace JacRed.Engine
                     Title = "JacRed API",
                     Version = "v1",
                     Description =
-                        "Torrent aggregator API: Jackett-compatible search, native torrent search, stats, sync. " +
-                        "Interactive UI at <code>/swagger</code>. OpenAPI JSON at <code>/swagger/v1/swagger.json</code>."
+                        "Torrent aggregator API: Jackett-compatible search, native torrent search, stats, sync, config. " +
+                        "Interactive UI at <code>/swagger</code>. " +
+                        "Static OpenAPI YAML at <a href=\"/openapi.yaml\">/openapi.yaml</a> " +
+                        "(<code>wwwroot/openapi.yaml</code>, served via static files)."
                 });
 
                 options.DocInclusionPredicate((_, api) =>
@@ -28,6 +30,28 @@ namespace JacRed.Engine
                     if (path.StartsWith("dev/", StringComparison.OrdinalIgnoreCase)) return false;
                     if (path.StartsWith("jsondb/", StringComparison.OrdinalIgnoreCase)) return false;
                     return true;
+                });
+
+                options.TagActionsBy(api =>
+                {
+                    var path = api.RelativePath ?? "";
+                    if (path.StartsWith("api/v1.0/config", StringComparison.OrdinalIgnoreCase))
+                        return new[] { "Config" };
+                    if (path.StartsWith("stats", StringComparison.OrdinalIgnoreCase))
+                        return new[] { "Stats" };
+                    if (path.StartsWith("sync/", StringComparison.OrdinalIgnoreCase))
+                        return new[] { "Sync" };
+                    if (path.Contains("torznab", StringComparison.OrdinalIgnoreCase) ||
+                        path.Equals("api", StringComparison.OrdinalIgnoreCase))
+                        return new[] { "Torznab" };
+                    if (path.Contains("indexers", StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains("torrents", StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains("qualitys", StringComparison.OrdinalIgnoreCase))
+                        return new[] { "Search" };
+                    if (path is "health" or "version" or "lastupdatedb" or "openapi.yaml" ||
+                        path.StartsWith("api/v1.0/conf", StringComparison.OrdinalIgnoreCase))
+                        return new[] { "System" };
+                    return new[] { "Web" };
                 });
 
                 options.AddSecurityDefinition("ApiKeyQuery", new OpenApiSecurityScheme
@@ -52,6 +76,14 @@ namespace JacRed.Engine
                     Scheme = "bearer",
                     BearerFormat = "API key",
                     Description = "API key as Bearer token"
+                });
+
+                options.AddSecurityDefinition("DevKeyHeader", new OpenApiSecurityScheme
+                {
+                    Type = SecuritySchemeType.ApiKey,
+                    In = ParameterLocation.Header,
+                    Name = "X-Dev-Key",
+                    Description = "Dev key for /api/v1.0/config (when devkey is set in init.yaml)"
                 });
 
                 options.AddSecurityRequirement(new OpenApiSecurityRequirement

@@ -1,36 +1,88 @@
 using System;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 using JacRed;
 using JacRed.Engine;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace JacRed.Controllers
 {
+    /// <summary>Request body for config validate, diff, and save.</summary>
     public class ConfigSaveRequest
     {
+        /// <summary>Raw init.yaml / init.conf text.</summary>
         public string content { get; set; }
+
+        /// <summary>yaml or json — format hint for content or output file.</summary>
         public string format { get; set; }
-        public object data { get; set; }
+
+        /// <summary>Parsed configuration object (settings form UI).</summary>
+        public JObject data { get; set; }
     }
 
+    /// <summary>
+    /// Configuration management API (init.yaml / init.conf).
+    /// Restricted to local/private network. Requires X-Dev-Key when devkey is configured.
+    /// Uses Newtonsoft.Json end-to-end (System.Text.Json breaks JObject → [] on the client).
+    /// </summary>
     [Route("api/v1.0/config")]
+    [ApiExplorerSettings(GroupName = "Config")]
     public class ConfigController : Controller
     {
-        [HttpGet("schema")]
-        public IActionResult Schema()
+        static readonly JsonSerializerSettings JsonSettings = new JsonSerializerSettings
         {
-            return Json(new { ok = true, schema = ConfigSchema.Get() });
+            Formatting = Formatting.None,
+            NullValueHandling = NullValueHandling.Include
+        };
+
+        static IActionResult ConfigJson(object payload)
+            => new ContentResult
+            {
+                Content = JsonConvert.SerializeObject(payload, JsonSettings),
+                ContentType = "application/json; charset=utf-8",
+                StatusCode = 200
+            };
+
+        static ConfigSaveRequest ParseRequestBody(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            var root = JToken.Parse(json);
+            if (root.Type != JTokenType.Object) return null;
+            var obj = (JObject)root;
+            return new ConfigSaveRequest
+            {
+                content = obj["content"]?.Type == JTokenType.String ? obj["content"].ToString() : null,
+                format = obj["format"]?.ToString(),
+                data = obj["data"] as JObject
+            };
         }
 
+        async Task<ConfigSaveRequest> ReadBodyAsync()
+        {
+            using var reader = new StreamReader(Request.Body, Encoding.UTF8);
+            return ParseRequestBody(await reader.ReadToEndAsync());
+        }
+
+        /// <summary>Form field schema for /settings UI (groups, types, validation hints).</summary>
+        [HttpGet("schema")]
+        [Produces("application/json")]
+        public IActionResult Schema()
+            => ConfigJson(new { ok = true, schema = ConfigSchema.Get() });
+
+        /// <summary>Get current configuration as JSON (secrets included; LAN-only API).</summary>
         [HttpGet("")]
-        public IActionResult Get([FromQuery] string format = null, [FromQuery] bool raw = false)
+        [Produces("application/json")]
+        public IActionResult Get([FromQuery] string format = null)
         {
             var info = AppInit.GetConfigSourceInfo();
             var fmt = format ?? info.format ?? "yaml";
-            var data = AppInit.GetConfigData(redactSensitive: !raw);
-            var content = AppInit.GetConfigContent(redactSensitive: !raw, format: fmt);
+            var data = AppInit.GetConfigData();
+            var content = AppInit.GetConfigContent(format: fmt);
 
-            return Json(new
+            return ConfigJson(new
             {
                 ok = true,
                 path = info.path,
@@ -43,24 +95,25 @@ namespace JacRed.Controllers
                 schema = ConfigSchema.Get(),
                 examplePath = System.IO.File.Exists("Data/example.yaml") ? "Data/example.yaml" : "Data/example.conf",
                 sensitiveFields = ConfigSchema.SensitiveFieldNames,
-                note = raw
-                    ? "Полный конфиг с секретами. Доступ только из локальной сети."
-                    : "Секретные поля заменены на ***. При сохранении *** сохраняет текущие значения."
+                note = "Полный конфиг. API доступен только из локальной сети."
             });
         }
 
+        /// <summary>Validate configuration without writing to disk.</summary>
         [HttpPost("validate")]
-        public IActionResult Validate([FromBody] ConfigSaveRequest body)
+        [Produces("application/json")]
+        public async Task<IActionResult> Validate()
         {
+            var body = await ReadBodyAsync();
             if (body == null)
-                return Json(new { ok = false, error = "Тело запроса пусто" });
+                return ConfigJson(new { ok = false, error = "Тело запроса пусто" });
 
-            var (jo, parseError) = AppInit.TryParseRequestToJObject(body.content, body.format, body.data);
+            var (jo, parseError) = ResolveConfigPayload(body);
             if (jo == null)
-                return Json(new { ok = false, error = parseError });
+                return ConfigJson(new { ok = false, error = parseError });
 
             var result = AppInit.ValidateConfigObject(jo);
-            return Json(new
+            return ConfigJson(new
             {
                 ok = result.ok,
                 error = result.error,
@@ -69,20 +122,23 @@ namespace JacRed.Controllers
             });
         }
 
+        /// <summary>Compare proposed configuration with current (for save confirmation UI).</summary>
         [HttpPost("diff")]
-        public IActionResult Diff([FromBody] ConfigSaveRequest body)
+        [Produces("application/json")]
+        public async Task<IActionResult> Diff()
         {
+            var body = await ReadBodyAsync();
             if (body == null)
-                return Json(new { ok = false, error = "Тело запроса пусто" });
+                return ConfigJson(new { ok = false, error = "Тело запроса пусто" });
 
-            var (proposed, parseError) = AppInit.TryParseRequestToJObject(body.content, body.format, body.data);
+            var (proposed, parseError) = ResolveConfigPayload(body);
             if (proposed == null)
-                return Json(new { ok = false, error = parseError });
+                return ConfigJson(new { ok = false, error = parseError });
 
             var validation = AppInit.ValidateConfigObject(proposed);
             var diffs = AppInit.ComputeConfigDiff(proposed);
 
-            return Json(new
+            return ConfigJson(new
             {
                 ok = true,
                 diffs,
@@ -97,31 +153,24 @@ namespace JacRed.Controllers
             });
         }
 
+        /// <summary>Save configuration to init.yaml or init.conf (atomic write, hot-reload ~10s).</summary>
         [HttpPost("")]
-        public IActionResult Save([FromBody] ConfigSaveRequest body)
+        [Produces("application/json")]
+        public async Task<IActionResult> Save()
         {
+            var body = await ReadBodyAsync();
             if (body == null)
-                return Json(new { ok = false, error = "Тело запроса пусто" });
+                return ConfigJson(new { ok = false, error = "Тело запроса пусто" });
 
-            (bool ok, string error, AppInit.ConfigSourceInfo info) result;
-            if (body.data != null)
-            {
-                var jo = body.data is JObject j ? j : JObject.FromObject(body.data);
-                result = AppInit.SaveConfigObject(jo, body.format);
-            }
-            else if (!string.IsNullOrWhiteSpace(body.content))
-            {
-                result = AppInit.SaveConfigContent(body.content, body.format);
-            }
-            else
-            {
-                return Json(new { ok = false, error = "Укажите data или content" });
-            }
+            var (jo, parseError) = ResolveConfigPayload(body);
+            if (jo == null)
+                return ConfigJson(new { ok = false, error = parseError ?? "Укажите data или content" });
 
+            var result = AppInit.SaveConfigObject(jo, body.format);
             if (!result.ok)
-                return Json(new { ok = false, error = result.error });
+                return ConfigJson(new { ok = false, error = result.error });
 
-            return Json(new
+            return ConfigJson(new
             {
                 ok = true,
                 path = result.info?.path,
@@ -129,6 +178,15 @@ namespace JacRed.Controllers
                 lastModifiedUtc = result.info?.lastModifiedUtc,
                 message = "Конфигурация сохранена. Изменения применятся автоматически."
             });
+        }
+
+        static (JObject jo, string error) ResolveConfigPayload(ConfigSaveRequest body)
+        {
+            if (body.data != null)
+                return (body.data, null);
+            if (!string.IsNullOrWhiteSpace(body.content))
+                return AppInit.TryParseRequestToJObject(body.content, body.format, null);
+            return (null, "Укажите data или content");
         }
     }
 }

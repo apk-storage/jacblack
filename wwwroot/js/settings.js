@@ -61,9 +61,15 @@
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     return fetch(url, withDevKeyHeaders({ ...options, signal: controller.signal }))
-      .then((response) => {
+      .then(async (response) => {
         clearTimeout(timeoutId);
-        return response.json().then((json) => ({ response, json }));
+        const ct = response.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          const text = await response.text();
+          throw new Error(response.ok ? 'Ответ сервера не JSON' : (text || `HTTP ${response.status}`));
+        }
+        const json = await response.json();
+        return { response, json };
       })
       .catch((err) => {
         clearTimeout(timeoutId);
@@ -83,7 +89,7 @@
 
   const setLoading = (state) => {
     if (els.settingsLoading) {
-      els.settingsLoading.classList.toggle('d-none', state || !els.accessDenied?.classList.contains('d-none'));
+      els.settingsLoading.classList.toggle('d-none', !state);
     }
     if (els.reloadBtn) els.reloadBtn.disabled = state;
     if (els.validateBtn) els.validateBtn.disabled = state;
@@ -181,6 +187,7 @@
         dirty = false;
       })
       .catch((err) => {
+        showEditor();
         showToast(err?.name === 'AbortError' ? 'Истекло время ожидания' : (err.message || 'Ошибка загрузки'), { type: 'error' });
       })
       .finally(() => setLoading(false));

@@ -6,6 +6,7 @@ namespace JacRed.Engine.CORE
 {
     public static class JsonStream
     {
+        static readonly object _writeLock = new object();
         #region Read
         public static T Read<T>(string path)
         {
@@ -36,24 +37,28 @@ namespace JacRed.Engine.CORE
         #region Write
         public static void Write(string path, object db)
         {
-            try
+            lock (_writeLock)
             {
-                //var settings = new JsonSerializerSettings()
-                //{
-                //    Formatting = Formatting.Indented
-                //};
-
-                var serializer = JsonSerializer.Create(); // settings
-
-                using (var sw = new StreamWriter(new GZipStream(File.OpenWrite(path), CompressionMode.Compress)))
+                try
                 {
-                    using (var jsonTextWriter = new JsonTextWriter(sw))
+                    var serializer = JsonSerializer.Create();
+                    var tempPath = path + ".tmp";
+
+                    using (var sw = new StreamWriter(new GZipStream(File.Create(tempPath), CompressionMode.Compress)))
                     {
-                        serializer.Serialize(jsonTextWriter, db);
+                        using (var jsonTextWriter = new JsonTextWriter(sw))
+                        {
+                            serializer.Serialize(jsonTextWriter, db);
+                        }
                     }
+
+                    if (File.Exists(path))
+                        File.Replace(tempPath, path, null);
+                    else
+                        File.Move(tempPath, path);
                 }
+                catch { }
             }
-            catch { }
         }
         #endregion
     }

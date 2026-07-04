@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'jacred-static-v2.7.0';
+const CACHE_NAME = 'jacred-static-2.6.0-8-g73e9bba-dirty';
 
 const VENDOR_PRECACHE = [
   '/css/fonts.css',
@@ -39,6 +39,7 @@ const OPTIONAL_PRECACHE = [
   '/js/settings.js',
   '/js/settings-form.js',
   '/manifest.json',
+  '/openapi.yaml',
   '/img/jacred.png',
   '/img/favicon.ico',
   '/img/icon-192.png',

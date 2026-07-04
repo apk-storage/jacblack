@@ -67,7 +67,22 @@ namespace JacRed
         public void Configure(IApplicationBuilder app)
         {
             ApplicationServices = app.ApplicationServices;
-            app.UseDeveloperExceptionPage();
+
+            var env = app.ApplicationServices.GetService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
+            if (env?.EnvironmentName == Microsoft.Extensions.Hosting.Environments.Development)
+                app.UseDeveloperExceptionPage();
+            else
+            {
+                app.UseExceptionHandler(errorApp =>
+                {
+                    errorApp.Run(async context =>
+                    {
+                        context.Response.StatusCode = 500;
+                        context.Response.ContentType = "application/json; charset=utf-8";
+                        await context.Response.WriteAsync("{\"error\":\"internal server error\"}");
+                    });
+                });
+            }
 
 
             // Реальный IP клиента за cloudflared/прокси: доверяем X-Forwarded-For от loopback
