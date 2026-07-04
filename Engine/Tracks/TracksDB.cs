@@ -27,10 +27,14 @@ namespace JacRed.Engine
                 {
                     foreach (var file in Directory.GetFiles(folder2))
                     {
+                        string filename = Path.GetFileName(file);
+                        if (ShouldSkipLegacyTrackFile(folder2, filename))
+                            continue;
+
                         string infohash = InfohashFromTrackRelPath(
                             Path.GetFileName(folder1),
                             Path.GetFileName(folder2),
-                            Path.GetFileName(file));
+                            filename);
 
                         if (!IsValidInfohash(infohash))
                             continue;
@@ -68,6 +72,16 @@ namespace JacRed.Engine
             return $"Data/tracks/{infohash.Substring(0, 2)}/{infohash[2]}/{infohash.Substring(3)}";
         }
 
+        /// <summary>
+        /// Layout экспорта / lampa-tracks: uppercase hex + .json.
+        /// </summary>
+        static string ExportLayoutPathDb(string infohash, string tracksDir = "Data/tracks")
+        {
+            infohash = NormalizeInfohash(infohash);
+            var upper = infohash.ToUpperInvariant();
+            return Path.Combine(tracksDir, upper.Substring(0, 2), upper.Substring(2, 1), $"{upper.Substring(3)}.json");
+        }
+
         static string TrackFilePath(string tracksDir, string infohash, bool withExtension = true)
         {
             infohash = NormalizeInfohash(infohash);
@@ -76,11 +90,26 @@ namespace JacRed.Engine
             return Path.Combine(folder, filename);
         }
 
+        static bool IsLegacyTrackFile(string filename) =>
+            !filename.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+
+        static bool ShouldSkipLegacyTrackFile(string folder, string filename)
+        {
+            if (!IsLegacyTrackFile(filename))
+                return false;
+
+            return File.Exists(Path.Combine(folder, $"{filename}.json"));
+        }
+
         static string ResolveTrackPath(string infohash)
         {
             string jsonPath = pathDb(infohash);
             if (File.Exists(jsonPath))
                 return jsonPath;
+
+            string exportJsonPath = ExportLayoutPathDb(infohash);
+            if (File.Exists(exportJsonPath))
+                return exportJsonPath;
 
             string legacyPath = LegacyPathDb(infohash);
             if (File.Exists(legacyPath))
@@ -1047,11 +1076,9 @@ namespace JacRed.Engine
         /// </summary>
         static string ExportFilePath(string outputDir, string infohash)
         {
-            infohash = NormalizeInfohash(infohash);
-            var upper = infohash.ToUpperInvariant();
-            string folder = Path.Combine(outputDir, upper.Substring(0, 2), upper.Substring(2, 1));
-            Directory.CreateDirectory(folder);
-            return Path.Combine(folder, $"{upper.Substring(3)}.json");
+            string path = ExportLayoutPathDb(infohash, outputDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            return path;
         }
 
         /// <summary>
@@ -1099,10 +1126,14 @@ namespace JacRed.Engine
                         if (stats != null)
                             stats.filesScanned++;
 
+                        string filename = Path.GetFileName(file);
+                        if (ShouldSkipLegacyTrackFile(folder2, filename))
+                            continue;
+
                         string infohash = InfohashFromTrackRelPath(
                             Path.GetFileName(folder1),
                             Path.GetFileName(folder2),
-                            Path.GetFileName(file));
+                            filename);
 
                         if (!IsValidInfohash(infohash))
                         {
