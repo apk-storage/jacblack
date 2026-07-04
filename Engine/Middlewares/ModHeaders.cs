@@ -125,6 +125,34 @@ namespace JacRed.Engine.Middlewares
             return null;
         }
 
+        /// <summary>Sets standard security headers (CSP skipped for Swagger UI).</summary>
+        public static void ApplySecurityHeaders(HttpContext httpContext)
+        {
+            var headers = httpContext.Response.Headers;
+            headers["X-Content-Type-Options"] = "nosniff";
+            headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            headers["X-Frame-Options"] = "SAMEORIGIN";
+            headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+
+            var path = httpContext.Request.Path.Value ?? "";
+            if (path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            headers["Content-Security-Policy"] =
+                "default-src 'self'; " +
+                "base-uri 'self'; " +
+                "form-action 'self'; " +
+                "frame-ancestors 'self'; " +
+                "object-src 'none'; " +
+                "script-src 'self'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "font-src 'self'; " +
+                "img-src 'self' data:; " +
+                "connect-src 'self' https: http:; " +
+                "manifest-src 'self'; " +
+                "worker-src 'self'";
+        }
+
         /// <summary>Public web/PWA paths that must stay reachable without apikey (also served from wwwroot when web=true).</summary>
         private static bool IsPublicWebPath(string path)
         {
@@ -134,7 +162,9 @@ namespace JacRed.Engine.Middlewares
                 || path.Equals("/sw.js", StringComparison.OrdinalIgnoreCase)
                 || path.StartsWith("/css/", StringComparison.OrdinalIgnoreCase)
                 || path.StartsWith("/js/", StringComparison.OrdinalIgnoreCase)
-                || path.StartsWith("/img/", StringComparison.OrdinalIgnoreCase);
+                || path.StartsWith("/img/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/vendor/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/fonts/", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsPathWhitelisted(string path)
@@ -154,6 +184,8 @@ namespace JacRed.Engine.Middlewares
         /// <summary>Handles request: IP check, devkey, apikey, CORS, cron logging.</summary>
         public async Task Invoke(HttpContext httpContext)
         {
+            ApplySecurityHeaders(httpContext);
+
             bool fromLocalNetwork = IsLocalOrPrivate(httpContext.Connection.RemoteIpAddress);
             string path = httpContext.Request.Path.Value ?? "";
 

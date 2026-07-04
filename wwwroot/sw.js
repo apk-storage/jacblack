@@ -1,8 +1,27 @@
 'use strict';
 
-const CACHE_NAME = 'jacred-static-v2.7.0';
+const CACHE_NAME = 'jacred-static-v3.3.0';
+
+const VENDOR_PRECACHE = [
+  '/css/fonts.css',
+  '/vendor/bootstrap/bootstrap.min.css',
+  '/vendor/bootstrap/bootstrap.bundle.min.js',
+  '/vendor/bootstrap-icons/bootstrap-icons.min.css',
+  '/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2',
+  '/vendor/gsap/gsap.min.js',
+  '/vendor/gsap/ScrollTrigger.min.js',
+  '/fonts/inter/inter-latin-400-normal.woff2',
+  '/fonts/inter/inter-latin-500-normal.woff2',
+  '/fonts/inter/inter-latin-600-normal.woff2',
+  '/fonts/inter/inter-latin-700-normal.woff2',
+  '/fonts/inter/inter-cyrillic-400-normal.woff2',
+  '/fonts/inter/inter-cyrillic-500-normal.woff2',
+  '/fonts/inter/inter-cyrillic-600-normal.woff2',
+  '/fonts/inter/inter-cyrillic-700-normal.woff2'
+];
 
 const CRITICAL_PRECACHE = [
+  ...VENDOR_PRECACHE,
   '/css/styles.css',
   '/js/theme.js',
   '/js/offline-inline.js',
@@ -18,7 +37,8 @@ const OPTIONAL_PRECACHE = [
   '/img/jacred.png',
   '/img/favicon.ico',
   '/img/icon-192.png',
-  '/img/icon-512.png'
+  '/img/icon-512.png',
+  '/img/icon-maskable-512.png'
 ];
 
 const MINIMAL_OFFLINE_HTML = '<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">' +
@@ -45,6 +65,7 @@ const isAppShellPath = (pathname) =>
 const isStaticAsset = (url) => {
   const p = url.pathname;
   return p.startsWith('/css/') || p.startsWith('/js/') || p.startsWith('/img/') ||
+    p.startsWith('/vendor/') || p.startsWith('/fonts/') ||
     /\.(css|js|png|ico|json|woff2?)$/i.test(p);
 };
 

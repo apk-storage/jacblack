@@ -331,11 +331,22 @@
     else global.addEventListener('load', register);
   };
 
-  const appendApiKey = (url) => {
+  const appendApiKey = (url) => url;
+
+  const withApiKeyHeaders = (options = {}) => {
     const key = LS.get('api_key');
-    if (!key) return url;
-    const sep = url.indexOf('?') >= 0 ? '&' : '?';
-    return url + sep + 'apikey=' + encodeURIComponent(key);
+    if (!key) return options;
+    const headers = new Headers(options.headers || {});
+    if (!headers.has('X-Api-Key')) headers.set('X-Api-Key', key);
+    return { ...options, headers };
+  };
+
+  const fetchWithApiKey = (url, options = {}) => fetch(url, withApiKeyHeaders(options));
+
+  const getSafeIconPath = (trackerName) => {
+    const rawName = String(trackerName || '').toLowerCase();
+    const safeName = rawName.replace(/[^a-z0-9_-]/g, '');
+    return './img/ico/' + (safeName || 'default') + '.ico';
   };
 
   const initApiKeyModal = ({
@@ -375,7 +386,10 @@
       }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), confTimeoutMs);
-      fetch(apiBase + '/conf?apikey=' + encodeURIComponent(key), { signal: controller.signal })
+      fetch(apiBase + '/conf', {
+        signal: controller.signal,
+        headers: key ? { 'X-Api-Key': key } : undefined
+      })
         .then(r => r.json())
         .then(json => {
           clearTimeout(timeoutId);
@@ -436,6 +450,9 @@
     getStatsSkeletonHtml,
     registerServiceWorker,
     appendApiKey,
+    fetchWithApiKey,
+    withApiKeyHeaders,
+    getSafeIconPath,
     initApiKeyModal
   });
 })(window);

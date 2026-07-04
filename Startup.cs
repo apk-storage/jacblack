@@ -96,6 +96,12 @@ namespace JacRed
 
             if (AppInit.conf.web)
             {
+                app.Use(async (context, next) =>
+                {
+                    ModHeaders.ApplySecurityHeaders(context);
+                    await next();
+                });
+
                 app.UseStaticFiles(new StaticFileOptions
                 {
                     OnPrepareResponse = ctx =>

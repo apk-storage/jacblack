@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { LS, debounce, scrollToTop, initThemeToggle, initApiKeyModal, showToast, isTypingTarget, setInert, getSearchSkeletonHtml } = window.Jacred;
+  const { LS, debounce, scrollToTop, initThemeToggle, initApiKeyModal, showToast, isTypingTarget, setInert, getSearchSkeletonHtml, fetchWithApiKey, getSafeIconPath } = window.Jacred;
 
   const URL_FILTER_KEYS = ['type', 'tracker', 'voice', 'videotype', 'year', 'quality', 'season', 'refine', 'exclude'];
 
@@ -338,7 +338,7 @@
     const sid = elem.sid != null ? elem.sid : 0;
     const pir = elem.pir != null ? elem.pir : 0;
     const tracker = (elem.tracker || '').toLowerCase();
-    const icoSrc = `./img/ico/${tracker}.ico`;
+    const icoSrc = getSafeIconPath(tracker);
     const trackerName = elem.tracker || '';
     const isActive = activeTracker && trackerName === activeTracker;
     const trackerBtnClass = isActive ? 'btn-filter-tracker tracker-btn--active' : 'btn-filter-tracker';
@@ -445,8 +445,6 @@
     if (f.year) url += '&relased=' + encodeURIComponent(f.year);
     if (f.quality) url += '&quality=' + encodeURIComponent(f.quality);
     if (f.season) url += '&season=' + encodeURIComponent(f.season);
-    const apiKey = LS.get('api_key');
-    if (apiKey) url += '&apikey=' + encodeURIComponent(apiKey);
     return url;
   };
 
@@ -497,14 +495,13 @@
   };
 
   const ensureApiKey = () => new Promise((resolve, reject) => {
-    const key = LS.get('api_key');
-    const url = API_BASE + '/conf' + (key ? '?apikey=' + encodeURIComponent(key) : '');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), CONF_TIMEOUT_MS);
-    fetch(url, { signal: controller.signal })
+    fetchWithApiKey(API_BASE + '/conf', { signal: controller.signal })
       .then(r => r.json())
       .then(json => {
         clearTimeout(timeoutId);
+        const key = LS.get('api_key');
         if (json.apikey) {
           if (key) LS.set('api_key', key);
           resolve();
@@ -566,7 +563,7 @@
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-      const response = await fetch(buildApiUrl(query), { signal: controller.signal });
+      const response = await fetchWithApiKey(buildApiUrl(query), { signal: controller.signal });
       clearTimeout(timeoutId);
       if (response.status === 401) {
         elements.validateError.textContent = 'Требуется API ключ. Проверьте введённый ключ.';

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { LS, debounce, throttle, scrollToTop, initThemeToggle, initApiKeyModal, appendApiKey, showToast, isTypingTarget, getStatsSkeletonHtml } = window.Jacred;
+  const { LS, debounce, throttle, scrollToTop, initThemeToggle, initApiKeyModal, fetchWithApiKey, showToast, isTypingTarget, getStatsSkeletonHtml, getSafeIconPath } = window.Jacred;
 
   const API_BASE = '/api/v1.0';
   const CONF_TIMEOUT_MS = 5000;
@@ -148,12 +148,7 @@
     skip: Number(item.tracks?.skip) || 0
   });
 
-  const getSafeIconPath = (item) => {
-    const rawName = (item.trackerName || '').toLowerCase();
-    const safeName = rawName.replace(/[^a-z0-9_-]/g, '');
-    const finalName = safeName || 'default';
-    return `./img/ico/${finalName}.ico`;
-  };
+  const getSafeIconPathForTracker = (item) => getSafeIconPath(item.trackerName || item.tracker);
 
   const statValue = (type, value, fullLabel) =>
     `<span class="stat-value stat-value--${type} stat-number fw-semibold" aria-label="${escapeAttr(fullLabel)}">${value}</span>`;
@@ -163,7 +158,7 @@
     const displayName = getTrackerDisplayName(slug);
     const slugSafe = escapeHtml(slug);
     const displaySafe = escapeHtml(displayName);
-    const ico = escapeAttr(getSafeIconPath(item));
+    const ico = escapeAttr(getSafeIconPathForTracker(item));
     const showSlug = displayName.toLowerCase() !== slug;
 
     if (compact) {
@@ -470,7 +465,7 @@
       const timerId = setTimeout(() => controller.abort(), CONFIG.FETCH_TIMEOUT_MS);
 
       try {
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetchWithApiKey(url, { signal: controller.signal });
         clearTimeout(timerId);
 
         if (!response.ok) {
@@ -523,7 +518,7 @@
     const timerId = setTimeout(() => controller.abort(), CONFIG.LAST_UPDATE_TIMEOUT_MS);
 
     try {
-      const response = await fetch(appendApiKey(CONFIG.LAST_UPDATE_URL), { signal: controller.signal });
+      const response = await fetchWithApiKey(CONFIG.LAST_UPDATE_URL, { signal: controller.signal });
       clearTimeout(timerId);
 
       if (!response.ok) {
@@ -577,7 +572,7 @@
     syncRefreshBtnA11y(true);
 
     try {
-      const raw = await fetchWithRetry(appendApiKey(CONFIG.API_URL));
+      const raw = await fetchWithRetry(CONFIG.API_URL);
 
       if (typeof raw !== 'string' || raw.trim() === '') {
         throw new Error(
