@@ -49,11 +49,21 @@ namespace JacRed.Engine
                     }
                 }
             }
+
+            TryLoadStatsCache(true, out _, out _);
         }
 
         static Random random = new Random();
 
         static ConcurrentDictionary<string, FfprobeModel> Database = new ConcurrentDictionary<string, FfprobeModel>();
+
+        const string TracksStatsPath = "Data/temp/tracks-stats.json";
+        static readonly object _statsCacheLock = new object();
+        static DateTime? _statsCacheUpdatedAt;
+        static bool _lastExportStatsFromCache;
+
+        public static DateTime? GetExportStatsUpdatedAt() => _statsCacheUpdatedAt;
+        public static bool LastExportStatsFromCache => _lastExportStatsFromCache;
 
         static string pathDb(string infohash, bool createfolder = false)
         {
@@ -1222,13 +1232,237 @@ namespace JacRed.Engine
             }
         }
 
-        public static TracksExportStats GetExportStats(bool includeTorrentDb = true)
+        static bool TrackFileHasStreams(string path)
         {
-            var result = new Dictionary<string, FfprobeModel>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                using var fs = File.OpenRead(path);
+                using var reader = new JsonTextReader(new StreamReader(fs));
+
+                while (reader.Read())
+                {
+                    if (reader.TokenType != JsonToken.PropertyName ||
+                        !string.Equals((string)reader.Value, "streams", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (!reader.Read() || reader.TokenType != JsonToken.StartArray)
+                        return false;
+
+                    if (!reader.Read())
+                        return false;
+
+                    return reader.TokenType != JsonToken.EndArray;
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        static void CollectStatsFromTracksDir(string tracksDir, HashSet<string> seen, TracksExportStats stats)
+        {
+            if (!Directory.Exists(tracksDir))
+                return;
+
+            foreach (var folder1 in Directory.GetDirectories(tracksDir))
+            {
+                foreach (var folder2 in Directory.GetDirectories(folder1))
+                {
+                    foreach (var file in Directory.GetFiles(folder2))
+                    {
+                        stats.filesScanned++;
+
+                        string filename = Path.GetFileName(file);
+                        if (ShouldSkipLegacyTrackFile(folder2, filename))
+                            continue;
+
+                        string infohash = InfohashFromTrackRelPath(
+                            Path.GetFileName(folder1),
+                            Path.GetFileName(folder2),
+                            filename);
+
+                        if (!IsValidInfohash(infohash))
+                        {
+                            stats.invalidPath++;
+                            continue;
+                        }
+
+                        if (!TrackFileHasStreams(file))
+                        {
+                            stats.emptyStreams++;
+                            continue;
+                        }
+
+                        if (seen.Add(infohash))
+                            stats.fromTracksFiles++;
+                    }
+                }
+            }
+        }
+
+        static void CollectStatsFromTorrentDb(HashSet<string> seen, TracksExportStats stats)
+        {
+            foreach (var item in FileDB.masterDb.Keys)
+            {
+                IReadOnlyDictionary<string, TorrentDetails> db;
+                try
+                {
+                    db = FileDB.OpenRead(item, cache: false);
+                }
+                catch
+                {
+                    stats.torrentDbErrors++;
+                    continue;
+                }
+
+                if (db == null)
+                    continue;
+
+                foreach (var torrent in db.Values)
+                {
+                    stats.torrentsScanned++;
+
+                    if (torrent?.ffprobe == null || torrent.ffprobe.Count == 0 || string.IsNullOrEmpty(torrent.magnet))
+                        continue;
+
+                    string infohash;
+                    try
+                    {
+                        infohash = NormalizeInfohash(MagnetLink.Parse(torrent.magnet).InfoHashes.V1OrV2.ToHex());
+                    }
+                    catch
+                    {
+                        stats.magnetErrors++;
+                        continue;
+                    }
+
+                    if (!IsValidInfohash(infohash))
+                    {
+                        stats.magnetErrors++;
+                        continue;
+                    }
+
+                    if (seen.Contains(infohash))
+                        continue;
+
+                    if (seen.Add(infohash))
+                        stats.fromTorrentDb++;
+                }
+            }
+        }
+
+        static TracksExportStats CollectStatsOnly(bool includeTorrentDb)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var stats = new TracksExportStats();
-            CollectAllInto(result, stats, includeTorrentDb);
-            stats.total = result.Count;
+
+            CollectStatsFromTracksDir("Data/tracks", seen, stats);
+
+            foreach (var item in Database)
+            {
+                if (item.Value?.streams == null || item.Value.streams.Count == 0)
+                    continue;
+
+                if (seen.Add(item.Key))
+                    stats.fromMemory++;
+            }
+
+            if (includeTorrentDb)
+                CollectStatsFromTorrentDb(seen, stats);
+
+            stats.total = seen.Count;
             return stats;
+        }
+
+        static bool TryLoadStatsCache(bool includeTorrentDb, out TracksExportStats stats, out DateTime? updatedAt)
+        {
+            stats = null;
+            updatedAt = _statsCacheUpdatedAt;
+
+            try
+            {
+                if (!File.Exists(TracksStatsPath))
+                    return false;
+
+                var cache = JsonConvert.DeserializeObject<TracksStatsCacheFile>(File.ReadAllText(TracksStatsPath));
+                if (cache?.entries == null || cache.entries.Count == 0)
+                    return false;
+
+                updatedAt = cache.updatedAt;
+                _statsCacheUpdatedAt = cache.updatedAt;
+
+                var entry = cache.entries.FirstOrDefault(e => e.includeTorrentDb == includeTorrentDb);
+                if (entry?.stats == null)
+                    return false;
+
+                stats = entry.stats;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        static void WriteStatsCacheFile(TracksStatsCacheFile cache)
+        {
+            if (!Directory.Exists("Data/temp"))
+                Directory.CreateDirectory("Data/temp");
+
+            File.WriteAllText(TracksStatsPath, JsonConvert.SerializeObject(cache, Formatting.Indented), Encoding.UTF8);
+            _statsCacheUpdatedAt = cache.updatedAt;
+        }
+
+        /// <summary>
+        /// Пересчитывает статистику tracks и пишет в Data/temp/tracks-stats.json (оба варианта includeTorrentDb).
+        /// </summary>
+        public static DateTime RefreshExportStatsCache()
+        {
+            lock (_statsCacheLock)
+            {
+                var cache = new TracksStatsCacheFile
+                {
+                    updatedAt = DateTime.UtcNow,
+                    entries = new List<TracksStatsCacheEntry>
+                    {
+                        new TracksStatsCacheEntry { includeTorrentDb = true, stats = CollectStatsOnly(true) },
+                        new TracksStatsCacheEntry { includeTorrentDb = false, stats = CollectStatsOnly(false) }
+                    }
+                };
+
+                WriteStatsCacheFile(cache);
+                Console.WriteLine($"tracks stats: wrote cache to {TracksStatsPath} / total={cache.entries[0].stats.total} / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                return cache.updatedAt;
+            }
+        }
+
+        public static TracksExportStats GetExportStats(bool includeTorrentDb = true, bool refresh = false)
+        {
+            if (!refresh && TryLoadStatsCache(includeTorrentDb, out var cached, out _))
+            {
+                _lastExportStatsFromCache = true;
+                return cached;
+            }
+
+            lock (_statsCacheLock)
+            {
+                if (!refresh && TryLoadStatsCache(includeTorrentDb, out cached, out _))
+                {
+                    _lastExportStatsFromCache = true;
+                    return cached;
+                }
+
+                _lastExportStatsFromCache = false;
+                RefreshExportStatsCache();
+
+                if (TryLoadStatsCache(includeTorrentDb, out cached, out _))
+                    return cached;
+
+                return CollectStatsOnly(includeTorrentDb);
+            }
         }
 
         static volatile bool _exportRunning;
@@ -1319,6 +1553,20 @@ namespace JacRed.Engine
                 progress.includeTorrentDb = includeTorrentDb;
             }
 
+            if (dryRun)
+            {
+                result.stats = CollectStatsOnly(includeTorrentDb);
+
+                if (progress != null)
+                {
+                    progress.phase = "done";
+                    progress.total = result.stats.total;
+                    progress.stats = result.stats;
+                }
+
+                return result;
+            }
+
             var data = new Dictionary<string, FfprobeModel>(StringComparer.OrdinalIgnoreCase);
             result.stats = new TracksExportStats();
             CollectAllInto(data, result.stats, includeTorrentDb);
@@ -1326,13 +1574,10 @@ namespace JacRed.Engine
 
             if (progress != null)
             {
-                progress.phase = dryRun ? "done" : "writing";
+                progress.phase = "writing";
                 progress.total = data.Count;
                 progress.stats = result.stats;
             }
-
-            if (dryRun)
-                return result;
 
             Directory.CreateDirectory(outputDir);
 
@@ -1475,6 +1720,18 @@ namespace JacRed.Engine
 
             return result;
         }
+    }
+
+    public class TracksStatsCacheFile
+    {
+        public DateTime updatedAt { get; set; }
+        public List<TracksStatsCacheEntry> entries { get; set; } = new List<TracksStatsCacheEntry>();
+    }
+
+    public class TracksStatsCacheEntry
+    {
+        public bool includeTorrentDb { get; set; }
+        public TracksExportStats stats { get; set; }
     }
 
     public class TracksExportStats

@@ -13,6 +13,9 @@ namespace JacRed.Engine
         {
             await Task.Delay(20_000);
 
+            try { TracksDB.RefreshExportStatsCache(); }
+            catch (Exception ex) { Console.WriteLine($"tracks stats: startup refresh error / {ex.Message}"); }
+
             while (true)
             {
                 if (AppInit.conf?.timeStatsUpdate == -1)
@@ -96,6 +99,9 @@ namespace JacRed.Engine
 
                     }), Formatting.Indented));
                     Console.WriteLine($"stats: wrote {stats.Count} trackers to Data/temp/stats.json / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+                    try { TracksDB.RefreshExportStatsCache(); }
+                    catch (Exception ex) { Console.WriteLine($"tracks stats: error / {ex.Message}"); }
                 }
                 catch (Exception ex) { Console.WriteLine($"stats: error / {ex.Message}"); if (ex.StackTrace != null) Console.WriteLine(ex.StackTrace); }
             }

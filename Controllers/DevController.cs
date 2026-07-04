@@ -1129,12 +1129,19 @@ namespace JacRed.Controllers
         /// <summary>
         /// Статистика по ffprobe/tracks (файлы Data/tracks + поле ffprobe в FileDB).
         /// </summary>
-        public JsonResult TracksStats(bool includeTorrentDb = true)
+        public JsonResult TracksStats(bool includeTorrentDb = true, bool refresh = false)
         {
             if (HttpContext.Connection.RemoteIpAddress?.ToString() != "127.0.0.1")
                 return Json(new { badip = true });
 
-            return Json(new { ok = true, stats = TracksDB.GetExportStats(includeTorrentDb) });
+            var stats = TracksDB.GetExportStats(includeTorrentDb, refresh);
+            return Json(new
+            {
+                ok = true,
+                updatedAt = TracksDB.GetExportStatsUpdatedAt(),
+                fromCache = TracksDB.LastExportStatsFromCache,
+                stats
+            });
         }
 
         /// <summary>

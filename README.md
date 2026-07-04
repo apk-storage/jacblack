@@ -207,6 +207,8 @@ evercache:
 | `tracksinterval` | Интервалы запуска задач tracks (task1 — за последние сутки, task0 — остальные), мин | `task1: 60, task0: 180` |
 | `tsuri` | URL сервиса анализа треков (массив) | `["http://127.0.0.1:8090"]` |
 
+Результаты анализа сохраняются в **`Data/tracks/{aa}/{b}/{hash}.json`**. Экспорт, backfill и статистика — эндпоинты **`/dev/TracksStats`**, **`/dev/ExportTracks`**, **`/dev/BackfillTracks`** (см. раздел **«Разработка и отладка»**).
+
 ### Трекеры (блоки в конфиге)
 
 Для каждого трекера можно задать следующие параметры:
@@ -473,12 +475,34 @@ REST API и страница **`/settings`** для редактирования
 | **`/dev/MigrateAnilibertyUrls`** | Мигрирует торренты Aniliberty на URL с хешем из magnet (`?hash=...`). |
 | **`/dev/RemoveDuplicateAniliberty`** | Удаляет дубликаты Aniliberty по хешу magnet, оставляет запись с последним `updateTime`. |
 | **`/dev/FixAnimelayerDuplicates`** | Устраняет дубликаты Animelayer: нормализует HTTP→HTTPS, удаляет HTTP-дубликаты. |
+| **`/dev/TracksStats`** | Статистика ffprobe/tracks (кэш `Data/temp/tracks-stats.json`, обновляется вместе с `stats.json` по `timeStatsUpdate`). Параметры: `?includeTorrentDb=true`, `?refresh=true` — принудительный пересчёт. |
+| **`/dev/ExportTracks`** | Экспорт ffprobe в JSON для lampa-tracks/R2. Параметры: `?dir=Data/tracks-export`, `?dryRun=true`, `?includeTorrentDb=true`, `?background=true`. Формат: `{AA}/{B}/{HASH}.json`, тело `{ "streams": [ ... ] }`. |
+| **`/dev/ExportTracksStatus`** | Статус фонового экспорта (см. `ExportTracks` с `background=true`). |
+| **`/dev/BackfillTracks`** | Миграция `Data/tracks`: legacy без расширения → `.json`, дописывание недостающих из FileDB. Параметры: `?dryRun=true`, `?migrateLegacy=true`, `?includeTorrentDb=true`. |
+
+**Хранение tracks (`Data/tracks/`):**
+
+- Новые файлы пишутся как `{aa}/{b}/{hash}.json` (lowercase hex); чтение поддерживает и legacy без расширения, и uppercase layout экспорта.
+- При сохранении через модуль tracks legacy-файл без расширения удаляется автоматически.
+- Для массовой миграции существующих файлов без `.json` — **`/dev/BackfillTracks`** (сначала `?dryRun=true`).
+
+Примеры:
+
+```bash
+curl -s 'http://127.0.0.1:9117/dev/TracksStats'
+curl -s 'http://127.0.0.1:9117/dev/TracksStats?refresh=true'
+curl -s 'http://127.0.0.1:9117/dev/ExportTracks?dryRun=true'
+curl -s 'http://127.0.0.1:9117/dev/ExportTracks?dir=Data/tracks-export'
+curl -s 'http://127.0.0.1:9117/dev/BackfillTracks?dryRun=true'
+curl -s 'http://127.0.0.1:9117/dev/ExportTracksStatus'
+```
 
 ### Статистика и синхронизация
 
 - **`GET /stats/*`** — статистика (если `openstats: true`).
 - **`GET /sync/*`** — эндпоинты синхронизации (если `opensync: true`).
   - Поддерживаются форматы v1 и v2 (v1 требует `opensync_v1: true`).
+  - **`GET /sync/tracks/stats`** — та же статистика ffprobe/tracks, что и `/dev/TracksStats` (при `opensync: true`; доступ по `apikey`, без ограничения localhost).
 
 ### Парсинг трекеров
 
