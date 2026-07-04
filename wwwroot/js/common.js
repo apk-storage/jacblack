@@ -259,7 +259,7 @@
   const registerServiceWorker = () => {
     if (!('serviceWorker' in navigator)) return;
     const register = () => {
-      navigator.serviceWorker.register('./sw.js', { scope: '/' }).catch((err) => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
         console.warn('Service worker registration failed:', err);
       });
     };

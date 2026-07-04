@@ -5,26 +5,29 @@
    Offline: shell (offline.html) без CDN; index/stats требуют сеть для vendor.
    opensearch.xml is served by the backend and is not in static precache. */
 
-const CACHE_NAME = 'jacred-static-v2.6.1';
-const OFFLINE_URL = './offline.html';
+const CACHE_NAME = 'jacred-static-v2.7.0';
+const OFFLINE_PATH = '/offline.html';
 
+/** Root-absolute paths — cache.add() must not use ./ paths (they resolve from /sw.js or /stats/sw.js). */
 const PRECACHE = [
-  './',
-  './stats',
-  OFFLINE_URL,
-  './css/styles.css',
-  './js/common.js',
-  './js/theme.js',
-  './js/pwa.js',
-  './js/animations.js',
-  './js/app.js',
-  './js/stats.js',
-  './manifest.json',
-  './img/jacred.png',
-  './img/favicon.ico',
-  './img/icon-192.png',
-  './img/icon-512.png'
+  '/',
+  '/stats',
+  OFFLINE_PATH,
+  '/css/styles.css',
+  '/js/common.js',
+  '/js/theme.js',
+  '/js/pwa.js',
+  '/js/animations.js',
+  '/js/app.js',
+  '/js/stats.js',
+  '/manifest.json',
+  '/img/jacred.png',
+  '/img/favicon.ico',
+  '/img/icon-192.png',
+  '/img/icon-512.png'
 ];
+
+const absUrl = (path) => new URL(path, self.location.origin).href;
 
 const isStaticAsset = (url) => {
   const p = url.pathname;
@@ -35,7 +38,9 @@ const isStaticAsset = (url) => {
 const isNavigation = (request) => request.mode === 'navigate';
 
 const precacheEntries = async (cache) => {
-  const results = await Promise.allSettled(PRECACHE.map((url) => cache.add(url)));
+  const results = await Promise.allSettled(
+    PRECACHE.map((path) => cache.add(absUrl(path)))
+  );
   const failed = [];
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
@@ -56,7 +61,7 @@ self.addEventListener('install', (event) => {
         return;
       }
       if (failed.length) {
-        console.warn('[SW] partial precache failure:', failed.length, 'of', PRECACHE.length);
+        console.warn('[SW] partial precache failure:', failed.length, 'of', PRECACHE.length, failed);
       }
       await self.skipWaiting();
     })()
@@ -72,7 +77,7 @@ self.addEventListener('activate', (event) => {
 });
 
 const serveOfflineFallback = async () => {
-  const offline = await caches.match(OFFLINE_URL);
+  const offline = await caches.match(absUrl(OFFLINE_PATH));
   if (offline) return offline;
   return new Response('Offline', { status: 503, statusText: 'Offline' });
 };
