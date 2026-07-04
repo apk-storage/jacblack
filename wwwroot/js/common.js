@@ -226,7 +226,8 @@
   };
 
   const isAppShellPath = (pathname) =>
-    pathname === '/' || pathname === '/stats' || pathname.startsWith('/stats/');
+    pathname === '/' || pathname === '/stats' || pathname.startsWith('/stats/') ||
+    pathname === '/settings' || pathname.startsWith('/settings/');
 
   const syncOfflineUi = () => {
     if (global.JacredOffline?.syncInline) {
@@ -368,7 +369,15 @@
     return { ...options, headers };
   };
 
-  const fetchWithApiKey = (url, options = {}) => fetch(url, withApiKeyHeaders(options));
+  const withDevKeyHeaders = (options = {}) => {
+    const key = LS.get('dev_key');
+    if (!key) return options;
+    const headers = new Headers(options.headers || {});
+    if (!headers.has('X-Dev-Key')) headers.set('X-Dev-Key', key);
+    return { ...options, headers };
+  };
+
+  const fetchWithDevKey = (url, options = {}) => fetch(url, withDevKeyHeaders(options));
 
   const getSafeIconPath = (trackerName) => {
     const rawName = String(trackerName || '').toLowerCase();
@@ -490,6 +499,8 @@
     appendApiKey,
     fetchWithApiKey,
     withApiKeyHeaders,
+    withDevKeyHeaders,
+    fetchWithDevKey,
     getSafeIconPath,
     isSafeHttpUrl,
     initApiKeyModal

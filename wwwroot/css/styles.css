@@ -4167,3 +4167,88 @@ html.jr-offline-inline-active .jr-offline-inline {
     border-width: 1.5px;
   }
 }
+
+/* Settings page */
+.jr-settings-panel {
+  border-color: var(--jr-stats-table-border);
+}
+
+.jr-settings-format {
+  width: auto;
+  min-width: 6.5rem;
+}
+
+.jr-config-editor {
+  min-height: 24rem;
+  max-height: min(70vh, 48rem);
+  resize: vertical;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  tab-size: 2;
+  background: var(--jr-gm-surface-light-elevated, rgba(255, 255, 255, 0.6));
+  border-color: var(--jr-stats-table-border);
+  color: var(--bs-body-color);
+}
+
+[data-bs-theme='dark'] .jr-config-editor {
+  background: rgba(19, 23, 32, 0.72);
+}
+
+.jr-config-editor:focus {
+  border-color: var(--jr-accent, #1a73e8);
+  box-shadow: 0 0 0 0.2rem rgba(26, 115, 232, 0.15);
+}
+
+.jr-settings-meta code {
+  font-size: 0.85em;
+}
+
+.jr-brand-icon--settings {
+  background: linear-gradient(135deg, #34a853 0%, #1a73e8 100%);
+}
+
+.jr-settings-mode-tabs {
+  border-bottom: 0;
+}
+
+.jr-settings-mode-tabs .nav-link {
+  font-size: 0.875rem;
+  padding: 0.35rem 0.75rem;
+}
+
+.jr-settings-nav .nav-link {
+  font-size: 0.8125rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.jr-settings-trackers .accordion-button {
+  font-size: 0.9rem;
+  padding: 0.65rem 1rem;
+}
+
+.jr-settings-trackers .accordion-body {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.jr-diff-table code {
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.jr-diff-table td {
+  vertical-align: top;
+  max-width: 12rem;
+  word-break: break-word;
+}
+
+.jr-diff-row--added td:last-child {
+  color: var(--bs-success);
+}
+
+.jr-diff-row--removed td:nth-child(2) {
+  color: var(--bs-danger);
+}
+
+.jr-diff-row--changed td:last-child {
+  color: var(--bs-primary);
+}

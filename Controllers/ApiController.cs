@@ -36,6 +36,13 @@ namespace JacRed.Controllers
             return File(System.IO.File.OpenRead("wwwroot/stats.html"), "text/html");
         }
 
+        [Route("/settings")]
+        public ActionResult Settings()
+        {
+            SetNoStoreHtmlHeaders(Response);
+            return File(System.IO.File.OpenRead("wwwroot/settings.html"), "text/html");
+        }
+
         static void SetNoStoreHtmlHeaders(HttpResponse response)
         {
             response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";

@@ -1,7 +1,6 @@
 'use strict';
 
-/* Bump CACHE_NAME on each deploy (build.sh syncs from git describe). */
-const CACHE_NAME = 'jacred-static-v3.3.2';
+const CACHE_NAME = 'jacred-static-v2.7.0';
 
 const VENDOR_PRECACHE = [
   '/css/fonts.css',
@@ -33,9 +32,12 @@ const CRITICAL_PRECACHE = [
 const OPTIONAL_PRECACHE = [
   '/',
   '/stats',
+  '/settings',
   '/js/animations.js',
   '/js/app.js',
   '/js/stats.js',
+  '/js/settings.js',
+  '/js/settings-form.js',
   '/manifest.json',
   '/img/jacred.png',
   '/img/favicon.ico',
@@ -64,7 +66,8 @@ const normalizePathname = (pathname) => {
 };
 
 const isAppShellPath = (pathname) =>
-  pathname === '/' || pathname === '/stats' || pathname.startsWith('/stats/');
+  pathname === '/' || pathname === '/stats' || pathname.startsWith('/stats/') ||
+  pathname === '/settings' || pathname.startsWith('/settings/');
 
 const isStaticAsset = (url) => {
   const p = url.pathname;
@@ -167,14 +170,15 @@ const precacheEntries = async (cache) => {
 
 const getCachedAppShell = async (pathname) => {
   const p = normalizePathname(pathname);
-  const shellPath = p === '/stats' ? '/stats' : '/';
-  return caches.match(absUrl(shellPath));
+  if (p === '/stats' || p.startsWith('/stats/')) return caches.match(absUrl('/stats'));
+  if (p === '/settings' || p.startsWith('/settings/')) return caches.match(absUrl('/settings'));
+  return caches.match(absUrl('/'));
 };
 
 const cacheAppShell = async (request, response) => {
   if (!response.ok) return;
   const p = normalizePathname(new URL(request.url).pathname);
-  if (p !== '/' && p !== '/stats') return;
+  if (p !== '/' && p !== '/stats' && p !== '/settings') return;
   await putInCache(request, response);
 };
 

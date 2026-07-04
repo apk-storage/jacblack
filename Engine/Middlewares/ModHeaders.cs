@@ -36,7 +36,8 @@ namespace JacRed.Engine.Middlewares
             return path.StartsWith("/cron/", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/jsondb", StringComparison.OrdinalIgnoreCase)
                 || path.StartsWith("/jsondb/", StringComparison.OrdinalIgnoreCase)
-                || path.StartsWith("/dev/", StringComparison.OrdinalIgnoreCase);
+                || path.StartsWith("/dev/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/api/v1.0/config", StringComparison.OrdinalIgnoreCase);
         }
 
         public ModHeaders(RequestDelegate next)
@@ -173,6 +174,8 @@ namespace JacRed.Engine.Middlewares
             return path.Equals("/", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/stats", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/stats/", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/settings", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/settings/", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/health", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/version", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/lastupdatedb", StringComparison.OrdinalIgnoreCase)

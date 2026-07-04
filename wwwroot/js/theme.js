@@ -4,7 +4,8 @@
   /* Runs in <head> before paint — theme, offline shell, PWA safe-area hooks */
 
   var isAppShellPath = function (pathname) {
-    return pathname === '/' || pathname === '/stats' || pathname.indexOf('/stats/') === 0;
+    return pathname === '/' || pathname === '/stats' || pathname.indexOf('/stats/') === 0 ||
+      pathname === '/settings' || pathname.indexOf('/settings/') === 0;
   };
 
   if (!navigator.onLine && isAppShellPath(global.location.pathname)) {

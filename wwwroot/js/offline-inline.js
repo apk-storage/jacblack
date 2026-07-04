@@ -9,12 +9,15 @@
   };
 
   var isAppShellPath = function (pathname) {
-    return pathname === '/' || pathname === '/stats' || pathname.indexOf('/stats/') === 0;
+    return pathname === '/' || pathname === '/stats' || pathname.indexOf('/stats/') === 0 ||
+      pathname === '/settings' || pathname.indexOf('/settings/') === 0;
   };
 
   var appHomePath = function () {
     var p = normalizePathname(global.location.pathname);
-    return p === '/stats' || p.indexOf('/stats/') === 0 ? '/stats' : '/';
+    if (p === '/stats' || p.indexOf('/stats/') === 0) return '/stats';
+    if (p === '/settings' || p.indexOf('/settings/') === 0) return '/settings';
+    return '/';
   };
 
   var probeConnection = function () {

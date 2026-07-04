@@ -1,5 +1,6 @@
 using JacRed.Models;
 using JacRed.Models.AppConf;
+using JacRed.Engine;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -314,5 +315,357 @@ namespace JacRed
         public TorznabSettings torznab = new TorznabSettings();
 
         public List<ProxySettings> globalproxy;
+
+        #region ConfigManagement
+        public sealed class ConfigSourceInfo
+        {
+            public string path { get; set; }
+            public string format { get; set; }
+            public bool exists { get; set; }
+            public DateTime? lastModifiedUtc { get; set; }
+        }
+
+        public sealed class ConfigValidationResult
+        {
+            public bool ok { get; set; }
+            public string error { get; set; }
+            public List<string> warnings { get; set; } = new List<string>();
+            public List<string> errors { get; set; } = new List<string>();
+        }
+
+        private const string RedactedPlaceholder = "***";
+        public const string ConfigRedactedPlaceholder = "***";
+
+        public static ConfigSourceInfo GetConfigSourceInfo()
+        {
+            var (path, lastWrite) = GetConfigSource();
+            return new ConfigSourceInfo
+            {
+                path = path,
+                format = path == null ? null : (path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) ? "yaml" : "json"),
+                exists = path != null,
+                lastModifiedUtc = path == null ? (DateTime?)null : lastWrite
+            };
+        }
+
+        public static JObject GetConfigData(bool redactSensitive = true)
+        {
+            var c = conf;
+            if (c == null) return new JObject();
+            var jo = JObject.FromObject(c);
+            if (redactSensitive)
+                RedactSensitive(jo);
+            return jo;
+        }
+
+        public static string GetConfigContent(bool redactSensitive = true, string format = null)
+        {
+            var c = conf;
+            if (c == null) return format == "json" ? "{}" : "---\n";
+
+            var jo = JObject.FromObject(c);
+            if (redactSensitive)
+                RedactSensitive(jo);
+
+            return SerializeConfigObject(jo, format ?? GetConfigSourceInfo().format ?? "yaml");
+        }
+
+        public static (JObject data, string error) TryParseRequestToJObject(string content, string format, object dataObj)
+        {
+            if (dataObj != null)
+            {
+                try
+                {
+                    var jo = dataObj is JObject j ? j : JObject.FromObject(dataObj);
+                    return (jo, null);
+                }
+                catch (Exception ex)
+                {
+                    return (null, ex.Message);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(content))
+                return (null, "Укажите data или content");
+
+            var fmt = format ?? DetectConfigFormat(content);
+            var parsed = TryParseConfigContent(content, fmt, out var error);
+            if (parsed == null)
+                return (null, error ?? "Не удалось разобрать конфигурацию");
+
+            return (JObject.FromObject(parsed), null);
+        }
+
+        public static ConfigValidationResult ValidateConfigObject(JObject data)
+        {
+            var result = new ConfigValidationResult();
+            if (data == null)
+            {
+                result.error = "Данные конфигурации пусты";
+                return result;
+            }
+
+            try
+            {
+                var parsed = data.ToObject<AppInit>();
+                return ValidateConfigModel(parsed);
+            }
+            catch (Exception ex)
+            {
+                result.error = ex.Message;
+                return result;
+            }
+        }
+
+        public static ConfigValidationResult ValidateConfigContent(string content, string format)
+        {
+            var result = new ConfigValidationResult();
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                result.error = "Конфигурация пуста";
+                return result;
+            }
+
+            try
+            {
+                var parsed = TryParseConfigContent(content, format, out var error);
+                if (parsed == null)
+                {
+                    result.error = error ?? "Не удалось разобрать конфигурацию";
+                    return result;
+                }
+
+                return ValidateConfigModel(parsed);
+            }
+            catch (Exception ex)
+            {
+                result.error = ex.Message;
+            }
+
+            return result;
+        }
+
+        private static ConfigValidationResult ValidateConfigModel(AppInit parsed)
+        {
+            var result = new ConfigValidationResult();
+            ConfigSchema.ValidateAgainstSchema(parsed, result.errors, result.warnings);
+            result.ok = result.errors.Count == 0;
+            if (!result.ok)
+                result.error = result.errors[0];
+            return result;
+        }
+
+        public static List<ConfigDiffEntry> ComputeConfigDiff(JObject proposed, bool redactSensitive = true)
+        {
+            var current = JObject.FromObject(conf ?? new AppInit());
+            var merged = (JObject)proposed.DeepClone();
+            MergeSensitiveTokens(merged, JObject.FromObject(conf ?? new AppInit()));
+
+            if (redactSensitive)
+            {
+                RedactSensitive(current);
+                RedactSensitive(merged);
+            }
+
+            return ConfigSchema.ComputeDiff(current, merged);
+        }
+
+        public static (bool ok, string error, ConfigSourceInfo info) SaveConfigObject(JObject data, string format = null)
+        {
+            if (data == null)
+                return (false, "Данные конфигурации пусты", null);
+
+            try
+            {
+                var parsed = data.ToObject<AppInit>();
+                if (parsed == null)
+                    return (false, "Не удалось преобразовать конфигурацию", null);
+
+                var validation = ValidateConfigModel(parsed);
+                if (!validation.ok)
+                    return (false, validation.error ?? "Ошибка валидации", null);
+
+                var merged = MergeSensitiveFromCurrent(parsed);
+                var jo = JObject.FromObject(merged);
+                return SaveConfigObjectInternal(jo, format);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message, null);
+            }
+        }
+
+        public static (bool ok, string error, ConfigSourceInfo info) SaveConfigContent(string content, string format = null)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+                return (false, "Конфигурация пуста", null);
+
+            var sourceInfo = GetConfigSourceInfo();
+            var outputFormat = format ?? sourceInfo.format ?? "yaml";
+
+            var parsed = TryParseConfigContent(content, DetectFormat(content, outputFormat), out var parseError);
+            if (parsed == null)
+                return (false, parseError ?? "Не удалось разобрать конфигурацию", sourceInfo);
+
+            var validation = ValidateConfigModel(parsed);
+            if (!validation.ok)
+                return (false, validation.error ?? "Ошибка валидации", sourceInfo);
+
+            var merged = MergeSensitiveFromCurrent(parsed);
+            var jo = JObject.FromObject(merged);
+            return SaveConfigObjectInternal(jo, format);
+        }
+
+        private static (bool ok, string error, ConfigSourceInfo info) SaveConfigObjectInternal(JObject jo, string format)
+        {
+            var sourceInfo = GetConfigSourceInfo();
+            var outputFormat = format ?? sourceInfo.format ?? "yaml";
+            var targetPath = sourceInfo.path ?? (outputFormat == "json" ? ConfigFileJson : ConfigFileYaml);
+
+            try
+            {
+                var serialized = SerializeConfigObject(jo, outputFormat);
+                WriteConfigAtomically(targetPath, serialized);
+                ReloadConfigFromDisk(targetPath);
+                return (true, null, GetConfigSourceInfo());
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message, sourceInfo);
+            }
+        }
+
+        private static AppInit TryParseConfigContent(string content, string format, out string error)
+        {
+            error = null;
+            try
+            {
+                if (string.Equals(format, "yaml", StringComparison.OrdinalIgnoreCase))
+                {
+                    var deserializer = new DeserializerBuilder().Build();
+                    var yamlObj = deserializer.Deserialize<object>(new StringReader(content));
+                    var json = JsonConvert.SerializeObject(yamlObj);
+                    return JsonConvert.DeserializeObject<AppInit>(json);
+                }
+
+                return JsonConvert.DeserializeObject<AppInit>(content);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return null;
+            }
+        }
+
+        public static string DetectConfigFormat(string content, string fallback = "yaml")
+        {
+            if (string.IsNullOrWhiteSpace(content)) return fallback;
+            var trimmed = content.TrimStart();
+            if (trimmed.StartsWith("{") || trimmed.StartsWith("["))
+                return "json";
+            if (trimmed.StartsWith("---") || trimmed.Contains(':'))
+                return "yaml";
+            return fallback;
+        }
+
+        private static string DetectFormat(string content, string fallback)
+            => DetectConfigFormat(content, fallback);
+
+        private static AppInit MergeSensitiveFromCurrent(AppInit incoming)
+        {
+            var current = conf;
+            if (current == null || incoming == null)
+                return incoming;
+
+            var incomingJo = JObject.FromObject(incoming);
+            var currentJo = JObject.FromObject(current);
+            MergeSensitiveTokens(incomingJo, currentJo);
+            return incomingJo.ToObject<AppInit>();
+        }
+
+        private static void MergeSensitiveTokens(JObject incoming, JObject current)
+        {
+            foreach (var prop in incoming.Properties().ToList())
+            {
+                if (prop.Value == null || prop.Value.Type == JTokenType.Null)
+                    continue;
+
+                if (prop.Value.Type == JTokenType.String && prop.Value.ToString() == RedactedPlaceholder)
+                {
+                    var curVal = current[prop.Name];
+                    if (curVal != null && curVal.Type != JTokenType.Null)
+                        prop.Value = curVal.DeepClone();
+                    continue;
+                }
+
+                if (prop.Value is JObject incObj && current[prop.Name] is JObject curObj)
+                    MergeSensitiveTokens(incObj, curObj);
+            }
+        }
+
+        private static void CollectValidationWarnings(AppInit config, List<string> warnings)
+        {
+            if (config == null)
+            {
+                warnings.Add("Конфигурация не задана");
+                return;
+            }
+
+            if (config.listenport < 1 || config.listenport > 65535)
+                warnings.Add("listenport должен быть в диапазоне 1–65535");
+
+            if (config.tracksmod != 0 && config.tracksmod != 1)
+                warnings.Add("tracksmod: допустимы значения 0 или 1");
+
+            if (config.timeSync < 1)
+                warnings.Add("timeSync должен быть больше 0");
+
+            if (config.timeStatsUpdate < 1)
+                warnings.Add("timeStatsUpdate должен быть больше 0");
+
+            if (config.maxreadfile < 1)
+                warnings.Add("maxreadfile должен быть больше 0");
+
+            if (config.fdbPathLevels < 1 || config.fdbPathLevels > 4)
+                warnings.Add("fdbPathLevels: рекомендуется 1–4");
+        }
+
+        private static string SerializeConfigObject(JObject jo, string format)
+        {
+            if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
+                return jo.ToString(Formatting.Indented);
+
+            var serializer = new SerializerBuilder()
+                .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
+                .Build();
+            var obj = JsonConvert.DeserializeObject<object>(jo.ToString(Formatting.None));
+            using var writer = new StringWriter();
+            writer.WriteLine("---");
+            serializer.Serialize(writer, obj);
+            return writer.ToString();
+        }
+
+        private static void WriteConfigAtomically(string path, string content)
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            var tempPath = path + ".tmp";
+            File.WriteAllText(tempPath, content);
+            if (File.Exists(path))
+                File.Replace(tempPath, path, null);
+            else
+                File.Move(tempPath, path);
+        }
+
+        private static void ReloadConfigFromDisk(string path)
+        {
+            cacheconf.Item1 = LoadConfigFromFile(path);
+            cacheconf.Item2 = path;
+            cacheconf.Item3 = File.GetLastWriteTimeUtc(path);
+            LogSafeConfig("config (saved)", path);
+        }
+        #endregion
     }
 }
