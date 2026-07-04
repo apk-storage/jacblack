@@ -283,29 +283,48 @@ globalproxy:
   "globalproxy": [
     { "pattern": "\\.onion", "list": ["socks5://192.168.1.1:9050"] }
   ],
-  "torznab": {
-    "enable": true,
+  "search": {
     "mergeV1": "auto",
     "maxV1Pairs": 4,
     "v1Sort": "sid",
-    "stripTrailingYear": true,
+    "stripTrailingYear": true
+  },
+  "torznab": {
+    "enable": true,
     "enrichTitles": true,
     "skipCatFilter": true
   }
 }
 ```
 
-#### Torznab / Jackett (`torznab`)
+#### Combined search (`search`)
+
+Настройки объединённого поиска v2 + v1 для **`/api/v2.0/indexers/.../results`** (Lampa) и Torznab (при `torznab.enable`).
 
 | Параметр | Описание | По умолчанию |
 | -------- | -------- | ------------ |
-| `enable` | Включить Torznab XML | `true` |
-| `mergeV1` | Слияние v1: `true` / `false` / `auto` | `auto` |
-| `maxV1Pairs` | Лимит v1-запросов в fuzzy mode (`auto`) | `4` |
-| `v1Sort` | Сортировка v1 для IMDB (`sid` = seeders) | `sid` |
-| `stripTrailingYear` | Доп. вариант запроса без года | `true` |
-| `enrichTitles` | Озвучки в Torznab title | `true` |
-| `skipCatFilter` | Не фильтровать по `cat` на стороне сервера | `true` |
+| `mergeV1` | Fuzzy v1-merge: `false` / `auto` / `true` | `auto` |
+| `maxV1Pairs` | Лимит v1-запросов при `mergeV1=auto` (fuzzy) | `4` |
+| `v1Sort` | Сортировка v1 (`sid` = seeders; также IMDB/KP) | `sid` |
+| `stripTrailingYear` | Доп. вариант fuzzy-запроса без года | `true` |
+
+**`mergeV1: auto`** — v1 fuzzy **только в fuzzy mode** (Torznab text search, Lampa global search). Card mode (Lampa: `title` + `title_original`) — только v2 exact, без v1 fuzzy.
+
+| `mergeV1` | Card (Lampa карточка) | Fuzzy (Query / Torznab) |
+|-----------|----------------------|-------------------------|
+| `false` | v2 only | v2 only |
+| `auto` | v2 only | v2 + v1 fuzzy (до `maxV1Pairs`) |
+| `true` | v2 + v1 fuzzy (без лимита) | v2 + v1 fuzzy (без лимита) |
+
+IMDB/KP (`tt…`, `kp…`) всегда через v1 exact, независимо от `mergeV1`.
+
+#### Torznab XML (`torznab`)
+
+| Параметр | Описание | По умолчанию |
+| -------- | -------- | ------------ |
+| `enable` | Torznab XML + combined search (вместо legacy Jackett) | `true` |
+| `enrichTitles` | Озвучки в Torznab `<title>` | `true` |
+| `skipCatFilter` | Не фильтровать по `cat` на сервере | `true` |
 
 При `enable: false` Torznab-эндпоинты отвечают **404**.
 

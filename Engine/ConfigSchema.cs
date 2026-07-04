@@ -90,14 +90,17 @@ namespace JacRed.Engine
                         Field("evercache.maxOpenWriteTask", "int", "Max open write", null, min: 1),
                         Field("evercache.dropCacheTake", "int", "Drop cache take", null, min: 1)
                     }),
-                    Group("torznab", "Torznab", "Jackett-совместимость", new[]
+                    Group("search", "Поиск (combined)", "Jackett JSON + Torznab combined search", new[]
                     {
-                        Field("torznab.enable", "bool", "Torznab XML", "/torznab/api"),
-                        Field("torznab.mergeV1", "select", "Merge v1", null, enumValues: new[] { "auto", "true", "false" }),
-                        Field("torznab.maxV1Pairs", "int", "Max v1 pairs", null, min: 1),
-                        Field("torznab.v1Sort", "string", "V1 sort", "sid, pir, size…"),
-                        Field("torznab.stripTrailingYear", "bool", "Strip trailing year", null),
-                        Field("torznab.enrichTitles", "bool", "Enrich titles", null),
+                        Field("search.mergeV1", "select", "Merge v1 (fuzzy)", "auto — только fuzzy; card без v1", enumValues: new[] { "false", "auto", "true" }),
+                        Field("search.maxV1Pairs", "int", "Max v1 pairs", "При mergeV1=auto или true (fuzzy)", min: 1),
+                        Field("search.v1Sort", "string", "V1 sort", "sid, pir, size…"),
+                        Field("search.stripTrailingYear", "bool", "Strip trailing year", "Fuzzy: запрос без года")
+                    }),
+                    Group("torznab", "Torznab", "Torznab XML (Sonarr/Radarr/Prowlarr)", new[]
+                    {
+                        Field("torznab.enable", "bool", "Torznab XML", "/torznab/api + combined search"),
+                        Field("torznab.enrichTitles", "bool", "Enrich titles", "Озвучки в XML title"),
                         Field("torznab.skipCatFilter", "bool", "Skip cat filter", null)
                     }),
                     Group("proxy", "Прокси", null, new[]
@@ -154,16 +157,16 @@ namespace JacRed.Engine
 
         private static object Field(string key, string type, string label, string description = null,
             bool sensitive = false, int? min = null, int? max = null, string[] enumValues = null) => new
-        {
-            key,
-            type,
-            label,
-            description,
-            sensitive,
-            min,
-            max,
-            enumValues
-        };
+            {
+                key,
+                type,
+                label,
+                description,
+                sensitive,
+                min,
+                max,
+                enumValues
+            };
 
         public static void ValidateAgainstSchema(AppInit config, List<string> errors, List<string> warnings)
         {
@@ -219,12 +222,7 @@ namespace JacRed.Engine
                 }
             }
 
-            if (config.torznab?.mergeV1 != null)
-            {
-                var mv = config.torznab.mergeV1.ToLowerInvariant();
-                if (mv != "auto" && mv != "true" && mv != "false")
-                    errors.Add("torznab.mergeV1: допустимы auto, true, false");
-            }
+            ValidateMergeV1(config.search?.mergeV1, "search.mergeV1", errors);
 
             if (config.evercache != null)
             {
@@ -241,6 +239,14 @@ namespace JacRed.Engine
                 if (config.TracksInterval.task1 < 1)
                     errors.Add("tracksinterval.task1: должно быть ≥ 1");
             }
+        }
+
+        private static void ValidateMergeV1(string value, string fieldName, List<string> errors)
+        {
+            if (value == null) return;
+            var mv = value.ToLowerInvariant();
+            if (mv != "auto" && mv != "true" && mv != "false")
+                errors.Add($"{fieldName}: допустимы auto, true, false");
         }
 
         private static void ValidateTrackerList(string[] list, string fieldName, List<string> warnings)

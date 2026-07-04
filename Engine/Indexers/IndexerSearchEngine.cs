@@ -18,7 +18,7 @@ namespace JacRed.Engine.Indexers
     {
         public static async Task<List<Result>> SearchCombinedAsync(IndexerSearchRequest req, IMemoryCache cache)
         {
-            var settings = AppInit.conf.torznab ?? new TorznabSettings();
+            var settings = IndexerSearchOptions.Resolve();
             string query = IndexerRequestParams.NormalizeQuery(req.Query);
 
             string titleRu = req.Title;
@@ -79,7 +79,7 @@ namespace JacRed.Engine.Indexers
             return req.IsSerial;
         }
 
-        static List<string> BuildQueryVariants(string query, string titleRu, string titleEn, TorznabSettings settings)
+        static List<string> BuildQueryVariants(string query, string titleRu, string titleEn, SearchSettings settings)
         {
             var variants = new List<string>();
             bool skipCombined = !string.IsNullOrWhiteSpace(query) && query.Contains(" / ") && (!string.IsNullOrWhiteSpace(titleRu) || !string.IsNullOrWhiteSpace(titleEn));
@@ -106,21 +106,22 @@ namespace JacRed.Engine.Indexers
             return variants;
         }
 
-        static List<(string search, string altname)> V1Pairs(string query, string titleRu, string titleEn, TorznabSettings settings, bool cardMode)
+        static List<(string search, string altname)> V1Pairs(string query, string titleRu, string titleEn, SearchSettings settings, bool cardMode)
         {
             var mode = (settings.mergeV1 ?? "auto").ToLowerInvariant();
             if (mode == "false" || mode == "0") return new List<(string, string)>();
 
+            // auto: v1 fuzzy только для fuzzy mode, не для card (Lampa card search)
+            if (cardMode && mode == "auto")
+                return new List<(string, string)>();
+
             if (mode == "true" || mode == "1")
                 return V1SearchPairs(query, titleRu, titleEn, settings, null);
-
-            if (cardMode)
-                return V1SearchPairs(query, titleRu, titleEn, settings, 2);
 
             return V1SearchPairs(query, titleRu, titleEn, settings, Math.Max(1, settings.maxV1Pairs));
         }
 
-        static List<(string search, string altname)> V1SearchPairs(string query, string titleRu, string titleEn, TorznabSettings settings, int? maxPairs)
+        static List<(string search, string altname)> V1SearchPairs(string query, string titleRu, string titleEn, SearchSettings settings, int? maxPairs)
         {
             var pairs = new List<(string, string)>();
             var seen = new HashSet<string>();

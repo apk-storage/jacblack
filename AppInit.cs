@@ -319,6 +319,8 @@ namespace JacRed
 
         public ProxySettings proxy = new ProxySettings();
 
+        public SearchSettings search = new SearchSettings();
+
         public TorznabSettings torznab = new TorznabSettings();
 
         public List<ProxySettings> globalproxy;
