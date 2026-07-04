@@ -30,8 +30,6 @@ namespace JacRed.Engine
         /// </param>
         async public static Task Run(int typetask)
         {
-            await Task.Delay(20_000);
-
             bool firstRun = (typetask == 1); // Для задачи 1 сразу выполняем первый запуск
 
             while (true)
