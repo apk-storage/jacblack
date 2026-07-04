@@ -92,6 +92,13 @@ namespace JacRed.Engine
             return Path.Combine(tracksDir, upper.Substring(0, 2), upper.Substring(2, 1), $"{upper.Substring(3)}.json");
         }
 
+        static string ExportLayoutLegacyPathDb(string infohash, string tracksDir = "Data/tracks")
+        {
+            infohash = NormalizeInfohash(infohash);
+            var upper = infohash.ToUpperInvariant();
+            return Path.Combine(tracksDir, upper.Substring(0, 2), upper.Substring(2, 1), upper.Substring(3));
+        }
+
         static string TrackFilePath(string tracksDir, string infohash, bool withExtension = true)
         {
             infohash = NormalizeInfohash(infohash);
@@ -111,21 +118,82 @@ namespace JacRed.Engine
             return File.Exists(Path.Combine(folder, $"{filename}.json"));
         }
 
-        static string ResolveTrackPath(string infohash)
+        static string ResolveTrackJsonPath(string infohash, string tracksDir = "Data/tracks")
         {
-            string jsonPath = pathDb(infohash);
+            string jsonPath = TrackFilePath(tracksDir, infohash, withExtension: true);
             if (File.Exists(jsonPath))
                 return jsonPath;
 
-            string exportJsonPath = ExportLayoutPathDb(infohash);
-            if (File.Exists(exportJsonPath))
-                return exportJsonPath;
+            jsonPath = ExportLayoutPathDb(infohash, tracksDir);
+            if (File.Exists(jsonPath))
+                return jsonPath;
 
-            string legacyPath = LegacyPathDb(infohash);
+            return null;
+        }
+
+        static string ResolveLegacyTrackPath(string infohash, string tracksDir = "Data/tracks")
+        {
+            string legacyPath = TrackFilePath(tracksDir, infohash, withExtension: false);
+            if (File.Exists(legacyPath))
+                return legacyPath;
+
+            legacyPath = ExportLayoutLegacyPathDb(infohash, tracksDir);
             if (File.Exists(legacyPath))
                 return legacyPath;
 
             return null;
+        }
+
+        static string ResolveTrackPath(string infohash)
+        {
+            string jsonPath = ResolveTrackJsonPath(infohash);
+            if (jsonPath != null)
+                return jsonPath;
+
+            return ResolveLegacyTrackPath(infohash);
+        }
+
+        static int MigrateLegacyTrackFilesInPlace(string tracksDir, bool dryRun)
+        {
+            if (!Directory.Exists(tracksDir))
+                return 0;
+
+            int migrated = 0;
+
+            foreach (var folder1 in Directory.GetDirectories(tracksDir))
+            {
+                foreach (var folder2 in Directory.GetDirectories(folder1))
+                {
+                    foreach (var file in Directory.GetFiles(folder2))
+                    {
+                        string filename = Path.GetFileName(file);
+                        if (!IsLegacyTrackFile(filename))
+                            continue;
+
+                        if (ShouldSkipLegacyTrackFile(folder2, filename))
+                            continue;
+
+                        string infohash = InfohashFromTrackRelPath(
+                            Path.GetFileName(folder1),
+                            Path.GetFileName(folder2),
+                            filename);
+
+                        if (!IsValidInfohash(infohash))
+                            continue;
+
+                        string jsonPath = Path.Combine(folder2, $"{filename}.json");
+                        if (File.Exists(jsonPath))
+                            continue;
+
+                        if (!dryRun)
+                            File.Move(file, jsonPath);
+
+                        migrated++;
+                    }
+                }
+            }
+
+            return migrated;
         }
 
         public static bool theBad(string[] types)
@@ -945,8 +1013,8 @@ namespace JacRed.Engine
                 string json = JsonConvert.SerializeObject(result, Formatting.Indented);
                 await File.WriteAllTextAsync(path, json, Encoding.UTF8);
 
-                string legacyPath = LegacyPathDb(infohash);
-                if (File.Exists(legacyPath) && !string.Equals(path, legacyPath, StringComparison.OrdinalIgnoreCase))
+                string legacyPath = ResolveLegacyTrackPath(infohash);
+                if (legacyPath != null && !string.Equals(path, legacyPath, StringComparison.OrdinalIgnoreCase))
                 {
                     try { File.Delete(legacyPath); }
                     catch { }
@@ -1640,17 +1708,15 @@ namespace JacRed.Engine
             CollectAllInto(data, result.stats, includeTorrentDb);
             result.stats.total = data.Count;
 
+            if (migrateLegacy)
+                result.migratedLegacy = MigrateLegacyTrackFilesInPlace(tracksDir, dryRun);
+
             if (dryRun)
             {
                 foreach (var item in data)
                 {
-                    string jsonPath = TrackFilePath(tracksDir, item.Key, withExtension: true);
-                    string legacyPath = TrackFilePath(tracksDir, item.Key, withExtension: false);
-
-                    if (File.Exists(jsonPath))
+                    if (ResolveTrackJsonPath(item.Key, tracksDir) != null)
                         result.skippedExisting++;
-                    else if (migrateLegacy && File.Exists(legacyPath))
-                        result.migratedLegacy++;
                     else
                         result.written++;
                 }
@@ -1664,28 +1730,14 @@ namespace JacRed.Engine
             {
                 try
                 {
-                    string jsonPath = TrackFilePath(tracksDir, item.Key, withExtension: true);
-                    string legacyPath = TrackFilePath(tracksDir, item.Key, withExtension: false);
-                    Directory.CreateDirectory(Path.GetDirectoryName(jsonPath));
-
-                    if (File.Exists(jsonPath))
+                    if (ResolveTrackJsonPath(item.Key, tracksDir) != null)
                     {
                         result.skippedExisting++;
-                        if (migrateLegacy && File.Exists(legacyPath))
-                        {
-                            try { File.Delete(legacyPath); result.migratedLegacy++; }
-                            catch { }
-                        }
                         continue;
                     }
 
-                    if (migrateLegacy && File.Exists(legacyPath))
-                    {
-                        File.Move(legacyPath, jsonPath);
-                        result.migratedLegacy++;
-                        Database.AddOrUpdate(item.Key, item.Value, (k, v) => item.Value);
-                        continue;
-                    }
+                    string jsonPath = TrackFilePath(tracksDir, item.Key, withExtension: true);
+                    Directory.CreateDirectory(Path.GetDirectoryName(jsonPath));
 
                     string json = JsonConvert.SerializeObject(item.Value, Formatting.Indented);
                     File.WriteAllText(jsonPath, json, Encoding.UTF8);
