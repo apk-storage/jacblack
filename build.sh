@@ -200,17 +200,8 @@ build_for() {
 echo "==> Restoring packages..."
 dotnet restore --verbosity minimal
 
-bump_sw_cache_version() {
-  local sw_file="$SCRIPT_DIR/wwwroot/sw.js"
-  [[ -f "$sw_file" ]] || return 0
-  local sw_tag
-  sw_tag="$(git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' | tr '/ ' '-')"
-  sw_tag="${sw_tag:-dev}"
-  perl -pi -e "s/const CACHE_NAME = 'jacred-static-[^']+'/const CACHE_NAME = 'jacred-static-${sw_tag}'/" "$sw_file"
-  echo "==> Service worker cache: jacred-static-${sw_tag}"
-}
-
-bump_sw_cache_version
+echo "==> Bumping service worker cache version..."
+"$SCRIPT_DIR/scripts/bump-sw-cache.sh"
 
 for platform in "${PLATFORMS[@]}"; do
   build_for "$platform" "$BUILD_ROOT/$platform" "$platform"

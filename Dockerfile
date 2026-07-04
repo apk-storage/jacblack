@@ -22,6 +22,7 @@ COPY . .
 
 # Restore and publish
 RUN set -eu; \
+    chmod +x ./scripts/bump-sw-cache.sh && ./scripts/bump-sw-cache.sh; \
     case "${TARGETARCH}" in \
     386)   RID=linux-musl-x86 ;; \
     amd64) RID=linux-musl-x64 ;; \
