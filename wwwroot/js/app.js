@@ -83,8 +83,42 @@
     return 'результатов';
   };
 
+  const MOBILE_SEARCH_MQ = '(max-width: 767px)';
+  let searchDockAnchor = null;
+
+  const syncMobileSearchDock = () => {
+    const dock = document.querySelector('.jr-search-dock-wrap');
+    const root = document.documentElement;
+    const isMobile = window.matchMedia(MOBILE_SEARCH_MQ).matches;
+    const hasResults = document.body.classList.contains('jr-has-results');
+
+    if (!dock) return;
+
+    if (hasResults && isMobile) {
+      if (!searchDockAnchor) {
+        searchDockAnchor = document.createComment('jr-search-dock-anchor');
+        dock.parentNode.insertBefore(searchDockAnchor, dock);
+      }
+      if (dock.parentNode !== document.body) {
+        document.body.prepend(dock);
+      }
+      document.body.classList.add('jr-mobile-search-fixed');
+      requestAnimationFrame(() => {
+        root.style.setProperty('--jr-search-dock-h', `${dock.offsetHeight}px`);
+      });
+      return;
+    }
+
+    document.body.classList.remove('jr-mobile-search-fixed');
+    root.style.removeProperty('--jr-search-dock-h');
+    if (searchDockAnchor && searchDockAnchor.parentNode && dock.parentNode === document.body) {
+      searchDockAnchor.parentNode.insertBefore(dock, searchDockAnchor.nextSibling);
+    }
+  };
+
   const setSearchResultsMode = (hasResults) => {
     document.body.classList.toggle('jr-has-results', !!hasResults);
+    requestAnimationFrame(() => requestAnimationFrame(syncMobileSearchDock));
   };
 
   const updateResultsHeader = () => {
@@ -664,7 +698,7 @@
     write().then(() => {
       const old = btn.innerHTML;
       btn.innerHTML = successHtml || '<i class="bi bi-check-lg text-success"></i>';
-      showToast('Скопировано в буфер обмена', { type: 'success' });
+      showToast('Скопировано в буфер обмена', { type: 'success', duration: 1200, replace: true });
       setTimeout(() => { btn.innerHTML = old; }, 1500);
     }).catch(() => {
       showToast('Не удалось скопировать', { type: 'error' });
@@ -744,6 +778,13 @@
     updateFilterCountBadge();
     syncListViewUi();
 
+    const searchDock = document.querySelector('.jr-search-dock-wrap');
+    if (searchDock && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(syncMobileSearchDock).observe(searchDock);
+    }
+    window.addEventListener('resize', syncMobileSearchDock, { passive: true });
+    window.addEventListener('orientationchange', syncMobileSearchDock, { passive: true });
+
     document.getElementById('toggleListView')?.addEventListener('click', toggleListView);
 
     elements.backToTop.addEventListener('click', (e) => { e.preventDefault(); scrollToTop(); });
@@ -807,6 +848,14 @@
 
     document.getElementById('torServerBtn').addEventListener('click', openTorServerModal);
     if (torServerModalSave) torServerModalSave.addEventListener('click', saveTorServerFromModal);
+    if (torServerModalEl) {
+      torServerModalEl.querySelectorAll('[data-bs-dismiss="modal"], .btn-close').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          closeTorServerModal();
+        });
+      });
+    }
 
     [torServerUrlInput, torServerLoginInput, torServerPasswordInput].forEach(input => {
       if (!input) return;
@@ -1030,6 +1079,8 @@
         updateClearButton();
       }
     }
+
+    syncMobileSearchDock();
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

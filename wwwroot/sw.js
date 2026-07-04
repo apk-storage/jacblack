@@ -5,7 +5,7 @@
    Offline: shell (offline.html) без CDN; index/stats требуют сеть для vendor.
    opensearch.xml is served by the backend and is not in static precache. */
 
-const CACHE_NAME = 'jacred-static-v17';
+const CACHE_NAME = 'jacred-static-v2.6.1';
 const OFFLINE_URL = './offline.html';
 
 const PRECACHE = [

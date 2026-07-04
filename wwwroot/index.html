@@ -71,8 +71,10 @@
     </header>
 
       <form id="searchForm" class="jr-search-form">
-      <div class="jr-search-dock-wrap">
-          <div class="jr-search-dock glass-card">
+        <div class="jr-search-form-body">
+        <div class="jr-search-pin-group">
+        <div class="jr-search-dock-wrap">
+          <div class="jr-search-dock">
             <div id="searchSticky" class="jr-search-sticky">
               <label for="s" class="visually-hidden">Поиск торрентов</label>
               <div class="jr-search-bar">
@@ -92,23 +94,62 @@
               <div id="validateError" class="jr-search-error d-none" role="alert" aria-live="polite"></div>
             </div>
           </div>
-      </div>
-
-      <div class="jr-search-panel glass-card mb-3 gsap-rise">
-        <div class="jr-filter-bar mb-2">
-          <button type="button" id="filterToggle" aria-expanded="false" aria-controls="filterContainer"
-            class="btn btn-jr-ghost w-100 d-flex align-items-center justify-content-between tap-target jr-filter-toggle">
-            <span class="d-flex align-items-center gap-2">
-              <i class="bi bi-funnel"></i>
-              <span id="filterToggleLabel">Дополнительные фильтры</span>
-              <span id="filterCountBadge" class="badge jr-badge d-none"></span>
-            </span>
-            <i class="bi bi-chevron-down" id="filterToggleIcon"></i>
-          </button>
         </div>
 
-        <div id="filterContainer" class="collapse-content" aria-hidden="true">
-          <div class="jr-filter-panel__inner mb-3">
+        <div class="jr-search-shell glass-card mb-3 gsap-rise">
+          <div class="jr-search-header">
+          <div class="jr-search-toolbar">
+            <div class="jr-filter-bar">
+              <button type="button" id="filterToggle" aria-expanded="false" aria-controls="filterContainer"
+                class="btn btn-jr-ghost d-flex align-items-center justify-content-between tap-target jr-filter-toggle">
+                <span class="d-flex align-items-center gap-2">
+                  <i class="bi bi-funnel" aria-hidden="true"></i>
+                  <span id="filterToggleLabel">
+                    <span class="jr-filter-toggle__short d-none d-md-inline">Фильтры</span>
+                    <span class="jr-filter-toggle__long d-md-none">Дополнительные фильтры</span>
+                  </span>
+                  <span id="filterCountBadge" class="badge jr-badge d-none"></span>
+                </span>
+                <i class="bi bi-chevron-down" id="filterToggleIcon" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div class="jr-search-extras">
+              <div class="jr-sort-row">
+                <div class="jr-segmented" role="radiogroup" aria-label="Сортировка результатов">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="sort" value="sid" id="sortSid" checked />
+                    <label class="form-check-label" for="sortSid" title="По количеству сидов">по сидам</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="sort" value="size" id="sortSize" />
+                    <label class="form-check-label" for="sortSize" title="По размеру файла">по размеру</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="sort" value="date" id="sortDate" />
+                    <label class="form-check-label" for="sortDate" title="По дате добавления в базу">добавлен</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="sort" value="update" id="sortUpdate" />
+                    <label class="form-check-label" for="sortUpdate" title="По дате обновления">обновлён</label>
+                  </div>
+                </div>
+                <div class="jr-sort-row__footer">
+                  <div class="form-check form-switch jr-exact-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch" id="forcedSearch" />
+                    <label class="form-check-label" for="forcedSearch">
+                      <span class="jr-exact-switch__short d-none d-lg-inline">Точный</span>
+                      <span class="jr-exact-switch__long d-lg-none">Точный поиск</span>
+                    </label>
+                  </div>
+                  <button type="button" id="clearSearchStorage" class="btn btn-jr-ghost btn-jr-ghost--compact tap-target">Сбросить</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="filterContainer" class="collapse-content" aria-hidden="true">
+            <div class="jr-filter-panel__inner">
             <div class="row g-2 g-md-3 mb-2">
               <div class="col-sm-6">
                 <label class="form-label jr-filter-label" for="filterRefine">Уточнить</label>
@@ -171,39 +212,10 @@
               <button type="button" id="filterReset" class="btn btn-sm btn-jr-ghost jr-filter-reset tap-target">Сбросить фильтры</button>
             </div>
           </div>
-        </div>
-
-        <div class="jr-search-extras">
-        <div class="jr-sort-row">
-          <div class="jr-segmented" role="radiogroup" aria-label="Сортировка результатов">
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sort" value="sid" id="sortSid" checked />
-              <label class="form-check-label" for="sortSid" title="По количеству сидов">по сидам</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sort" value="size" id="sortSize" />
-              <label class="form-check-label" for="sortSize" title="По размеру файла">по размеру</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sort" value="date" id="sortDate" />
-              <label class="form-check-label" for="sortDate" title="По дате добавления в базу">добавлен</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sort" value="update" id="sortUpdate" />
-              <label class="form-check-label" for="sortUpdate" title="По дате обновления">обновлён</label>
-            </div>
           </div>
-          <div class="jr-sort-row__footer">
-            <div class="form-check form-switch jr-exact-switch mb-0">
-              <input class="form-check-input" type="checkbox" role="switch" id="forcedSearch" />
-              <label class="form-check-label" for="forcedSearch">Точный поиск</label>
-            </div>
-            <button type="button" id="clearSearchStorage" class="btn btn-jr-ghost btn-jr-ghost--compact tap-target">Сбросить</button>
           </div>
         </div>
         </div>
-      </div>
-      </form>
 
       <section class="jr-results-section" aria-label="Результаты поиска">
       <div id="loading" class="d-none" role="status" aria-live="polite" aria-label="Поиск торрентов">
@@ -243,6 +255,8 @@
         </div>
       </div>
       </section>
+      </div>
+      </form>
     </main>
 
     <footer class="glass-card p-4 jr-page-footer gsap-scroll">
@@ -291,7 +305,7 @@
       <div class="modal-content glass-card border-0">
         <div class="modal-header border-0 pb-0">
           <h2 class="modal-title h5 fw-semibold" id="apiKeyModalTitle">Установить API ключ</h2>
-          <button type="button" class="btn-close" id="apiKeyModalCancel" aria-label="Закрыть"></button>
+          <button type="button" class="btn-close" id="apiKeyModalCancel" data-bs-dismiss="modal" aria-label="Закрыть"></button>
         </div>
         <div class="modal-body">
           <p class="small text-secondary">Ключ используется для поиска по API. Сохраняется в браузере.</p>
@@ -314,7 +328,7 @@
       <div class="modal-content glass-card border-0">
         <div class="modal-header border-0 pb-0">
           <h2 class="modal-title h5 fw-semibold" id="torServerModalTitle">Настройки TorrServer</h2>
-          <button type="button" class="btn-close" id="torServerModalCancel" aria-label="Закрыть"></button>
+          <button type="button" class="btn-close" id="torServerModalCancel" data-bs-dismiss="modal" aria-label="Закрыть"></button>
         </div>
         <div class="modal-body">
           <p class="small text-secondary">URL TorrServer. При отправке с карточки браузер отправляет POST с

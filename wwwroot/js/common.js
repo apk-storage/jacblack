@@ -98,8 +98,6 @@
     global.requestAnimationFrame(() => { region.textContent = message; });
   };
 
-  let toastHideTimer = null;
-
   const ensureToastHost = () => {
     if (document.getElementById('jrToastHost')) return;
     const host = document.createElement('div');
@@ -114,20 +112,25 @@
   const showToast = (message, options = {}) => {
     if (!message) return;
     const type = options.type || 'info';
-    const duration = options.duration != null ? options.duration : 2800;
+    const duration = options.duration != null ? options.duration : 2200;
+    const fadeMs = options.fadeMs != null ? options.fadeMs : 180;
     const politeness = options.politeness || (type === 'error' ? 'assertive' : 'polite');
     announceLive(message, { politeness });
     ensureToastHost();
     const host = document.getElementById('jrToastHost');
+    if (options.replace) {
+      host.querySelectorAll('.jr-toast').forEach((existing) => existing.remove());
+    }
     const toast = document.createElement('div');
     toast.className = 'jr-toast jr-toast--' + type;
     toast.textContent = message;
     host.appendChild(toast);
     global.requestAnimationFrame(() => toast.classList.add('jr-toast--visible'));
-    clearTimeout(toastHideTimer);
-    toastHideTimer = global.setTimeout(() => {
+    global.setTimeout(() => {
       toast.classList.remove('jr-toast--visible');
-      global.setTimeout(() => toast.remove(), 280);
+      global.setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+      }, fadeMs);
     }, duration);
   };
 
@@ -335,6 +338,12 @@
       if (btn) btn.addEventListener('click', open);
     });
     if (saveEl) saveEl.addEventListener('click', save);
+    modalEl.querySelectorAll('[data-bs-dismiss="modal"], .btn-close').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        close();
+      });
+    });
     inputEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); save(); }
     });
