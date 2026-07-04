@@ -173,9 +173,12 @@ namespace JacRed.Engine.Indexers
             string sn = StringConvert.SearchName(search);
             string altSn = StringConvert.SearchName(altname);
 
+            if (string.IsNullOrEmpty(sn) && string.IsNullOrEmpty(altSn))
+                return new List<Result>();
+
             if (exact)
             {
-                foreach (var mdb in FileDB.masterDb.Where(i => i.Key.StartsWith($"{sn}:") || i.Key.EndsWith($":{sn}") || (altSn != null && i.Key.Contains(altSn))))
+                foreach (var mdb in FileDB.masterDb.Where(i => (sn != null && (i.Key.StartsWith($"{sn}:") || i.Key.EndsWith($":{sn}"))) || (altSn != null && i.Key.Contains(altSn))))
                 {
                     foreach (var t in FileDB.OpenRead(mdb.Key, true).Values)
                     {
@@ -189,7 +192,7 @@ namespace JacRed.Engine.Indexers
             }
             else
             {
-                var mdb = FileDB.masterDb.Where(i => i.Key.Contains(sn) || (altSn != null && i.Key.Contains(altSn)));
+                var mdb = FileDB.masterDb.Where(i => (sn != null && i.Key.Contains(sn)) || (altSn != null && i.Key.Contains(altSn)));
                 if (!AppInit.conf.evercache.enable || AppInit.conf.evercache.validHour > 0)
                     mdb = mdb.Take(AppInit.conf.maxreadfile);
                 foreach (var val in mdb)

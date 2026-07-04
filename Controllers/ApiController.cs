@@ -836,10 +836,13 @@ namespace JacRed.Controllers
             string _s = StringConvert.SearchName(search);
             string _altsearch = StringConvert.SearchName(altname);
 
+            if (string.IsNullOrEmpty(_s) && string.IsNullOrEmpty(_altsearch))
+                return Json(torrents);
+
             if (exact)
             {
                 #region Точный поиск
-                foreach (var mdb in FileDB.masterDb.Where(i => i.Key.StartsWith($"{_s}:") || i.Key.EndsWith($":{_s}") || (_altsearch != null && i.Key.Contains(_altsearch))))
+                foreach (var mdb in FileDB.masterDb.Where(i => (_s != null && (i.Key.StartsWith($"{_s}:") || i.Key.EndsWith($":{_s}"))) || (_altsearch != null && i.Key.Contains(_altsearch))))
                 {
                     foreach (var t in FileDB.OpenRead(mdb.Key, true).Values)
                     {
@@ -862,7 +865,7 @@ namespace JacRed.Controllers
             else
             {
                 #region Поиск по совпадению ключа в имени
-                var mdb = FileDB.masterDb.Where(i => i.Key.Contains(_s) || (_altsearch != null && i.Key.Contains(_altsearch)));
+                var mdb = FileDB.masterDb.Where(i => (_s != null && i.Key.Contains(_s)) || (_altsearch != null && i.Key.Contains(_altsearch)));
                 if (!AppInit.conf.evercache.enable || AppInit.conf.evercache.validHour > 0)
                     mdb = mdb.Take(AppInit.conf.maxreadfile);
 
