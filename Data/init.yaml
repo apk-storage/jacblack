@@ -5,6 +5,7 @@ devkey: ""
 mergeduplicates: true
 mergenumduplicates: true
 openstats: true
+openconfig: false
 opensync: false
 opensync_v1: false
 web: true

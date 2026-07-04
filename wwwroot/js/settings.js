@@ -58,9 +58,9 @@
   let devKeyModalInstance = null;
 
   const ACCESS_MESSAGES = {
-    network: 'Редактирование конфигурации доступно только из локальной сети сервера. Откройте эту страницу по адресу сервера (например, http://127.0.0.1:9117/settings) или через VPN.',
-    devkey: 'Требуется dev-ключ из init.yaml. Укажите его в настройках браузера — кнопка «Dev ключ» в шапке или ниже.',
-    apikey: 'Требуется API-ключ. Задайте его на главной странице (кнопка «API ключ» в шапке), затем обновите настройки.'
+    network: 'Доступ к API конфигурации закрыт. Включите openconfig: true в init.yaml, задайте devkey, или откройте через Cloudflare Tunnel / локальную сеть.',
+    devkey: 'Требуется dev-ключ из init.yaml. Укажите его — кнопка «Dev ключ» в шапке или ниже.',
+    apikey: 'Требуется API-ключ. Задайте его на главной (кнопка «API ключ»), затем обновите страницу.'
   };
 
   const withConfigHeaders = (options = {}) => withApiKeyHeaders(withDevKeyHeaders(options));

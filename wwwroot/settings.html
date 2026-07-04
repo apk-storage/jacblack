@@ -70,7 +70,7 @@
           <span class="jr-settings-denied__icon" aria-hidden="true"><i class="bi bi-shield-exclamation"></i></span>
           <div class="flex-grow-1">
             <h2 class="h6 fw-semibold mb-1">Доступ ограничен</h2>
-            <p id="accessDeniedMessage" class="small text-secondary mb-3">Редактирование конфигурации доступно только из локальной сети сервера или с dev-ключом, если он задан в <code class="jr-inline-code">init.yaml</code>.</p>
+            <p id="accessDeniedMessage" class="small text-secondary mb-3">Через Cloudflare Tunnel или локальную сеть доступ открыт автоматически. Для прямого доступа из интернета включите <code class="jr-inline-code">openconfig: true</code> в конфиге или задайте <code class="jr-inline-code">devkey</code>.</p>
             <div id="accessDeniedActions" class="d-flex flex-wrap gap-2">
               <button type="button" id="accessDeniedDevKeyBtn" class="btn btn-sm btn-jr-primary tap-target d-none">
                 <i class="bi bi-shield-lock me-1" aria-hidden="true"></i>Ввести dev-ключ

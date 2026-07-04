@@ -35,12 +35,13 @@ namespace JacRed.Engine
                         Field("listenip", "string", "IP прослушивания", "any или конкретный IP"),
                         Field("listenport", "int", "Порт", "1–65535", min: 1, max: 65535),
                         Field("apikey", "password", "API ключ", "Пусто — без проверки", sensitive: true),
-                        Field("devkey", "password", "Dev ключ", "Для /dev/, /cron/, /jsondb за туннелем", sensitive: true),
+                        Field("devkey", "password", "Dev ключ", "Для /dev/, /cron/, /jsondb из интернета и за туннелем", sensitive: true),
                         Field("web", "bool", "Веб-интерфейс", "Раздавать статику (PWA)")
                     }),
                     Group("api", "API и дубликаты", null, new[]
                     {
                         Field("openstats", "bool", "Открытая статистика", null),
+                        Field("openconfig", "bool", "Удалённый config API", "Редактирование init.yaml из интернета (/settings). За Cloudflare Tunnel работает и без этого флага"),
                         Field("opensync", "bool", "Открытый sync", null),
                         Field("opensync_v1", "bool", "Sync v1", "Старый формат sync"),
                         Field("mergeduplicates", "bool", "Объединять дубликаты", null),

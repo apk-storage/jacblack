@@ -88,13 +88,23 @@ namespace JacRed
 
 
             // Реальный IP клиента за cloudflared/прокси: доверяем X-Forwarded-For от loopback
+            app.Use(async (context, next) =>
+            {
+                ModHeaders.CaptureOriginalRemoteIp(context);
+                await next();
+            });
+
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
                 KnownNetworks =
                 {
                     new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Loopback, 8),
-                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.IPv6Loopback, 128)
+                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.IPv6Loopback, 128),
+                    // cloudflared / reverse proxy в Docker на том же хосте
+                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("10.0.0.0"), 8),
+                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.16.0.0"), 12),
+                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("192.168.0.0"), 16)
                 }
             });
 

@@ -21,7 +21,8 @@ info:
     | `Authorization: Bearer` | Same as apikey |
     | `X-Dev-Key` header | Config API behind tunnel when `devkey` is set |
 
-    Config endpoints (`/api/v1.0/config/*`) are restricted to **local/private network** only.
+    Config endpoints (`/api/v1.0/config/*`): local network, Cloudflare Tunnel (cloudflared on the same host),
+    `openconfig: true`, or valid `X-Dev-Key` when `devkey` is set.
 
     ## Config files
 

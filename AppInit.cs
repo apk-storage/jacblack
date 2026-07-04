@@ -205,6 +205,9 @@ namespace JacRed
 
         public bool openstats = true;
 
+        /// <summary>Разрешить /api/v1.0/config/* с любого IP (при заданном devkey — только с ключом).</summary>
+        public bool openconfig = false;
+
         public bool opensync = true;
 
         public bool opensync_v1 = false;

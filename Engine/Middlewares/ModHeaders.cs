@@ -12,8 +12,17 @@ using System.Threading.Tasks;
 namespace JacRed.Engine.Middlewares
 {
     /// <summary>
-    /// Middleware: IP restriction (local/private network), devkey for /cron/, /jsondb, /dev/,
-    /// apikey for search and stats, CORS Access-Control-Allow-Private-Network, cron logging.
+    /// Middleware: access control for JacRed API and admin paths.
+    ///
+    /// Two client notions (see Startup UseForwardedHeaders + CaptureOriginalRemoteIp):
+    /// - <b>Client IP</b> — RemoteIpAddress after X-Forwarded-For (who uses the service).
+    /// - <b>Peer IP</b> — direct TCP connection to Kestrel (cloudflared/nginx on same host → loopback/private).
+    ///
+    /// | Path group | LAN client | Same-host proxy (CF Tunnel / local nginx) | Remote proxy / internet |
+    /// |------------|------------|-------------------------------------------|-------------------------|
+    /// | /dev/, /cron/, /jsondb | ✓ | devkey if set, else ✗ | devkey if set, else ✗ |
+    /// | /api/v1.0/config | ✓ | ✓ | openconfig or devkey |
+    /// | Search etc. | apikey if configured | apikey if configured | apikey if configured |
     /// </summary>
     public partial class ModHeaders
     {
@@ -34,16 +43,19 @@ namespace JacRed.Engine.Middlewares
             => !string.IsNullOrEmpty(path)
                 && path.StartsWith("/api/v1.0/config", StringComparison.OrdinalIgnoreCase);
 
-        /// <summary>Paths restricted to local/private network (by client IP).</summary>
-        private static bool IsLocalOnlyPath(string path)
+        /// <summary>Admin/dev paths: /dev/, /cron/, /jsondb — never open to remote clients without devkey.</summary>
+        private static bool IsDevOnlyPath(string path)
         {
             if (string.IsNullOrEmpty(path)) return false;
             return path.StartsWith("/cron/", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/jsondb", StringComparison.OrdinalIgnoreCase)
                 || path.StartsWith("/jsondb/", StringComparison.OrdinalIgnoreCase)
-                || path.StartsWith("/dev/", StringComparison.OrdinalIgnoreCase)
-                || IsConfigApiPath(path);
+                || path.StartsWith("/dev/", StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>All paths with elevated restrictions (dev + config API).</summary>
+        private static bool IsRestrictedAdminPath(string path)
+            => IsDevOnlyPath(path) || IsConfigApiPath(path);
 
         public ModHeaders(RequestDelegate next)
         {
@@ -74,11 +86,36 @@ namespace JacRed.Engine.Middlewares
             ctx.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
         }
 
-        /// <summary>Whether to add Access-Control-Allow-Private-Network (local network or non-local-only path).</summary>
-        private static bool ShouldSetPrivateNetworkHeader(bool fromLocalNetwork, string path)
+        /// <summary>Whether to add Access-Control-Allow-Private-Network (local network or non-restricted path).</summary>
+        private static bool ShouldSetPrivateNetworkHeader(bool trustedContext, string path)
         {
-            return fromLocalNetwork || !IsLocalOnlyPath(path);
+            return trustedContext || !IsRestrictedAdminPath(path);
         }
+
+        /// <summary>HttpContext.Items key for TCP remote IP before ForwardedHeaders.</summary>
+        public const string OriginalRemoteIpItemKey = "JacRed.OriginalRemoteIp";
+
+        /// <summary>Store direct connection IP before UseForwardedHeaders overwrites RemoteIpAddress.</summary>
+        public static void CaptureOriginalRemoteIp(HttpContext httpContext)
+        {
+            httpContext.Items[OriginalRemoteIpItemKey] = httpContext.Connection.RemoteIpAddress;
+        }
+
+        /// <summary>Direct TCP peer is loopback or RFC1918 (cloudflared/nginx on the same host or Docker network).</summary>
+        private static bool IsViaLocalPeer(HttpContext httpContext)
+        {
+            if (!httpContext.Items.TryGetValue(OriginalRemoteIpItemKey, out var value) || value is not IPAddress peer)
+                return false;
+            return IsLocalOrPrivate(peer);
+        }
+
+        /// <summary>Client IP (after forwarded headers) is loopback or RFC1918 — true LAN/localhost user.</summary>
+        private static bool IsDirectLocalClient(HttpContext httpContext)
+            => IsLocalOrPrivate(httpContext.Connection.RemoteIpAddress);
+
+        /// <summary>LAN client or request arrived through a local reverse proxy / Cloudflare Tunnel on this host.</summary>
+        private static bool IsTrustedContext(HttpContext httpContext)
+            => IsDirectLocalClient(httpContext) || IsViaLocalPeer(httpContext);
 
         private static bool IsLocalOrPrivate(IPAddress remoteIp)
         {
@@ -101,6 +138,43 @@ namespace JacRed.Engine.Middlewares
                 if ((bytes[0] & 0xfe) == 0xfc) return true;                      // fc00::/7 unique local
                 return false;
             }
+            return false;
+        }
+
+        /// <summary>
+        /// /dev/, /cron/, /jsondb: only a true LAN/localhost client, or remote with valid devkey.
+        /// Same-host Cloudflare Tunnel / nginx does NOT grant access without devkey.
+        /// </summary>
+        private static bool IsDevEndpointAccessAllowed(HttpContext httpContext)
+        {
+            if (IsDirectLocalClient(httpContext))
+                return true;
+
+            if (!string.IsNullOrEmpty(AppInit.conf?.devkey))
+                return DevKeyMatches(httpContext);
+
+            return false;
+        }
+
+        /// <summary>
+        /// /api/v1.0/config: LAN, same-host proxy (CF Tunnel / local nginx), openconfig, or devkey.
+        /// Remote nginx on another host → openconfig or devkey.
+        /// </summary>
+        private static bool IsConfigApiAccessAllowed(HttpContext httpContext)
+        {
+            if (IsDirectLocalClient(httpContext) || IsViaLocalPeer(httpContext))
+                return true;
+
+            if (AppInit.conf?.openconfig == true)
+            {
+                if (!string.IsNullOrEmpty(AppInit.conf?.devkey))
+                    return DevKeyMatches(httpContext);
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(AppInit.conf?.devkey) && DevKeyMatches(httpContext))
+                return true;
+
             return false;
         }
 
@@ -191,45 +265,30 @@ namespace JacRed.Engine.Middlewares
                 || PathWhitelistRegex().IsMatch(path);
         }
 
+        static int DenyStatus(bool keyConfigured, string method)
+            => method == "OPTIONS" ? 204 : (keyConfigured ? 401 : 403);
+
         /// <summary>Handles request: IP check, devkey, apikey, CORS, cron logging.</summary>
         public async Task Invoke(HttpContext httpContext)
         {
             ApplySecurityHeaders(httpContext);
 
-            bool fromLocalNetwork = IsLocalOrPrivate(httpContext.Connection.RemoteIpAddress);
             string path = httpContext.Request.Path.Value ?? "";
+            bool trustedContext = IsTrustedContext(httpContext);
+            bool devkeyConfigured = !string.IsNullOrEmpty(AppInit.conf?.devkey);
 
-            if (!fromLocalNetwork)
+            if (IsDevOnlyPath(path) && !IsDevEndpointAccessAllowed(httpContext))
             {
-                // /cron/, /jsondb, /dev/ — local network only; config API allows remote access with devkey
-                if (IsLocalOnlyPath(path))
-                {
-                    if (IsConfigApiPath(path) && !string.IsNullOrEmpty(AppInit.conf?.devkey))
-                    {
-                        if (!DevKeyMatches(httpContext))
-                        {
-                            SetPrivateNetworkHeader(httpContext);
-                            httpContext.Response.StatusCode = httpContext.Request.Method == "OPTIONS" ? 204 : 401;
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        // OPTIONS: 204 for CORS preflight. UseCors runs before UseModHeaders, so CORS headers are applied to the response.
-                        httpContext.Response.StatusCode = httpContext.Request.Method == "OPTIONS" ? 204 : 403;
-                        return;
-                    }
-                }
+                SetPrivateNetworkHeader(httpContext);
+                httpContext.Response.StatusCode = DenyStatus(devkeyConfigured, httpContext.Request.Method);
+                return;
             }
-            else
+
+            if (IsConfigApiPath(path) && !IsConfigApiAccessAllowed(httpContext))
             {
-                // Behind tunnel/proxy: require devkey for /dev/, /cron/, /jsondb
-                if (IsLocalOnlyPath(path) && !string.IsNullOrEmpty(AppInit.conf?.devkey) && !DevKeyMatches(httpContext))
-                {
-                    SetPrivateNetworkHeader(httpContext);
-                    httpContext.Response.StatusCode = httpContext.Request.Method == "OPTIONS" ? 204 : 401;
-                    return;
-                }
+                SetPrivateNetworkHeader(httpContext);
+                httpContext.Response.StatusCode = DenyStatus(devkeyConfigured, httpContext.Request.Method);
+                return;
             }
 
             // API key required for search/stats (local and external)
@@ -244,15 +303,15 @@ namespace JacRed.Engine.Middlewares
                 var providedKey = GetApiKeyFromRequest(httpContext);
                 if (string.IsNullOrEmpty(providedKey) || !SecureEquals(providedKey, AppInit.conf?.apikey))
                 {
-                    if (ShouldSetPrivateNetworkHeader(fromLocalNetwork, path))
+                    if (ShouldSetPrivateNetworkHeader(trustedContext, path))
                         SetPrivateNetworkHeader(httpContext);
-                    httpContext.Response.StatusCode = httpContext.Request.Method == "OPTIONS" ? 204 : 401;
+                    httpContext.Response.StatusCode = DenyStatus(keyConfigured: true, httpContext.Request.Method);
                     return;
                 }
             }
 
             // CORS: Allow-Private-Network (Chrome PNA) when request passes checks
-            if (ShouldSetPrivateNetworkHeader(fromLocalNetwork, path))
+            if (ShouldSetPrivateNetworkHeader(trustedContext, path))
                 SetPrivateNetworkHeader(httpContext);
 
             bool isCron = path.StartsWith("/cron/", StringComparison.OrdinalIgnoreCase);
@@ -265,7 +324,7 @@ namespace JacRed.Engine.Middlewares
                 cronStopwatch.Stop();
                 var label = path.Substring(6);
                 var elapsed = cronStopwatch.ElapsedMilliseconds >= 1000
-                    ? $"{cronStopwatch.Elapsed.TotalSeconds:F1}s"
+                    ? $"{cronStopwatch.ElapsedMilliseconds / 1000.0:F1}s"
                     : $"{cronStopwatch.ElapsedMilliseconds}ms";
                 var status = httpContext.Response.StatusCode;
                 var ts = DateTime.Now.ToString("HH:mm:ss");
