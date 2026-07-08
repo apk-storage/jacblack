@@ -1,16 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using JacRed.Engine;
 using JacRed.Models.Details;
+using Newtonsoft.Json.Linq;
 
 namespace JacRed.Controllers
 {
     [Route("/stats/[action]")]
     public class StatsController : Controller
     {
-        const string StatsPath = "Data/temp/stats.json";
+        const string StatsPath = StatsCollector.StatsPath;
 
         /// <summary>
         /// Список раздач по всем трекерам из БД — для сверки с тем, что на трекере. newtoday=1, updatedtoday=1, limit (по умолчанию 200).
@@ -53,6 +55,37 @@ namespace JacRed.Controllers
         }
 
         /// <summary>
+        /// Время последнего сбора stats.json и tracks-stats.json (общий updatedAt).
+        /// </summary>
+        [Route("/stats/meta")]
+        public ActionResult Meta()
+        {
+            if (!AppInit.conf.openstats)
+                return Json(new { ok = false });
+
+            DateTime? updatedAt = StatsCollector.LastCollectedAtUtc ?? TracksDB.GetExportStatsUpdatedAt();
+
+            if (updatedAt == null && System.IO.File.Exists(StatsCollector.StatsMetaPath))
+            {
+                try
+                {
+                    var jo = JObject.Parse(System.IO.File.ReadAllText(StatsCollector.StatsMetaPath));
+                    if (jo.TryGetValue("updatedAt", out var token))
+                        updatedAt = ParseMetaUpdatedAt(token);
+                }
+                catch { }
+            }
+
+            return Json(new
+            {
+                ok = true,
+                updatedAt,
+                updatedAtLocal = updatedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                tracksStatsUpdatedAt = TracksDB.GetExportStatsUpdatedAt()
+            });
+        }
+
+        /// <summary>
         /// Получить новые раздачи для конкретного трекера (созданные сегодня).
         /// </summary>
         [Route("/stats/trackers/{trackerName}/new")]
@@ -82,6 +115,20 @@ namespace JacRed.Controllers
 
             var list = CollectTorrents(trackerName, newtoday: 0, updatedtoday: 1, limit);
             return Json(list);
+        }
+
+        static DateTime? ParseMetaUpdatedAt(JToken token)
+        {
+            if (token == null)
+                return null;
+
+            if (token.Type == JTokenType.Date)
+                return token.Value<DateTime>();
+
+            if (DateTime.TryParse(token.ToString(), null, DateTimeStyles.RoundtripKind, out var dt))
+                return dt;
+
+            return null;
         }
 
         static List<object> CollectTorrents(string trackerName, int newtoday, int updatedtoday, int limit)
