@@ -4,12 +4,11 @@ using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Globalization;
 using System.Text;
-using System.Threading;
-using JacRed.Engine;
-using System.Threading.Tasks;
-using System;
 using JacRed.Controllers;
+using System;
 using System.IO;
+using System.Threading.Tasks;
+using JacRed.Infrastructure.Logging;
 
 namespace JacRed
 {
@@ -33,52 +32,19 @@ namespace JacRed
             Directory.CreateDirectory("Data/log");
             Directory.CreateDirectory("Data/tracks");
 
-            // masterDb (~58MB) loads here; fast enough to keep before Kestrel
+            // masterDb (~58MB) must load synchronously before Kestrel accepts requests
             SyncController.Configuration();
-
-            ThreadPool.QueueUserWorkItem(async _ =>
-            {
-                try { TracksDB.StartupInit(); }
-                catch (IOException ex) { Console.WriteLine($"tracks startup: {ex}"); }
-                catch (UnauthorizedAccessException ex) { Console.WriteLine($"tracks startup: {ex}"); }
-
-                try { ApiController.getFastdb(update: true); }
-                catch (Exception ex) { Console.WriteLine($"fastdb startup: {ex}"); }
-            });
-
-            ThreadPool.QueueUserWorkItem(async _ =>
-            {
-                while (true)
-                {
-                    await Task.Delay(TimeSpan.FromMinutes(10));
-                    try { ApiController.getFastdb(update: true); } catch { }
-                }
-            });
-
-            ThreadPool.QueueUserWorkItem(async _ => await SyncCron.Torrents());
-            ThreadPool.QueueUserWorkItem(async _ => await SyncCron.Spidr());
-            ThreadPool.QueueUserWorkItem(async _ => await TrackersCron.Run());
-            ThreadPool.QueueUserWorkItem(async _ => await StatsCron.Run());
-
-            ThreadPool.QueueUserWorkItem(async _ => await FileDB.Cron());
-            ThreadPool.QueueUserWorkItem(async _ => await FileDB.CronFast());
-
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(1));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(2));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(3));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(4));
-            ThreadPool.QueueUserWorkItem(async _ => await TracksCron.Run(5));
 
             CultureInfo.CurrentCulture = new CultureInfo("ru-RU");
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
-                Console.WriteLine($"[fatal] UnhandledException: {e.ExceptionObject}");
+                JacRedLog.Error(JacRedLogCategories.Host, $"[fatal] UnhandledException: {e.ExceptionObject}");
             };
             TaskScheduler.UnobservedTaskException += (_, e) =>
             {
-                Console.WriteLine($"[fatal] UnobservedTaskException: {e.Exception}");
+                JacRedLog.Error(JacRedLogCategories.Host, $"[fatal] UnobservedTaskException: {e.Exception}");
                 e.SetObserved();
             };
 

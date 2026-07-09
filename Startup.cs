@@ -5,13 +5,21 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text.Json.Serialization;
-using JacRed.Engine;
-using JacRed.Engine.Middlewares;
+using JacRed.Configuration;
+using JacRed.Infrastructure.OpenApi;
+using JacRed.Infrastructure.Security;
+using JacRed.Application.Index;
+using JacRed.Application.Search;
+using JacRed.Application.Dev;
+using JacRed.Infrastructure.Background;
+using JacRed.Infrastructure.Logging;
+using JacRed.Infrastructure.Trackers;
 
 namespace JacRed
 {
@@ -19,8 +27,6 @@ namespace JacRed
     {
         #region Startup
         public IConfiguration Configuration { get; }
-
-        public static IServiceProvider ApplicationServices { get; private set; }
 
         public Startup(IConfiguration configuration)
         {
@@ -31,6 +37,10 @@ namespace JacRed
         #region ConfigureServices
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddJacRedConfiguration();
+            services.AddJacRedSecurity();
+            services.AddJacRedLogging();
+
             services.Configure<CookiePolicyOptions>(options =>
             {
                 options.CheckConsentNeeded = context => true;
@@ -61,14 +71,41 @@ namespace JacRed
                 //options.JsonSerializerOptions.WriteIndented = true;
             });
 
+            services.AddMemoryCache();
+            services.AddSingleton<IFastDbIndex>(FastDbIndex.Default);
+
+            services.AddScoped<IJackettSearchService, JackettSearchService>();
+            services.AddScoped<ITorrentQueryService, TorrentQueryService>();
+            services.AddScoped<IDevMaintenanceService, DevMaintenanceService>();
+            services.AddScoped<IDevDiagnosticsService, DevDiagnosticsService>();
+            services.AddScoped<IDevMigrationService, DevMigrationService>();
+            services.AddScoped<ITracksAdminService, TracksAdminService>();
+
+            services.AddHostedService<FastDbRefreshWorker>();
+            services.AddHostedService<SyncWorker>();
+            services.AddHostedService<TrackersWorker>();
+            services.AddHostedService<StatsWorker>();
+            services.AddHostedService<FileDbWorker>();
+            services.AddHostedService<TracksWorker>();
+
+            services.AddJacRedTrackers();
+
             services.AddJacRedSwagger();
+
+            var registryErrors = JacRedAccessCatalog.VerifyRegistry();
+            if (registryErrors.Count > 0)
+            {
+                foreach (var err in registryErrors)
+                    JacRedLog.Warning("security", $"registry mismatch: {err}");
+            }
         }
         #endregion
 
 
         public void Configure(IApplicationBuilder app)
         {
-            ApplicationServices = app.ApplicationServices;
+            JacRedLog.Configure(app.ApplicationServices.GetRequiredService<ILoggerFactory>());
+            JacRedLogSettings.Apply(AppInit.conf);
 
             var env = app.ApplicationServices.GetService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
             if (env?.EnvironmentName == Microsoft.Extensions.Hosting.Environments.Development)
@@ -87,24 +124,25 @@ namespace JacRed
             }
 
 
-            // Реальный IP клиента за cloudflared/прокси: доверяем X-Forwarded-For от loopback
+            // Client IP behind cloudflared/nginx (peer vs client — ClientNetworkContext)
             app.Use(async (context, next) =>
             {
-                ModHeaders.CaptureOriginalRemoteIp(context);
+                ClientNetworkContext.CaptureOriginalRemoteIp(context);
                 await next();
             });
 
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-                KnownNetworks =
+                ForwardLimit = 1,
+                KnownIPNetworks =
                 {
-                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Loopback, 8),
-                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.IPv6Loopback, 128),
+                    new System.Net.IPNetwork(IPAddress.Loopback, 8),
+                    new System.Net.IPNetwork(IPAddress.IPv6Loopback, 128),
                     // cloudflared / reverse proxy в Docker на том же хосте
-                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("10.0.0.0"), 8),
-                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.16.0.0"), 12),
-                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("192.168.0.0"), 16)
+                    new System.Net.IPNetwork(IPAddress.Parse("10.0.0.0"), 8),
+                    new System.Net.IPNetwork(IPAddress.Parse("172.16.0.0"), 12),
+                    new System.Net.IPNetwork(IPAddress.Parse("192.168.0.0"), 16)
                 }
             });
 
@@ -136,7 +174,7 @@ namespace JacRed
                         return;
                     }
 
-                    Console.WriteLine($"swagger: openapi.yaml → json failed ({error})");
+                    JacRedLog.Warning("swagger", $"openapi.yaml → json failed ({error})");
                     context.Response.StatusCode = 503;
                     context.Response.ContentType = "application/json; charset=utf-8";
                     await context.Response.WriteAsync($"{{\"error\":\"{error?.Replace("\"", "\\\"")}\"}}");
@@ -163,7 +201,7 @@ namespace JacRed
 
                 app.Use(async (context, next) =>
                 {
-                    ModHeaders.ApplySecurityHeaders(context);
+                    SecurityHeaders.Apply(context);
                     await next();
                 });
 
@@ -184,7 +222,7 @@ namespace JacRed
                 });
             }
 
-            app.UseModHeaders();
+            app.UseJacRedSecurity();
 
             app.UseEndpoints(endpoints =>
             {

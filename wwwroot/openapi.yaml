@@ -19,10 +19,14 @@ info:
     | `apikey` query | Search, stats (when `apikey` is set in config) |
     | `X-Api-Key` header | Same as query apikey |
     | `Authorization: Bearer` | Same as apikey |
-    | `X-Dev-Key` header | /settings (config API), /dev/, /cron/, /jsondb из интернета или через туннель |
+    | `X-Dev-Key` header | /dev/, /cron/, /jsondb, `/api/v1.0/config/*` из интернета или через туннель |
 
-    Config endpoints (`/api/v1.0/config/*`): LAN; same-host Cloudflare Tunnel / nginx без devkey;
-    из интернета или при заданном devkey — заголовок `X-Dev-Key`.
+    **Config API** (`/api/v1.0/config/*`): LAN-клиент **или** `X-Dev-Key` / `?devkey=`.
+    Same-host reverse proxy (Cloudflare Tunnel, nginx) **сам по себе не заменяет** devkey.
+
+    **Sync** (`/sync/*`): middleware пропускает без ключей; данные sync требуют `opensync: true` в конфиге.
+
+    Полная матрица: [`AccessTraceabilityMatrix.md`](AccessTraceabilityMatrix.md).
 
     ## Config files
 
@@ -50,7 +54,7 @@ tags:
   - name: Sync
     description: Remote sync protocol (requires opensync)
   - name: Config
-    description: init.yaml / init.conf read/write (local network only)
+    description: init.yaml / init.conf read/write (LAN or X-Dev-Key)
   - name: Web
     description: PWA HTML shells
 
@@ -449,8 +453,8 @@ paths:
   /stats/Torrents:
     get:
       tags: [Stats]
-      summary: Tracker statistics or torrent list
-      description: Without trackerName — summary from Data/temp/stats.json. With trackerName — torrent list.
+      summary: Tracker summary
+      description: Without trackerName — all trackers from stats.json. With trackerName — one tracker summary object.
       operationId: statsTorrents
       parameters:
         - $ref: '#/components/parameters/ApiKeyQuery'
@@ -458,46 +462,41 @@ paths:
           in: query
           schema:
             type: string
-        - name: newtoday
-          in: query
-          schema:
-            type: integer
-            enum: [0, 1]
-        - name: updatedtoday
-          in: query
-          schema:
-            type: integer
-            enum: [0, 1]
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 200
       responses:
         '200':
-          description: Stats JSON or torrent array
+          description: Tracker summary
           content:
             application/json:
               schema:
                 oneOf:
                   - type: array
                   - type: object
+        '404':
+          description: Unknown tracker (when trackerName set)
 
   /stats/trackers:
     get:
       tags: [Stats]
-      summary: All trackers torrent list
+      summary: Tracker summary (all)
+      description: Array from stats.json (counters per tracker).
       operationId: statsTrackers
       parameters:
         - $ref: '#/components/parameters/ApiKeyQuery'
-        - name: newtoday
-          in: query
-          schema:
-            type: integer
-        - name: updatedtoday
-          in: query
-          schema:
-            type: integer
+      responses:
+        '200':
+          description: Tracker summary array
+          content:
+            application/json:
+              schema:
+                type: array
+
+  /stats/trackers/new:
+    get:
+      tags: [Stats]
+      summary: New torrents today (all trackers)
+      operationId: statsTrackersNew
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyQuery'
         - name: limit
           in: query
           schema:
@@ -505,11 +504,139 @@ paths:
             default: 200
       responses:
         '200':
-          description: Torrent list
+          description: Torrent list from create shard
           content:
             application/json:
               schema:
                 type: array
+
+  /stats/trackers/updated:
+    get:
+      tags: [Stats]
+      summary: Updated torrents today (all trackers)
+      operationId: statsTrackersUpdated
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyQuery'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+      responses:
+        '200':
+          description: Torrent list from update shard
+          content:
+            application/json:
+              schema:
+                type: array
+
+  /stats/trackers/{trackerName}:
+    get:
+      tags: [Stats]
+      summary: Tracker summary (one)
+      operationId: statsTrackerSummary
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyQuery'
+        - name: trackerName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Single tracker summary
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Unknown tracker
+
+  /stats/meta:
+    get:
+      tags: [Stats]
+      summary: Last stats collection time
+      description: 'Requires `openstats: true`. Returns updatedAt for stats.json and tracks-stats.json.'
+      operationId: statsMeta
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyQuery'
+      responses:
+        '200':
+          description: Collection timestamps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  updatedAtLocal:
+                    type: string
+                  tracksStatsUpdatedAt:
+                    type: string
+                    format: date-time
+                  torrentIndexUpdatedAt:
+                    type: string
+                    format: date-time
+                  torrentIndexEntries:
+                    type: integer
+
+  /stats/tracks:
+    get:
+      tags: [Stats]
+      summary: Tracks export aggregate (tracks-stats.json cache)
+      description: 'Read-only cache from Data/temp/tracks-stats.json. Requires `openstats: true`. Per-tracker breakdown is on `/stats/torrents`.'
+      operationId: statsTracks
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyQuery'
+        - name: includeTorrentDb
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Tracks export aggregate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  fromCache:
+                    type: boolean
+                  stats:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      filesScanned:
+                        type: integer
+                      fromTracksFiles:
+                        type: integer
+                      fromMemory:
+                        type: integer
+                      fromTorrentDb:
+                        type: integer
+                      torrentsScanned:
+                        type: integer
+                      invalidPath:
+                        type: integer
+                      emptyStreams:
+                        type: integer
+                      readErrors:
+                        type: integer
+                      magnetErrors:
+                        type: integer
+                      torrentDbErrors:
+                        type: integer
 
   /stats/trackers/{trackerName}/new:
     get:
@@ -587,8 +714,9 @@ paths:
       tags: [Sync]
       summary: Sync FileDB key listing
       operationId: syncFdb
+      security: []
+      description: 'Requires `opensync: true` in server config.'
       parameters:
-        - $ref: '#/components/parameters/ApiKeyQuery'
         - name: key
           in: query
           schema:
@@ -600,11 +728,11 @@ paths:
   /sync/fdb/torrents:
     get:
       tags: [Sync]
-      summary: Sync FileDB torrent collections (v2)
-      description: Returns torrent batches changed after `time`. Supports spidr mode and incremental `start`.
+      summary: Sync FileDB torrent collections
+      description: 'Returns torrent batches changed after `time`. Supports spidr mode and incremental `start`. Requires `opensync: true`.'
       operationId: syncFdbTorrents
+      security: []
       parameters:
-        - $ref: '#/components/parameters/ApiKeyQuery'
         - name: time
           in: query
           required: true
@@ -630,24 +758,14 @@ paths:
               schema:
                 type: object
 
-  /sync/torrents:
-    get:
-      tags: [Sync]
-      summary: Sync torrents batch
-      operationId: syncTorrents
-      parameters:
-        - $ref: '#/components/parameters/ApiKeyQuery'
-      responses:
-        '200':
-          description: Torrent sync data
-
   /sync/tracks/stats:
     get:
       tags: [Sync]
       summary: Tracks export statistics for sync
       operationId: syncTracksStats
+      security: []
+      description: 'Requires `opensync: true`.'
       parameters:
-        - $ref: '#/components/parameters/ApiKeyQuery'
         - name: includeTorrentDb
           in: query
           schema:
@@ -674,7 +792,7 @@ paths:
       summary: Get current configuration
       description: |
         Returns parsed config as JSON object and serialized content (secrets included).
-        **Local network only.**
+        **LAN or valid X-Dev-Key** (same-host proxy alone is not sufficient).
       operationId: configGet
       security:
         - DevKeyHeader: []
@@ -696,12 +814,12 @@ paths:
         '401':
           description: Invalid or missing devkey
         '403':
-          description: Not from local/private network
+          description: Forbidden (LAN or devkey required)
 
     post:
       tags: [Config]
       summary: Save configuration
-      description: Writes to init.yaml or init.conf. Hot-reload within ~10s. **Local network only.**
+      description: Writes to init.yaml or init.conf. Hot-reload within ~10s. **LAN or valid X-Dev-Key.**
       operationId: configSave
       security:
         - DevKeyHeader: []
@@ -721,7 +839,7 @@ paths:
         '401':
           description: Invalid devkey
         '403':
-          description: Not from local network
+          description: Forbidden (LAN or devkey required)
 
   /api/v1.0/config/schema:
     get:
@@ -949,7 +1067,7 @@ components:
       type: apiKey
       in: header
       name: X-Dev-Key
-      description: Required for /api/v1.0/config when devkey is set in config
+      description: Admin/dev key — required from internet or tunnel when `devkey` is set; LAN clients may omit it.
 
   parameters:
     ApiKeyQuery:
@@ -1083,7 +1201,7 @@ components:
           format: date-time
         data:
           type: object
-          description: Parsed config (includes secrets; LAN-only API)
+          description: Parsed config (includes secrets; LAN or devkey)
           additionalProperties: true
         content:
           type: string

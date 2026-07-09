@@ -1,9 +1,12 @@
-﻿using JacRed.Engine;
-using JacRed.Engine.CORE;
+﻿using JacRed.Infrastructure.Persistence;
+using JacRed.Infrastructure.Tracks;
+using JacRed.Infrastructure.Networking;
+using JacRed.Infrastructure.Utils;
 using JacRed.Models;
 using JacRed.Models.Details;
 using JacRed.Models.Sync.v2;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,6 +17,8 @@ namespace JacRed.Controllers
 {
     public class SyncController : BaseController
     {
+        public SyncController(IMemoryCache memoryCache) : base(memoryCache) { }
+
         static Dictionary<string, TorrentInfo> masterDbCache;
 
         public static void Configuration()
@@ -141,40 +146,7 @@ namespace JacRed.Controllers
         [Route("/sync/torrents")]
         public JsonResult Torrents(long time)
         {
-            if (!AppInit.conf.opensync_v1 || time == 0)
-                return Json(new List<string>());
-
-            int take = 2_000;
-            var torrents = new List<Models.Sync.v1.Torrent>(take + 1);
-
-            foreach (var item in masterDbCache.Where(i => i.Value.fileTime > time))
-            {
-                foreach (var torrent in FileDB.OpenRead(item.Key, cache: false))
-                {
-                    if (AppInit.conf.disable_trackers != null && AppInit.conf.disable_trackers.Contains(torrent.Value.trackerName))
-                        continue;
-
-                    var _t = (TorrentDetails)torrent.Value.Clone();
-                    _t.updateTime = item.Value.updateTime;
-
-                    var streams = TracksDB.Get(_t.magnet, _t.types);
-                    if (streams != null)
-                    {
-                        _t.ffprobe = streams;
-                        _t.languages = TracksDB.Languages(_t, streams);
-                    }
-
-                    torrents.Add(new Models.Sync.v1.Torrent() { key = torrent.Key, value = _t });
-                }
-
-                if (torrents.Count > take)
-                {
-                    take = torrents.Count;
-                    break;
-                }
-            }
-
-            return Json(new { take, torrents });
+            return Json(new { error = "use GET /sync/fdb/torrents" });
         }
 
 
