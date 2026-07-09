@@ -1,12 +1,16 @@
 (function (global) {
   'use strict';
 
+  const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+  const isSafeKey = (key) => key && !UNSAFE_KEYS.has(key);
+
   const getByPath = (obj, path) => {
     if (!obj || !path) return undefined;
     const parts = path.split('.');
     let cur = obj;
     for (const p of parts) {
-      if (cur == null) return undefined;
+      if (!isSafeKey(p) || cur == null) return undefined;
       cur = cur[p];
     }
     return cur;
@@ -17,10 +21,13 @@
     let cur = obj;
     for (let i = 0; i < parts.length - 1; i++) {
       const p = parts[i];
+      if (!isSafeKey(p)) return;
       if (cur[p] == null || typeof cur[p] !== 'object') cur[p] = {};
       cur = cur[p];
     }
-    cur[parts[parts.length - 1]] = value;
+    const last = parts[parts.length - 1];
+    if (!isSafeKey(last)) return;
+    cur[last] = value;
   };
 
   const escapeHtml = (str) => {
@@ -360,6 +367,7 @@
       let cur = obj;
       for (let i = 0; i < parts.length - 1; i++) {
         const p = parts[i];
+        if (!isSafeKey(p)) return;
         if (cur[p] == null || typeof cur[p] !== 'object' || Array.isArray(cur[p])) {
           cur[p] = {};
         }
