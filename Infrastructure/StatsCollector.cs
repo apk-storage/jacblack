@@ -3,9 +3,11 @@ using JacRed.Infrastructure.Tracks;
 using JacRed.Infrastructure.Logging;
 using JacRed.Models.Details;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 
@@ -23,6 +25,28 @@ namespace JacRed.Infrastructure
         static DateTime? _lastCollectedAtUtc;
 
         public static DateTime? LastCollectedAtUtc => _lastCollectedAtUtc;
+
+        public static DateTime? TryReadStatsMetaUpdatedAt()
+        {
+            if (!File.Exists(StatsMetaPath))
+                return null;
+
+            try
+            {
+                var jo = JObject.Parse(File.ReadAllText(StatsMetaPath));
+                if (!jo.TryGetValue("updatedAt", out var token))
+                    return null;
+
+                if (token.Type == JTokenType.Date)
+                    return token.Value<DateTime>();
+
+                if (DateTime.TryParse(token.ToString(), null, DateTimeStyles.RoundtripKind, out var dt))
+                    return dt;
+            }
+            catch { }
+
+            return null;
+        }
 
         /// <summary>
         /// Full collect: one FDB pass, write stats.json + tracks-stats.json.

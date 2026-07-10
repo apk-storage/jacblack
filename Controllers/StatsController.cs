@@ -3,8 +3,6 @@ using JacRed.Infrastructure.Http;
 using JacRed.Infrastructure.Tracks;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Globalization;
-using Newtonsoft.Json.Linq;
 
 namespace JacRed.Controllers
 {
@@ -84,19 +82,8 @@ namespace JacRed.Controllers
             if (!AppInit.conf.openstats)
                 return Json(new { ok = false });
 
-            DateTime? updatedAt = StatsCollector.LastCollectedAtUtc ?? TracksDB.GetExportStatsUpdatedAt();
+            DateTime? updatedAt = StatsCollector.LastCollectedAtUtc ?? StatsCollector.TryReadStatsMetaUpdatedAt();
             var indexMeta = StatsTorrentIndex.TryLoadMeta();
-
-            if (updatedAt == null && System.IO.File.Exists(StatsCollector.StatsMetaPath))
-            {
-                try
-                {
-                    var jo = JObject.Parse(System.IO.File.ReadAllText(StatsCollector.StatsMetaPath));
-                    if (jo.TryGetValue("updatedAt", out var token))
-                        updatedAt = ParseMetaUpdatedAt(token);
-                }
-                catch { }
-            }
 
             return Json(new
             {
@@ -157,18 +144,5 @@ namespace JacRed.Controllers
         static IActionResult TorrentList(StatsTorrentIndex.Query query) =>
             new StreamingStatsTorrentsResult(query);
 
-        static DateTime? ParseMetaUpdatedAt(JToken token)
-        {
-            if (token == null)
-                return null;
-
-            if (token.Type == JTokenType.Date)
-                return token.Value<DateTime>();
-
-            if (DateTime.TryParse(token.ToString(), null, DateTimeStyles.RoundtripKind, out var dt))
-                return dt;
-
-            return null;
-        }
     }
 }

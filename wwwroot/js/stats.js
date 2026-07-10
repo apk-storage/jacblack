@@ -11,7 +11,6 @@
   const CONFIG = Object.freeze({
     API_URL: '/stats/torrents',
     STATS_META_URL: '/stats/meta',
-    LAST_UPDATE_URL: '/lastupdatedb',
     DEBOUNCE_DELAY: 300,
     RETRY_ATTEMPTS: 3,
     RETRY_DELAY: 1000,
@@ -86,7 +85,7 @@
       .replace(/\?.*$/, '')
       .replace(/^https?:\/\/[^/]+/, '') || '/';
     if (path.endsWith('/stats/torrents')) return 'статистика трекеров';
-    if (path.endsWith('/lastupdatedb')) return 'время обновления';
+    if (path.endsWith('/stats/meta')) return 'время обновления статистики';
     return 'сервер';
   };
 
@@ -550,39 +549,12 @@
     return false;
   };
 
-  const loadLastUpdateFromFdb = async (signal) => {
-    const response = await fetchWithApiKey(CONFIG.LAST_UPDATE_URL, { signal });
-    if (!response.ok)
-      return false;
-
-    let data;
-    try {
-      data = await response.json();
-    } catch {
-      return false;
-    }
-
-    if (data && data.lastupdatedb) {
-      const utcDate = parseUTCDate(data.lastupdatedb);
-      const formattedDate = utcDate ? formatLocalDateTime(utcDate) : String(data.lastupdatedb);
-      renderLastUpdate(formattedDate, 'Последнее обновление базы торрентов');
-      return true;
-    }
-
-    return false;
-  };
-
   const loadLastUpdate = async () => {
     const controller = new AbortController();
     const timerId = setTimeout(() => controller.abort(), CONFIG.LAST_UPDATE_TIMEOUT_MS);
 
     try {
       if (await loadLastUpdateFromMeta(controller.signal)) {
-        clearTimeout(timerId);
-        return;
-      }
-
-      if (await loadLastUpdateFromFdb(controller.signal)) {
         clearTimeout(timerId);
         return;
       }
