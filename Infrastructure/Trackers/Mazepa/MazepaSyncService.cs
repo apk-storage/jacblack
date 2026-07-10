@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Utils;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.Details;
 using Microsoft.Extensions.Caching.Memory;
@@ -70,7 +69,7 @@ namespace JacRed.Infrastructure.Trackers.Mazepa
             { "15",  new[] { "documovie" } },
         };
 
-        static bool _workParse = false;
+        static readonly TrackerParseLock _parseLock = new TrackerParseLock();
 
         public MazepaSyncService(IMemoryCache memoryCache)
         {
@@ -139,11 +138,10 @@ namespace JacRed.Infrastructure.Trackers.Mazepa
 
         public async Task<string> ParseAsync()
         {
-            if (_workParse) return "work";
-            if (string.IsNullOrEmpty(AppInit.conf.Mazepa.host)) return "disabled";
-            _workParse = true;
+            if (string.IsNullOrEmpty(AppInit.conf.Mazepa.host))
+                return TrackerSyncHelpers.DisabledResult;
 
-            try
+            return await TrackerSyncHelpers.RunParseAsync(TrackerName, _parseLock, checkDisabled: false, async () =>
             {
                 if (!await CheckLogin())
                     return "login error";
@@ -186,8 +184,7 @@ namespace JacRed.Infrastructure.Trackers.Mazepa
 
                 ParserLog.Write(TrackerName, $"Finished: {total} in {sw.Elapsed}");
                 return $"ok {total}";
-            }
-            finally { _workParse = false; }
+            });
         }
 
         async Task<(int found, int added, string signature)> ParseCategory(string url, string[] types, string host)

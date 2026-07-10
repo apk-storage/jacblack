@@ -1,7 +1,7 @@
-﻿using JacRed.Infrastructure.Persistence;
+﻿using JacRed.Infrastructure.Logging;
+using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Tracks;
 using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Utils;
 using JacRed.Models;
 using JacRed.Models.Details;
 using JacRed.Models.Sync.v2;
@@ -19,11 +19,11 @@ namespace JacRed.Controllers
     {
         public SyncController(IMemoryCache memoryCache) : base(memoryCache) { }
 
-        static Dictionary<string, TorrentInfo> masterDbCache;
+        static Dictionary<string, MasterDbShard> masterDbCache;
 
         public static void Configuration()
         {
-            Console.WriteLine("SyncController load");
+            JacRedLog.Debug(JacRedLogCategories.Sync, "SyncController cache initialized");
 
             masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value);
 

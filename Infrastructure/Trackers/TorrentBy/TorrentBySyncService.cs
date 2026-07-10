@@ -5,9 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Utils;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.tParse;
 using IO = System.IO;
@@ -21,9 +19,9 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
 
         static Dictionary<string, List<TaskParse>> taskParse = new Dictionary<string, List<TaskParse>>();
 
-        static volatile bool _workParse;
-        static volatile bool _parseAllTaskWork;
-        static readonly SemaphoreSlim _parseLatestSemaphore = new SemaphoreSlim(1, 1);
+        static readonly TrackerParseLock _parseLock = new TrackerParseLock();
+        static readonly TrackerWorkFlag _parseAllTaskWork = new TrackerWorkFlag();
+        static readonly TrackerLatestParseLock _parseLatestLock = new TrackerLatestParseLock();
 
         static readonly string[] Categories = { "films", "movies", "serials", "tv", "humor", "cartoons", "anime", "sport" };
 
@@ -35,36 +33,31 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
 
         public async Task<string> ParseAsync(int page, CancellationToken cancellationToken = default)
         {
-            if (_workParse)
-                return "work";
-
-            string log = "";
-            _workParse = true;
-
-            try
+            return await TrackerSyncHelpers.RunParseAsync(TrackerName, _parseLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                string baseUrl = AppInit.conf.TorrentBy.rqHost();
-                ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
-                foreach (string cat in Categories)
+                string log = "";
+
+                try
                 {
-                    string pageUrl = $"{baseUrl}/{cat}/?page={page}";
-                    ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
-                    await TorrentByParser.ParsePageAsync(cat, page);
-                    log += $"{cat} - {page}\n";
+                    var sw = Stopwatch.StartNew();
+                    string baseUrl = AppInit.conf.TorrentBy.rqHost();
+                    ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
+                    foreach (string cat in Categories)
+                    {
+                        string pageUrl = $"{baseUrl}/{cat}/?page={page}";
+                        ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
+                        await TorrentByParser.ParsePageAsync(cat, page);
+                        log += $"{cat} - {page}\n";
+                    }
+                    ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
                 }
-                ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"Error: {ex.Message}");
-            }
-            finally
-            {
-                _workParse = false;
-            }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"Error: {ex.Message}");
+                }
 
-            return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+                return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+            });
         }
 
         public async Task<string> UpdateTasksParseAsync(CancellationToken cancellationToken = default)
@@ -98,12 +91,7 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
 
         public async Task<string> ParseAllTaskAsync(CancellationToken cancellationToken = default)
         {
-            if (_parseAllTaskWork)
-                return "work";
-
-            _parseAllTaskWork = true;
-
-            try
+            return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: false, async () =>
             {
                 foreach (var task in taskParse.ToArray())
                 {
@@ -119,55 +107,46 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
                             val.updateTime = DateTime.Today;
                     }
                 }
-            }
-            catch { }
-
-            _parseAllTaskWork = false;
-            return "ok";
+            }, cancellationToken);
         }
 
         public async Task<string> ParseLatestAsync(int pages = 5, CancellationToken cancellationToken = default)
         {
-            if (!await _parseLatestSemaphore.WaitAsync(0, cancellationToken))
-                return "work";
-
-            var log = new StringBuilder();
-
-            try
+            return await TrackerSyncHelpers.RunParseLatestAsync(TrackerName, _parseLatestLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
+                var log = new StringBuilder();
 
-                foreach (var task in taskParse.ToArray())
+                try
                 {
-                    var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
+                    var sw = Stopwatch.StartNew();
+                    ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
 
-                    foreach (var val in pagesToParse)
+                    foreach (var task in taskParse.ToArray())
                     {
-                        await Task.Delay(AppInit.conf.TorrentBy.parseDelay, cancellationToken);
+                        var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
 
-                        bool res = await TorrentByParser.ParsePageAsync(task.Key, val.page);
-                        if (res)
+                        foreach (var val in pagesToParse)
                         {
-                            val.updateTime = DateTime.Today;
-                            log.AppendLine($"{task.Key} - {val.page}");
+                            await Task.Delay(AppInit.conf.TorrentBy.parseDelay, cancellationToken);
+
+                            bool res = await TorrentByParser.ParsePageAsync(task.Key, val.page);
+                            if (res)
+                            {
+                                val.updateTime = DateTime.Today;
+                                log.AppendLine($"{task.Key} - {val.page}");
+                            }
                         }
                     }
+
+                    ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
+                }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"ParseLatest Error: {ex.Message}");
                 }
 
-                ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"ParseLatest Error: {ex.Message}");
-            }
-            finally
-            {
-                _parseLatestSemaphore.Release();
-            }
-
-            var logText = log.ToString();
-            return string.IsNullOrWhiteSpace(logText) ? "ok" : logText;
+                return log.ToString();
+            }, cancellationToken);
         }
     }
 }

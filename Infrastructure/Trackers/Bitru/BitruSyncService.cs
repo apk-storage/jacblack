@@ -5,9 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Utils;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.tParse;
 using IO = System.IO;
@@ -21,9 +19,9 @@ namespace JacRed.Infrastructure.Trackers.Bitru
 
         static Dictionary<string, List<TaskParse>> taskParse = new Dictionary<string, List<TaskParse>>();
 
-        static volatile bool _workParse;
-        static volatile bool _parseAllTaskWork;
-        static readonly SemaphoreSlim _parseLatestSemaphore = new SemaphoreSlim(1, 1);
+        static readonly TrackerParseLock _parseLock = new TrackerParseLock();
+        static readonly TrackerWorkFlag _parseAllTaskWork = new TrackerWorkFlag();
+        static readonly TrackerLatestParseLock _parseLatestLock = new TrackerLatestParseLock();
 
         static BitruSyncService()
         {
@@ -33,36 +31,31 @@ namespace JacRed.Infrastructure.Trackers.Bitru
 
         public async Task<string> ParseAsync(int page = 1, CancellationToken cancellationToken = default)
         {
-            if (_workParse)
-                return "work";
-
-            _workParse = true;
-            string log = "";
-
-            try
+            return await TrackerSyncHelpers.RunParseAsync(TrackerName, _parseLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                string baseUrl = $"{AppInit.conf.Bitru.rqHost()}/browse.php";
-                ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
-                foreach (string cat in new List<string>() { "movie", "serial" })
+                string log = "";
+
+                try
                 {
-                    string pageUrl = $"{baseUrl}?tmp={cat}&page={page}";
-                    ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
-                    await BitruParser.ParsePageAsync(cat, page);
-                    log += $"{cat} - {page}\n";
+                    var sw = Stopwatch.StartNew();
+                    string baseUrl = $"{AppInit.conf.Bitru.rqHost()}/browse.php";
+                    ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
+                    foreach (string cat in new List<string>() { "movie", "serial" })
+                    {
+                        string pageUrl = $"{baseUrl}?tmp={cat}&page={page}";
+                        ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
+                        await BitruParser.ParsePageAsync(cat, page);
+                        log += $"{cat} - {page}\n";
+                    }
+                    ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
                 }
-                ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"Error: {ex.Message}");
-            }
-            finally
-            {
-                _workParse = false;
-            }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"Error: {ex.Message}");
+                }
 
-            return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+                return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+            });
         }
 
         public async Task<string> UpdateTasksParseAsync(CancellationToken cancellationToken = default)
@@ -99,12 +92,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
 
         public async Task<string> ParseAllTaskAsync(CancellationToken cancellationToken = default)
         {
-            if (_parseAllTaskWork)
-                return "work";
-
-            _parseAllTaskWork = true;
-
-            try
+            return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: false, async () =>
             {
                 foreach (var task in taskParse.ToArray())
                 {
@@ -120,67 +108,58 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                             val.updateTime = DateTime.Today;
                     }
                 }
-            }
-            catch { }
-
-            _parseAllTaskWork = false;
-            return "ok";
+            }, cancellationToken);
         }
 
         public async Task<string> ParseLatestAsync(int pages = 5, CancellationToken cancellationToken = default)
         {
-            if (!await _parseLatestSemaphore.WaitAsync(0, cancellationToken))
-                return "work";
-
-            var log = new StringBuilder();
-
-            try
+            return await TrackerSyncHelpers.RunParseLatestAsync(TrackerName, _parseLatestLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
+                var log = new StringBuilder();
 
-                foreach (var task in taskParse.ToArray())
+                try
                 {
-                    var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
+                    var sw = Stopwatch.StartNew();
+                    ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
 
-                    foreach (var val in pagesToParse)
+                    foreach (var task in taskParse.ToArray())
                     {
-                        await Task.Delay(AppInit.conf.Bitru.parseDelay, cancellationToken);
+                        var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
 
-                        bool res = await BitruParser.ParsePageAsync(task.Key, val.page);
-                        if (res)
+                        foreach (var val in pagesToParse)
                         {
-                            val.updateTime = DateTime.Today;
-                            log.AppendLine($"{task.Key} - {val.page}");
+                            await Task.Delay(AppInit.conf.Bitru.parseDelay, cancellationToken);
+
+                            bool res = await BitruParser.ParsePageAsync(task.Key, val.page);
+                            if (res)
+                            {
+                                val.updateTime = DateTime.Today;
+                                log.AppendLine($"{task.Key} - {val.page}");
+                            }
                         }
                     }
+
+                    ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
+                }
+                catch (System.Net.Http.HttpRequestException ex)
+                {
+                    ParserLog.Write(TrackerName, $"ParseLatest HTTP Error: {ex.Message}");
+                }
+                catch (TaskCanceledException ex)
+                {
+                    ParserLog.Write(TrackerName, $"ParseLatest Cancelled: {ex.Message}");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    ParserLog.Write(TrackerName, $"ParseLatest Invalid Operation: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"ParseLatest Unexpected Error: {ex.Message}");
                 }
 
-                ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (System.Net.Http.HttpRequestException ex)
-            {
-                ParserLog.Write(TrackerName, $"ParseLatest HTTP Error: {ex.Message}");
-            }
-            catch (TaskCanceledException ex)
-            {
-                ParserLog.Write(TrackerName, $"ParseLatest Cancelled: {ex.Message}");
-            }
-            catch (InvalidOperationException ex)
-            {
-                ParserLog.Write(TrackerName, $"ParseLatest Invalid Operation: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"ParseLatest Unexpected Error: {ex.Message}");
-            }
-            finally
-            {
-                _parseLatestSemaphore.Release();
-            }
-
-            var logText = log.ToString();
-            return string.IsNullOrWhiteSpace(logText) ? "ok" : logText;
+                return log.ToString();
+            }, cancellationToken);
         }
     }
 }

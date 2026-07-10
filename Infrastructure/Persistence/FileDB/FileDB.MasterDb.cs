@@ -2,44 +2,42 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Threading;
+using System.Linq;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Utils;
+using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Logging;
 using JacRed.Models;
 using JacRed.Models.Details;
-using System.Linq;
 
 namespace JacRed.Infrastructure.Persistence
 {
-    public partial class FileDB : IDisposable
+    public partial class FileDB
     {
         #region FileDB
         /// <summary>
         /// $"{search_name}:{search_originalname}"
         /// Верхнее время изменения
         /// </summary>
-        public static ConcurrentDictionary<string, TorrentInfo> masterDb = new ConcurrentDictionary<string, TorrentInfo>();
+        public static ConcurrentDictionary<string, MasterDbShard> masterDb = new ConcurrentDictionary<string, MasterDbShard>();
 
         static ConcurrentDictionary<string, WriteTaskModel> openWriteTask = new ConcurrentDictionary<string, WriteTaskModel>();
 
         static FileDB()
         {
             if (File.Exists("Data/masterDb.bz"))
-                masterDb = JsonStream.Read<ConcurrentDictionary<string, TorrentInfo>>("Data/masterDb.bz");
+                masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>("Data/masterDb.bz");
 
             if (masterDb == null)
             {
                 if (File.Exists($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz"))
-                    masterDb = JsonStream.Read<ConcurrentDictionary<string, TorrentInfo>>($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz");
+                    masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz");
 
                 if (masterDb == null && File.Exists($"Data/masterDb_{DateTime.Today.AddDays(-1):dd-MM-yyyy}.bz"))
-                    masterDb = JsonStream.Read<ConcurrentDictionary<string, TorrentInfo>>($"Data/masterDb_{DateTime.Today.AddDays(-1):dd-MM-yyyy}.bz");
+                    masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>($"Data/masterDb_{DateTime.Today.AddDays(-1):dd-MM-yyyy}.bz");
 
                 if (masterDb == null)
-                    masterDb = new ConcurrentDictionary<string, TorrentInfo>();
+                    masterDb = new ConcurrentDictionary<string, MasterDbShard>();
 
                 #region переход с 29.08.2023
                 if (File.Exists("Data/masterDb.bz"))
@@ -48,7 +46,7 @@ namespace JacRed.Infrastructure.Persistence
                     {
                         foreach (var item in JsonStream.Read<Dictionary<string, DateTime>>("Data/masterDb.bz"))
                         {
-                            masterDb.TryAdd(item.Key, new TorrentInfo
+                            masterDb.TryAdd(item.Key, new MasterDbShard
                             {
                                 updateTime = item.Value,
                                 fileTime = item.Value.ToFileTimeUtc()
@@ -144,9 +142,9 @@ namespace JacRed.Infrastructure.Persistence
         static void AddOrUpdateMasterDb(TorrentDetails torrent)
         {
             string key = keyDb(torrent.name, torrent.originalname);
-            var md = new TorrentInfo() { updateTime = torrent.updateTime, fileTime = torrent.updateTime.ToFileTimeUtc() };
+            var md = new MasterDbShard() { updateTime = torrent.updateTime, fileTime = torrent.updateTime.ToFileTimeUtc() };
 
-            if (masterDb.TryGetValue(key, out TorrentInfo info))
+            if (masterDb.TryGetValue(key, out MasterDbShard info))
             {
                 if (torrent.updateTime > info.updateTime)
                     masterDb[key] = md;
@@ -275,78 +273,6 @@ namespace JacRed.Infrastructure.Persistence
         }
         #endregion
 
-
-        #region Cron
-        static bool TryEvictCacheEntry(string key)
-        {
-            if (!openWriteTask.TryGetValue(key, out WriteTaskModel wtm) || wtm.openconnection > 0)
-                return false;
-
-            if (!openWriteTask.TryRemove(key, out wtm))
-                return false;
-
-            try { wtm.db.SaveChangesIfNeeded(); } catch { }
-            return true;
-        }
-
-        async public static Task Cron(CancellationToken cancellationToken = default)
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken);
-
-                if (!AppInit.conf.evercache.enable || 0 >= AppInit.conf.evercache.validHour)
-                    continue;
-
-                try
-                {
-                    int evicted = 0;
-                    foreach (var i in openWriteTask.ToArray())
-                    {
-                        if (DateTime.UtcNow > i.Value.lastread.AddHours(AppInit.conf.evercache.validHour))
-                        {
-                            if (TryEvictCacheEntry(i.Key))
-                                evicted++;
-                        }
-                    }
-                    if (evicted > 0)
-                        JacRedLog.Warning(JacRedLogCategories.Fdb, $"evicted {evicted} cache entries (validHour) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                }
-                catch { }
-            }
-        }
-
-        async public static Task CronFast(CancellationToken cancellationToken = default)
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
-
-                if (!AppInit.conf.evercache.enable || 0 >= AppInit.conf.evercache.validHour)
-                    continue;
-
-                try
-                {
-                    if (openWriteTask.Count > AppInit.conf.evercache.maxOpenWriteTask)
-                    {
-                        var query = openWriteTask.Where(i => DateTime.Now > i.Value.create.AddMinutes(10));
-                        query = query.OrderBy(i => i.Value.countread).ThenBy(i => i.Value.lastread);
-
-                        int dropped = 0;
-                        foreach (var i in query.Take(AppInit.conf.evercache.dropCacheTake))
-                        {
-                            if (TryEvictCacheEntry(i.Key))
-                                dropped++;
-                        }
-                        if (dropped > 0)
-                            JacRedLog.Warning(JacRedLogCategories.Fdb, $"dropped {dropped} cache entries (maxOpenWriteTask) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                    }
-                }
-                catch { }
-            }
-        }
-        #endregion
-
         ///by Lexandros
         /// <summary>
         /// Обновляет информацию о попытках анализа ffprobe для торрента
@@ -406,6 +332,7 @@ namespace JacRed.Infrastructure.Persistence
                 JacRedLog.Error(JacRedLogCategories.Fdb, $"Ошибка при обновлении ffprobe информации: {ex.Message}");
             }
         }
+
 
     }
 }

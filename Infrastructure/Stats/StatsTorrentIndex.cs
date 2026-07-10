@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure
+namespace JacRed.Infrastructure.Stats
 {
     /// <summary>
     /// Lightweight JSONL.gz index for ad-hoc /stats/* torrent list queries (built during StatsCollector scan).
@@ -150,15 +150,15 @@ namespace JacRed.Infrastructure
             switch (query.DayFilter)
             {
                 case TorrentDayFilter.CreatedToday:
-                {
-                    var shard = CreateShardPath(today);
-                    return File.Exists(shard) ? new List<string> { shard } : new List<string>();
-                }
+                    {
+                        var shard = CreateShardPath(today);
+                        return File.Exists(shard) ? new List<string> { shard } : new List<string>();
+                    }
                 case TorrentDayFilter.UpdatedToday:
-                {
-                    var shard = UpdateShardPath(today);
-                    return File.Exists(shard) ? new List<string> { shard } : new List<string>();
-                }
+                    {
+                        var shard = UpdateShardPath(today);
+                        return File.Exists(shard) ? new List<string> { shard } : new List<string>();
+                    }
                 default:
                     return new List<string>();
             }

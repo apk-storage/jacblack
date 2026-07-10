@@ -1,6 +1,5 @@
 using System;
 using System.Globalization;
-using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
 using JacRed.Models.Details;
@@ -45,7 +44,7 @@ namespace JacRed.Infrastructure.Trackers.Knaben
             return string.IsNullOrWhiteSpace(t) ? title : t;
         }
 
-        /// <summary>Extracts name + year. Supports (2026), [2026, ...], standalone 2026. Used by DevMigrationService.FixKnabenNames.</summary>
+        /// <summary>Extracts name + year. Supports (2026), [2026, ...], standalone 2026. Used by FixKnabenNamesMigration.</summary>
         public static (string name, int relased) ParseNameAndYear(string title)
         {
             if (string.IsNullOrWhiteSpace(title)) return (null, 0);
@@ -72,7 +71,7 @@ namespace JacRed.Infrastructure.Trackers.Knaben
             return (string.IsNullOrWhiteSpace(name) ? title.Trim() : name, relased);
         }
 
-        /// <summary>Normalizes title for FileDB: 2160p lowercase, .HDR→ HDR, Dolby Vision→ HDR. Used by DevMigrationService.FixKnabenNames.</summary>
+        /// <summary>Normalizes title for FileDB: 2160p lowercase, .HDR→ HDR, Dolby Vision→ HDR. Used by FixKnabenNamesMigration.</summary>
         public static string BuildTitleForFileDB(string originalTitle)
         {
             if (string.IsNullOrWhiteSpace(originalTitle)) return originalTitle;

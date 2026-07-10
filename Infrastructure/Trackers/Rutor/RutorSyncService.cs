@@ -4,13 +4,10 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Utils;
 using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
 using JacRed.Models.tParse;
 using Newtonsoft.Json;
 using IO = System.IO;
@@ -23,9 +20,9 @@ namespace JacRed.Infrastructure.Trackers.Rutor
 
         static Dictionary<string, List<TaskParse>> taskParse = new Dictionary<string, List<TaskParse>>();
 
-        static bool _workParse = false;
-        static bool _parseAllTaskWork = false;
-        static readonly SemaphoreSlim _parseLatestSemaphore = new SemaphoreSlim(1, 1);
+        static readonly TrackerParseLock _parseLock = new TrackerParseLock();
+        static readonly TrackerWorkFlag _parseAllTaskWork = new TrackerWorkFlag();
+        static readonly TrackerLatestParseLock _parseLatestLock = new TrackerLatestParseLock();
 
         static readonly List<string> Categories = new List<string>() { "1", "5", "4", "16", "12", "6", "7", "10", "17", "13", "15" };
 
@@ -37,47 +34,42 @@ namespace JacRed.Infrastructure.Trackers.Rutor
 
         public async Task<string> ParseAsync(int page)
         {
-            if (_workParse)
-                return "work";
-
-            _workParse = true;
-            string log = "";
-
-            try
+            return await TrackerSyncHelpers.RunParseAsync(TrackerName, _parseLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                string baseUrl = $"{AppInit.conf.Rutor.rqHost()}/browse";
-                ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
-                // 1  - Зарубежные фильмы          | Фильмы
-                // 5  - Наши фильмы                | Фильмы
-                // 4  - Зарубежные сериалы         | Сериалы
-                // 16 - Наши сериалы               | Сериалы
-                // 12 - Научно-популярные фильмы   | Док. сериалы, Док. фильмы
-                // 6  - Телевизор                  | ТВ Шоу
-                // 7  - Мультипликация             | Мультфильмы, Мультсериалы
-                // 10 - Аниме                      | Аниме
-                // 17 - Иностранные релизы         | Фильмы (UKR)
-                // 13 - Спорт и Здоровье           | Спорт
-                // 15 - Юмор                       | ТВ Шоу
-                foreach (string cat in Categories)
+                string log = "";
+
+                try
                 {
-                    string pageUrl = $"{baseUrl}/{page}/{cat}/0/0";
-                    ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
-                    bool res = await parsePage(cat, page);
-                    log += $"{cat} - {page} / {res}\n";
+                    var sw = Stopwatch.StartNew();
+                    string baseUrl = $"{AppInit.conf.Rutor.rqHost()}/browse";
+                    ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
+                    // 1  - Зарубежные фильмы          | Фильмы
+                    // 5  - Наши фильмы                | Фильмы
+                    // 4  - Зарубежные сериалы         | Сериалы
+                    // 16 - Наши сериалы               | Сериалы
+                    // 12 - Научно-популярные фильмы   | Док. сериалы, Док. фильмы
+                    // 6  - Телевизор                  | ТВ Шоу
+                    // 7  - Мультипликация             | Мультфильмы, Мультсериалы
+                    // 10 - Аниме                      | Аниме
+                    // 17 - Иностранные релизы         | Фильмы (UKR)
+                    // 13 - Спорт и Здоровье           | Спорт
+                    // 15 - Юмор                       | ТВ Шоу
+                    foreach (string cat in Categories)
+                    {
+                        string pageUrl = $"{baseUrl}/{page}/{cat}/0/0";
+                        ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
+                        bool res = await parsePage(cat, page);
+                        log += $"{cat} - {page} / {res}\n";
+                    }
+                    ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
                 }
-                ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"Error: {ex.Message}");
-            }
-            finally
-            {
-                _workParse = false;
-            }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"Error: {ex.Message}");
+                }
 
-            return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+                return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+            });
         }
 
         public async Task<string> UpdateTasksParseAsync()
@@ -113,12 +105,7 @@ namespace JacRed.Infrastructure.Trackers.Rutor
 
         public async Task<string> ParseAllTaskAsync()
         {
-            if (_parseAllTaskWork)
-                return "work";
-
-            _parseAllTaskWork = true;
-
-            try
+            return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: false, async () =>
             {
                 foreach (var task in taskParse.ToArray())
                 {
@@ -134,56 +121,46 @@ namespace JacRed.Infrastructure.Trackers.Rutor
                             val.updateTime = DateTime.Today;
                     }
                 }
-            }
-            catch { }
-
-            _parseAllTaskWork = false;
-            return "ok";
+            });
         }
 
         public async Task<string> ParseLatestAsync(int pages = 5)
         {
-            if (!await _parseLatestSemaphore.WaitAsync(0))
-                return "work";
-
-            var log = new StringBuilder();
-
-            try
+            return await TrackerSyncHelpers.RunParseLatestAsync(TrackerName, _parseLatestLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
+                var log = new StringBuilder();
 
-                foreach (var task in taskParse.ToArray())
+                try
                 {
-                    // Get first N pages sorted by page number
-                    var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
+                    var sw = Stopwatch.StartNew();
+                    ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
 
-                    foreach (var val in pagesToParse)
+                    foreach (var task in taskParse.ToArray())
                     {
-                        await Task.Delay(AppInit.conf.Rutor.parseDelay);
+                        var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
 
-                        bool res = await parsePage(task.Key, val.page);
-                        if (res)
+                        foreach (var val in pagesToParse)
                         {
-                            val.updateTime = DateTime.Today;
-                            log.AppendLine($"{task.Key} - {val.page}");
+                            await Task.Delay(AppInit.conf.Rutor.parseDelay);
+
+                            bool res = await parsePage(task.Key, val.page);
+                            if (res)
+                            {
+                                val.updateTime = DateTime.Today;
+                                log.AppendLine($"{task.Key} - {val.page}");
+                            }
                         }
                     }
+
+                    ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
+                }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"ParseLatest Error: {ex.Message}");
                 }
 
-                ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"ParseLatest Error: {ex.Message}");
-            }
-            finally
-            {
-                _parseLatestSemaphore.Release();
-            }
-
-            var logText = log.ToString();
-            return string.IsNullOrWhiteSpace(logText) ? "ok" : logText;
+                return log.ToString();
+            });
         }
 
         async Task<bool> parsePage(string cat, int page)

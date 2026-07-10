@@ -4,11 +4,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Utils;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.Details;
 using JacRed.Models.tParse;
@@ -73,9 +71,9 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
 
         static string Cookie;
 
-        static bool _workParse = false;
-        static bool _parseAllTaskWork = false;
-        static readonly SemaphoreSlim _parseLatestSemaphore = new SemaphoreSlim(1, 1);
+        static readonly TrackerParseLock _parseLock = new TrackerParseLock();
+        static readonly TrackerWorkFlag _parseAllTaskWork = new TrackerWorkFlag();
+        static readonly TrackerLatestParseLock _parseLatestLock = new TrackerLatestParseLock();
 
         static RutrackerSyncService()
         {
@@ -150,36 +148,31 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
 
         public async Task<string> ParseAsync(int page)
         {
-            if (_workParse)
-                return "work";
-
-            _workParse = true;
-            string log = "";
-
-            try
+            return await TrackerSyncHelpers.RunParseAsync(TrackerName, _parseLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                string baseUrl = $"{AppInit.conf.Rutracker.rqHost()}/forum/viewforum.php";
-                ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
-                foreach (string cat in firstPageCats)
+                string log = "";
+
+                try
                 {
-                    string pageUrl = page == 0 ? $"{baseUrl}?f={cat}" : $"{baseUrl}?f={cat}&start={page * 50}";
-                    ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
-                    bool result = await parsePage(cat, page);
-                    log += $"{cat} - {page} - {result}\n";
+                    var sw = Stopwatch.StartNew();
+                    string baseUrl = $"{AppInit.conf.Rutracker.rqHost()}/forum/viewforum.php";
+                    ParserLog.Write(TrackerName, $"Starting parse page={page}, base: {baseUrl}");
+                    foreach (string cat in firstPageCats)
+                    {
+                        string pageUrl = page == 0 ? $"{baseUrl}?f={cat}" : $"{baseUrl}?f={cat}&start={page * 50}";
+                        ParserLog.Write(TrackerName, $"Category {cat}: {pageUrl}");
+                        bool result = await parsePage(cat, page);
+                        log += $"{cat} - {page} - {result}\n";
+                    }
+                    ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
                 }
-                ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"Error: {ex.Message}");
-            }
-            finally
-            {
-                _workParse = false;
-            }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"Error: {ex.Message}");
+                }
 
-            return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+                return string.IsNullOrWhiteSpace(log) ? "ok" : log;
+            });
         }
 
         public async Task<string> UpdateTasksParseAsync()
@@ -243,12 +236,7 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
 
         public async Task<string> ParseAllTaskAsync()
         {
-            if (_parseAllTaskWork)
-                return "work";
-
-            _parseAllTaskWork = true;
-
-            try
+            return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: false, async () =>
             {
                 foreach (var task in taskParse.ToArray())
                 {
@@ -261,56 +249,46 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                             val.updateTime = DateTime.Today;
                     }
                 }
-            }
-            catch { }
-
-            _parseAllTaskWork = false;
-            return "ok";
+            });
         }
 
         public async Task<string> ParseLatestAsync(int pages = 5)
         {
-            if (!await _parseLatestSemaphore.WaitAsync(0))
-                return "work";
-
-            var log = new StringBuilder();
-
-            try
+            return await TrackerSyncHelpers.RunParseLatestAsync(TrackerName, _parseLatestLock, checkDisabled: false, async () =>
             {
-                var sw = Stopwatch.StartNew();
-                ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
+                var log = new StringBuilder();
 
-                foreach (var task in taskParse.ToArray())
+                try
                 {
-                    // Get first N pages sorted by page number
-                    var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
+                    var sw = Stopwatch.StartNew();
+                    ParserLog.Write(TrackerName, $"Starting ParseLatest pages={pages}");
 
-                    foreach (var val in pagesToParse)
+                    foreach (var task in taskParse.ToArray())
                     {
-                        await Task.Delay(AppInit.conf.Rutracker.parseDelay);
+                        var pagesToParse = task.Value.OrderBy(x => x.page).Take(pages).ToArray();
 
-                        bool res = await parsePage(task.Key, val.page);
-                        if (res)
+                        foreach (var val in pagesToParse)
                         {
-                            val.updateTime = DateTime.Today;
-                            log.AppendLine($"{task.Key} - {val.page}");
+                            await Task.Delay(AppInit.conf.Rutracker.parseDelay);
+
+                            bool res = await parsePage(task.Key, val.page);
+                            if (res)
+                            {
+                                val.updateTime = DateTime.Today;
+                                log.AppendLine($"{task.Key} - {val.page}");
+                            }
                         }
                     }
+
+                    ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
+                }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"ParseLatest Error: {ex.Message}");
                 }
 
-                ParserLog.Write(TrackerName, $"ParseLatest completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
-            }
-            catch (Exception ex)
-            {
-                ParserLog.Write(TrackerName, $"ParseLatest Error: {ex.Message}");
-            }
-            finally
-            {
-                _parseLatestSemaphore.Release();
-            }
-
-            var logText = log.ToString();
-            return string.IsNullOrWhiteSpace(logText) ? "ok" : logText;
+                return log.ToString();
+            });
         }
 
         async Task<bool> parsePage(string cat, int page)
