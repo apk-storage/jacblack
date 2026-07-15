@@ -28,7 +28,6 @@ namespace JacRed.Infrastructure.Security
             new("/sync/fdb", JacRedAccessPolicy.Public, "SyncController", "+ opensync in controller"),
             new("/sync/fdb/torrents", JacRedAccessPolicy.Public, "SyncController", "+ opensync in controller"),
             new("/sync/torrents", JacRedAccessPolicy.Public, "SyncController", "returns error"),
-            new("/sync/tracks/stats", JacRedAccessPolicy.Public, "SyncController", "+ opensync in controller"),
 
             // Config API
             new("/api/v1.0/config", JacRedAccessPolicy.ConfigApi, "ConfigController"),
@@ -50,13 +49,10 @@ namespace JacRed.Infrastructure.Security
             new("/api/v2.0/indexers", JacRedAccessPolicy.ApiKeyWhenConfigured, "TorznabController"),
             new("/api/v1/indexer", JacRedAccessPolicy.ApiKeyWhenConfigured, "TorznabController"),
 
-            // Stats JSON — apikey + openstats in controller
-            new("/stats/trackers", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats; summary"),
-            new("/stats/trackers/new", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats"),
-            new("/stats/trackers/updated", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats"),
-            new("/stats/meta", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats"),
-            new("/stats/tracks", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats"),
-            new("/stats/torrents", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats"),
+            // Stats JSON — apikey + openstats in controller (web /stats UI)
+            new("/stats/torrents", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats; stats.json"),
+            new("/stats/tracks", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats; tracks-stats.json"),
+            new("/stats/meta", JacRedAccessPolicy.ApiKeyWhenConfigured, "StatsController", "+ openstats; timestamps"),
         };
 
         /// <summary>Returns registry mismatches (empty = OK).</summary>

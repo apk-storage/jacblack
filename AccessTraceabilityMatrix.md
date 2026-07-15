@@ -58,7 +58,6 @@
 | `GET /sync/conf` | SyncController | — |
 | `GET /sync/fdb` | SyncController | `opensync` |
 | `GET /sync/fdb/torrents` | SyncController | `opensync` |
-| `GET /sync/tracks/stats` | SyncController | `opensync` |
 | `GET /swagger`, `/openapi.yaml` | Startup / Swagger | — |
 
 ### ConfigApi
@@ -94,15 +93,9 @@
 | `GET /api/v2.0/indexers` | TorznabController | — |
 | `GET /api/v1/indexer` | TorznabController | — |
 | `GET /api/v1/indexer/{id}` | TorznabController | — |
-| `GET /stats/trackers` | StatsController | `openstats`; summary stats.json |
-| `GET /stats/trackers/new` | StatsController | `openstats`; create shard today |
-| `GET /stats/trackers/updated` | StatsController | `openstats`; update shard today |
-| `GET /stats/trackers/{name}` | StatsController | `openstats`; one tracker summary |
-| `GET /stats/meta` | StatsController | `openstats` |
-| `GET /stats/tracks` | StatsController | `openstats` |
-| `GET /stats/torrents` | StatsController | `openstats` |
-| `GET /stats/trackers/{name}/new` | StatsController | `openstats` |
-| `GET /stats/trackers/{name}/updated` | StatsController | `openstats` |
+| `GET /stats/torrents` | StatsController | `openstats`; stats.json |
+| `GET /stats/tracks` | StatsController | `openstats`; tracks-stats.json |
+| `GET /stats/meta` | StatsController | `openstats`; timestamps |
 
 ---
 
