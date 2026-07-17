@@ -19,11 +19,12 @@ namespace JacRed.Infrastructure.Trackers.Bitru
     {
         const string ApiGetTorrents = "torrents";
         const int ApiDelayMs = 250;
-        const string TrackerName = "bitruapi";
+        const string TrackerName = "bitru";
 
         static readonly string ApiUrl;
         static readonly string HostUrl;
-        static readonly string LastNewTorPath = "Data/temp/bitruapi_lastnewtor.txt";
+        static readonly string LastNewTorPath = "Data/temp/bitru_lastnewtor.txt";
+        const string LegacyLastNewTorPath = "Data/temp/bitruapi_lastnewtor.txt";
 
         static readonly TrackerParseLock _parseLock = new TrackerParseLock();
 
@@ -32,6 +33,25 @@ namespace JacRed.Infrastructure.Trackers.Bitru
             var host = AppInit.conf.Bitru?.host?.TrimEnd('/') ?? "https://bitru.org";
             ApiUrl = $"{host}/api.php";
             HostUrl = host;
+            MigrateLegacyLastNewTorFile();
+        }
+
+        static void MigrateLegacyLastNewTorFile()
+        {
+            try
+            {
+                if (IO.File.Exists(LastNewTorPath) || !IO.File.Exists(LegacyLastNewTorPath))
+                    return;
+                IO.File.Move(LegacyLastNewTorPath, LastNewTorPath);
+            }
+            catch (IO.IOException ex)
+            {
+                ParserLog.Write(TrackerName, $"Legacy lastnewtor migration failed: {ex.Message}");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                ParserLog.Write(TrackerName, $"Legacy lastnewtor migration failed: {ex.Message}");
+            }
         }
 
         public async Task<string> ParseAsync(int limit = 100, CancellationToken cancellationToken = default)
@@ -81,9 +101,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                 try
                 {
                     var sw = Stopwatch.StartNew();
-                    long unixFrom = DateTimeOffset.UtcNow.Date == fromDate.Date
-                        ? DateTimeOffset.FromUnixTimeSeconds(0).ToUnixTimeSeconds()
-                        : new DateTimeOffset(fromDate.Year, fromDate.Month, fromDate.Day, 0, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds();
+                    long unixFrom = BitruApiParser.UnixFromDate(fromDate);
 
                     ParserLog.Write(TrackerName, $"ParseFromDate lastnewtor={lastnewtor} (unix={unixFrom}), limit={limit}");
 
@@ -126,7 +144,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
             var currentParams = new Dictionary<string, object>
             {
                 { "limit", limit },
-                { "category", new[] { "movie", "serial" } }
+                { "category", BitruCategories.RequestCategories }
             };
             if (afterDateUnix.HasValue)
                 currentParams["after_date"] = afterDateUnix.Value.ToString();
@@ -136,21 +154,14 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                 await Task.Delay(ApiDelayMs, cancellationToken);
 
                 var resp = await ApiRequestAsync(currentParams, cancellationToken);
-                if (resp == null || resp.Error || resp.Result?.Items == null)
+                if (resp == null || resp.HasError || resp.Result?.Items == null)
                 {
-                    if (resp != null && resp.Error && !string.IsNullOrEmpty(resp.Message))
-                        ParserLog.Write(TrackerName, $"API error: {resp.Message}");
+                    if (resp != null && resp.HasError && !string.IsNullOrEmpty(resp.ErrorMessage))
+                        ParserLog.Write(TrackerName, $"API error: {resp.ErrorMessage}");
                     break;
                 }
 
-                foreach (var wrap in resp.Result.Items)
-                {
-                    if (wrap?.Item == null)
-                        continue;
-                    var t = BitruApiParser.MapToTorrentDetails(wrap.Item, HostUrl);
-                    if (t != null)
-                        all.Add(t);
-                }
+                all.AddRange(BitruApiParser.ParseTorrentsFromResponse(resp, HostUrl));
 
                 if (resp.Result.Items.Count == 0)
                     break;
@@ -162,6 +173,8 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                 long beforeUnix = 0;
                 if (nextDate is long l)
                     beforeUnix = l;
+                else if (nextDate is int i)
+                    beforeUnix = i;
                 else if (nextDate is string s && long.TryParse(s, out long parsed))
                     beforeUnix = parsed;
 
@@ -171,7 +184,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                 currentParams = new Dictionary<string, object>
                 {
                     { "limit", limit },
-                    { "category", new[] { "movie", "serial" } },
+                    { "category", BitruCategories.RequestCategories },
                     { "before_date", beforeUnix.ToString() }
                 };
             }
@@ -190,7 +203,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                 if (string.IsNullOrWhiteSpace(downloadUrl) || !downloadUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 {
                     var idMatch = System.Text.RegularExpressions.Regex.Match(t.url ?? "", @"\?id=(\d+)");
-                    downloadUrl = idMatch.Success ? $"{HostUrl}/download.php?id={idMatch.Groups[1].Value}" : null;
+                    downloadUrl = idMatch.Success ? $"{HostUrl}/api.php?download={idMatch.Groups[1].Value}" : null;
                 }
                 if (string.IsNullOrWhiteSpace(downloadUrl))
                     return false;

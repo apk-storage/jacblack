@@ -51,6 +51,17 @@ namespace JacRed.Infrastructure.Persistence
                 return m.Success && int.TryParse(m.Groups[1].Value, out int id) ? id : 0;
             }
 
+            // NNMClub: .../forum/viewtopic.php?t=1882070
+            if (string.Equals(trackerName, "nnmclub", StringComparison.OrdinalIgnoreCase))
+            {
+                var m = Regex.Match(url, @"viewtopic\.php\?t=(\d+)", RegexOptions.IgnoreCase);
+                return m.Success && int.TryParse(m.Groups[1].Value, out int id) ? id : 0;
+            }
+
+            // Lostfilm: host-independent path + #quality (qualities stay distinct).
+            if (string.Equals(trackerName, "lostfilm", StringComparison.OrdinalIgnoreCase))
+                return JacRed.Infrastructure.Trackers.Lostfilm.LostfilmParser.StableUrlId(url);
+
             return 0;
         }
 
