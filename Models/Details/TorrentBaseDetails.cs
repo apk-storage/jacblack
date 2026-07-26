@@ -1,4 +1,5 @@
 ﻿using JacRed.Models.Tracks;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 
@@ -42,6 +43,19 @@ namespace JacRed.Models.Details
         public List<ffStream> ffprobe { get; set; }
 
         public int ffprobe_tryingdata { get; set; }
+
+        /// <summary>
+        /// Сколько проверок подряд трекеры показали ноль сидов. Сбрасывается при
+        /// первом же признаке жизни. Если трекер не ответил вовсе — счётчик не
+        /// трогается: молчание означает «не знаю», а не «раздача мертва».
+        /// Ноль не сериализуется, чтобы не раздувать миллион существующих записей.
+        /// </summary>
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int deadChecks { get; set; }
+
+        /// <summary>Когда живость проверялась в последний раз.</summary>
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public DateTime? lastAliveCheck { get; set; }
 
 
         public string _sn { get; set; }
