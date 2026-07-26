@@ -267,7 +267,7 @@ namespace JacRed.Application.Search
                     CategoryDesc = categoryDesc,
                     Seeders = i.sid,
                     Peers = i.pir,
-                    MagnetUri = i.magnet,
+                    MagnetUri = MagnetHygiene.Clean(i.magnet),
                     ffprobe = ffprobe,
                     languages = languages,
                     info = rqnum ? null : new TorrentInfo()

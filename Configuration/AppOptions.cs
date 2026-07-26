@@ -158,6 +158,8 @@ namespace JacRed.Configuration
 
         public SearchSettings search = new SearchSettings();
 
+        public MagnetSettings magnet = new MagnetSettings();
+
         public TorznabSettings torznab = new TorznabSettings();
 
         public LoggingOptions logging = new LoggingOptions
