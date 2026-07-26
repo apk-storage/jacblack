@@ -148,6 +148,9 @@ namespace JacRed.Configuration
 
         public TrackerSettings Knaben = new TrackerSettings("https://api.knaben.org");
 
+        // JSON-лента, авторизация не нужна, magnet приходит прямо в ответе.
+        public TrackerSettings AnimeTosho = new TrackerSettings("https://feed.animetosho.org");
+
         // TODO: fix parser
         public TrackerSettings Baibako = new TrackerSettings("http://baibako.tv");
 

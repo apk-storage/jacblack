@@ -1,6 +1,7 @@
 using JacRed.Infrastructure.Trackers.Anidub;
 using JacRed.Infrastructure.Trackers.Aniliberty;
 using JacRed.Infrastructure.Trackers.AnimeLayer;
+using JacRed.Infrastructure.Trackers.AnimeTosho;
 using JacRed.Infrastructure.Trackers.Baibako;
 using JacRed.Infrastructure.Trackers.Bitru;
 using JacRed.Infrastructure.Trackers.Kinozal;
@@ -24,6 +25,7 @@ namespace JacRed.Infrastructure.Trackers
         {
             services.AddSingleton<KnabenSyncService>();
             services.AddSingleton<AnimeLayerSyncService>();
+            services.AddSingleton<AnimeToshoSyncService>();
             services.AddSingleton<AnilibertySyncService>();
             services.AddSingleton<LostfilmSyncService>();
             services.AddSingleton<RutrackerSyncService>();
