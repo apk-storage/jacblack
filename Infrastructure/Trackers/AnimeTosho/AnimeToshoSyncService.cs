@@ -1,13 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Infrastructure.Persistence;
-using JacRed.Models.Details;
 using JacRed.Models.tParse;
 using Newtonsoft.Json;
 
