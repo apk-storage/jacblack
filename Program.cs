@@ -117,6 +117,7 @@ namespace JacRed
             builder.Services.AddScoped<FixAnilibertyUrlsMigration>();
             builder.Services.AddScoped<RemoveDuplicateAnilibertyMigration>();
             builder.Services.AddScoped<FixAnimelayerDuplicatesMigration>();
+            builder.Services.AddScoped<FixAnimeToshoNamesMigration>();
             builder.Services.AddScoped<ITracksAdminService, TracksAdminService>();
 
             builder.Services.AddHostedService<FastDbRefreshWorker>();
