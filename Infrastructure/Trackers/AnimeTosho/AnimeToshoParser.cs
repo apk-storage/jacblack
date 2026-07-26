@@ -22,8 +22,13 @@ namespace JacRed.Infrastructure.Trackers.AnimeTosho
         // Год в круглых или квадратных скобках.
         static readonly Regex RxYear = new Regex(@"[\(\[]((?:19|20)\d{2})[\)\]]", RegexOptions.Compiled);
 
-        // " - S01E07", " - S1E7"
-        static readonly Regex RxSeasonEpisode = new Regex(@"\s+-\s+S(\d{1,2})E(\d{1,3})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        // " - S01E07", " S01E06" — дефис необязателен: сцена пишет без него.
+        static readonly Regex RxSeasonEpisode = new Regex(@"\s+-?\s*S(\d{1,2})E(\d{1,3})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Качество или источник — тоже граница имени: "Name 1080p AMZN WEB-DL".
+        static readonly Regex RxQualityBoundary = new Regex(
+            @"\s+(?:\d{3,4}p|\d{3,4}x\d{3,4}|BDRip|BDRemux|BluRay|BRRip|WEB[- ]?DL|WEBRip|WEB|HDTV|DVDRip|TVRip|Remux)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // " S01" перед скобкой или в конце: "Turn A Gundam S01 (1999)"
         static readonly Regex RxSeasonOnly = new Regex(@"\s+S(\d{1,2})(?=\s*[\(\[]|\s*$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -100,6 +105,10 @@ namespace JacRed.Infrastructure.Trackers.AnimeTosho
                 if (result.Episode == 0)
                     result.Episode = ToInt(mEp.Groups[1].Value);
             }
+
+            var mQuality = RxQualityBoundary.Match(t);
+            if (mQuality.Success)
+                cut = Math.Min(cut, mQuality.Index);
 
             if (yearIndex >= 0)
                 cut = Math.Min(cut, yearIndex);

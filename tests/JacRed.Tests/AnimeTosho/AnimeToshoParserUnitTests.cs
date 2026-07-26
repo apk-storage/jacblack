@@ -67,6 +67,31 @@ public class AnimeToshoParserUnitTests
     }
 
     [Fact]
+    public void Сезон_и_серия_без_дефиса_и_скобок_отрезаются()
+    {
+        // Сценовое именование: ни дефиса, ни скобок. На этом парсер спотыкался
+        // при первом прогоне живой ленты 2026-07-26.
+        var r = AnimeToshoParser.ParseTitle("Petals of Reincarnation S01E06 1080p AMZN WEB-DL AAC2.0 H 264-Vary");
+        Assert.Equal("Petals of Reincarnation", r.Name);
+        Assert.Equal(1, r.Season);
+        Assert.Equal(6, r.Episode);
+    }
+
+    [Fact]
+    public void Качество_не_попадает_в_имя()
+    {
+        var r = AnimeToshoParser.ParseTitle("Some Anime Title 1080p BDRip x265");
+        Assert.Equal("Some Anime Title", r.Name);
+    }
+
+    [Fact]
+    public void Источник_WEB_DL_тоже_граница_имени()
+    {
+        var r = AnimeToshoParser.ParseTitle("Another Show WEB-DL 720p");
+        Assert.Equal("Another Show", r.Name);
+    }
+
+    [Fact]
     public void Пустой_заголовок_не_роняет_разбор()
     {
         var r = AnimeToshoParser.ParseTitle("");
