@@ -160,6 +160,8 @@ namespace JacRed.Configuration
 
         public MagnetSettings magnet = new MagnetSettings();
 
+        public ScrapeSettings scrape = new ScrapeSettings();
+
         public TorznabSettings torznab = new TorznabSettings();
 
         public LoggingOptions logging = new LoggingOptions
