@@ -1,6 +1,7 @@
 using JacRed.Application.Dev;
 using JacRed.Application.Dev.Migrations;
 using JacRed.Application.Index;
+using JacRed.Application.Maintenance;
 using JacRed.Application.Search;
 using JacRed.Configuration;
 using JacRed.Controllers;
@@ -107,6 +108,7 @@ namespace JacRed
             builder.Services.AddSingleton<IFastDbIndex>(FastDbIndex.Default);
 
             builder.Services.AddSingleton<ILiveSeeders, LiveSeedersService>();
+            builder.Services.AddSingleton<AliveSweepService>();
             builder.Services.AddScoped<IJackettSearchService, JackettSearchService>();
             builder.Services.AddScoped<ITorrentQueryService, TorrentQueryService>();
             builder.Services.AddScoped<IDevMaintenanceService, DevMaintenanceService>();
