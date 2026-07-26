@@ -106,6 +106,7 @@ namespace JacRed
             builder.Services.AddMemoryCache();
             builder.Services.AddSingleton<IFastDbIndex>(FastDbIndex.Default);
 
+            builder.Services.AddSingleton<ILiveSeeders, LiveSeedersService>();
             builder.Services.AddScoped<IJackettSearchService, JackettSearchService>();
             builder.Services.AddScoped<ITorrentQueryService, TorrentQueryService>();
             builder.Services.AddScoped<IDevMaintenanceService, DevMaintenanceService>();

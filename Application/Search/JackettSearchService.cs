@@ -12,10 +12,12 @@ namespace JacRed.Application.Search
     public class JackettSearchService : IJackettSearchService
     {
         readonly IFastDbIndex _fastDbIndex;
+        readonly ILiveSeeders _liveSeeders;
 
-        public JackettSearchService(IFastDbIndex fastDbIndex)
+        public JackettSearchService(IFastDbIndex fastDbIndex, ILiveSeeders liveSeeders = null)
         {
             _fastDbIndex = fastDbIndex;
+            _liveSeeders = liveSeeders;
         }
 
         public async Task<List<Result>> SearchAsync(JackettSearchRequest request, IMemoryCache cache, CancellationToken ct = default)
@@ -38,7 +40,14 @@ namespace JacRed.Application.Search
 
             var req = IndexerSearchHelper.BuildRequest(q, request.ApiKey, rqnum, query, title, title_original, year, is_serial);
             var results = await IndexerSearchEngine.SearchCombinedAsync(req, cache, this);
-            return IndexerSearchHelper.ApplyPostFilters(results, q, req);
+            var filtered = IndexerSearchHelper.ApplyPostFilters(results, q, req);
+
+            // Сиды в базе — снимок на момент индексации, поэтому спрашиваем трекеры
+            // о том, что происходит сейчас. Не успели в бюджет — отдаём как есть.
+            if (_liveSeeders != null)
+                filtered = await _liveSeeders.ApplyAsync(filtered, ct);
+
+            return filtered;
         }
 
         public List<Result> SearchResults(string apikey, string query, string title, string title_original, int year, Dictionary<string, string> category, int is_serial, bool rqnum, IMemoryCache memoryCache)

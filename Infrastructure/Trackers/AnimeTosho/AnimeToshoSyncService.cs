@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Infrastructure.Persistence;
-using JacRed.Models.tParse;
 using Newtonsoft.Json;
 
 namespace JacRed.Infrastructure.Trackers.AnimeTosho
