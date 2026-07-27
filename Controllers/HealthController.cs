@@ -17,11 +17,28 @@ namespace JacRed.Controllers
             });
         }
 
+        /// <summary>
+        /// Версия протокола JacRed. Клиенты (Lampa, Lampac) проверяют этим адресом,
+        /// тот ли перед ними сервер, и ждут голое число в text/plain — ровно так,
+        /// как отдаёт оригинальный JacRed. Отдав вместо этого JSON со сведениями
+        /// о сборке, мы для них становимся чужим сервером, и поисковые запросы
+        /// до нас просто не доходят. Сведения о сборке — на /version/build.
+        /// </summary>
         [Route("version")]
         public IActionResult Version()
         {
+            return Content(ProtocolVersion, "text/plain; charset=utf-8");
+        }
+
+        const string ProtocolVersion = "11";
+
+        /// <summary>Сведения о сборке. Раньше жили на /version, но тот занят совместимостью.</summary>
+        [Route("version/build")]
+        public IActionResult VersionBuild()
+        {
             return Json(new Dictionary<string, string>
             {
+                ["protocol"] = ProtocolVersion,
                 ["version"] = VersionInfo.Version,
                 ["gitSha"] = VersionInfo.GitSha,
                 ["gitBranch"] = VersionInfo.GitBranch,
