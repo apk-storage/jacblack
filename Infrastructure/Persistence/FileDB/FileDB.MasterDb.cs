@@ -70,20 +70,34 @@ namespace JacRed.Infrastructure.Persistence
         #endregion
 
         #region pathDb / keyDb
+        /// <summary>
+        /// Путь к шарду. Раньше здесь на КАЖДОЕ обращение к базе — и на чтение
+        /// тоже — вызывался Directory.CreateDirectory, то есть системный вызов
+        /// там, где нужна только склейка строки. Каталоги создаются отдельно,
+        /// перед записью, и запоминаются.
+        /// </summary>
         static string pathDb(string key)
         {
             string md5key = HashTo.md5(key);
 
             if (AppInit.conf.fdbPathLevels == 2)
-            {
-                Directory.CreateDirectory($"Data/fdb/{md5key.Substring(0, 2)}");
                 return $"Data/fdb/{md5key.Substring(0, 2)}/{md5key.Substring(2)}";
-            }
-            else
-            {
-                Directory.CreateDirectory($"Data/fdb/{md5key[0]}");
-                return $"Data/fdb/{md5key[0]}/{md5key}";
-            }
+
+            return $"Data/fdb/{md5key[0]}/{md5key}";
+        }
+
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _createdDirs = new();
+
+        /// <summary>Создаёт каталог шарда, если он ещё не создавался в этом запуске.</summary>
+        static void EnsureShardDir(string path)
+        {
+            string dir = Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(dir) || !_createdDirs.TryAdd(dir, 0))
+                return;
+
+            try { Directory.CreateDirectory(dir); }
+            catch (IOException) { _createdDirs.TryRemove(dir, out _); }
+            catch (UnauthorizedAccessException) { _createdDirs.TryRemove(dir, out _); }
         }
 
         static string keyDb(string name, string originalname)

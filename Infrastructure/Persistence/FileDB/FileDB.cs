@@ -42,7 +42,11 @@ namespace JacRed.Infrastructure.Persistence
             lock (_dbLock)
             {
                 if (Database.Count > 0 && savechanges)
-                    JsonStream.Write(pathDb(fdbkey), Database);
+                {
+                    string path = pathDb(fdbkey);
+                    EnsureShardDir(path);
+                    JsonStream.Write(path, Database);
+                }
             }
         }
         #endregion

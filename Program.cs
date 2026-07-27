@@ -55,6 +55,13 @@ namespace JacRed
             CultureInfo.CurrentCulture = new CultureInfo("ru-RU");
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
+            // В парсерах около 160 разных шаблонов вызываются статически
+            // (Regex.Match(строка, шаблон)), а кеш .NET по умолчанию — 15 записей.
+            // Кеш непрерывно вытесняется, и почти каждый вызов компилирует шаблон
+            // заново. Правильное решение — статические поля с RegexOptions.Compiled,
+            // как у Baibako и Kinozal; до тех пор эта строка снимает основную потерю.
+            System.Text.RegularExpressions.Regex.CacheSize = 256;
+
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
                 JacRedLog.Error(JacRedLogCategories.Host, $"[fatal] UnhandledException: {e.ExceptionObject}");
