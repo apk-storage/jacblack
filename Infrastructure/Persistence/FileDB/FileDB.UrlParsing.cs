@@ -62,7 +62,40 @@ namespace JacRed.Infrastructure.Persistence
             if (string.Equals(trackerName, "lostfilm", StringComparison.OrdinalIgnoreCase))
                 return JacRed.Infrastructure.Trackers.Lostfilm.LostfilmParser.StableUrlId(url);
 
+            // Ниже — источники, у которых идентификатор в URL есть, но раньше
+            // не разбирался: защита от дублей при смене адреса на них не работала.
+
+            // Rutracker: .../forum/viewtopic.php?t=6886123
+            if (string.Equals(trackerName, "rutracker", StringComparison.OrdinalIgnoreCase))
+                return MatchId(url, @"viewtopic\.php\?t=(\d+)");
+
+            // Kinozal: .../details.php?id=2058877
+            if (string.Equals(trackerName, "kinozal", StringComparison.OrdinalIgnoreCase))
+                return MatchId(url, @"details\.php\?id=(\d+)");
+
+            // Toloka: .../t123456 или ...?t=123456
+            if (string.Equals(trackerName, "toloka", StringComparison.OrdinalIgnoreCase))
+            {
+                int id = MatchId(url, @"[?&]t=(\d+)");
+                return id > 0 ? id : MatchId(url, @"/t(\d+)(?:$|[^0-9])");
+            }
+
+            // Bitru: .../details.php?id=123456
+            if (string.Equals(trackerName, "bitru", StringComparison.OrdinalIgnoreCase))
+                return MatchId(url, @"[?&]id=(\d+)");
+
+            // AnimeTosho: .../view/{slug} — slug меняется, поэтому парсер строит
+            // адрес из числового id, который приходит в ответе API.
+            if (string.Equals(trackerName, "animetosho", StringComparison.OrdinalIgnoreCase))
+                return MatchId(url, @"/view/(\d+)(?:$|[^0-9])");
+
             return 0;
+        }
+
+        static int MatchId(string url, string pattern)
+        {
+            var m = Regex.Match(url, pattern, RegexOptions.IgnoreCase);
+            return m.Success && int.TryParse(m.Groups[1].Value, out int id) ? id : 0;
         }
 
     }

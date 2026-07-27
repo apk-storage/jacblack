@@ -31,5 +31,7 @@ namespace JacRed.Controllers.Dev
         public JsonResult FixAnimelayerDuplicates() => Json(_migrationService.FixAnimelayerDuplicates());
 
         public JsonResult FixAnimeToshoNames() => Json(_migrationService.FixAnimeToshoNames());
+
+        public JsonResult FixAnimeToshoUrls() => Json(_migrationService.FixAnimeToshoUrls());
     }
 }

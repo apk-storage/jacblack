@@ -11,5 +11,6 @@ namespace JacRed.Application.Dev
         object RemoveDuplicateAniliberty();
         object FixAnimelayerDuplicates();
         object FixAnimeToshoNames();
+        object FixAnimeToshoUrls();
     }
 }

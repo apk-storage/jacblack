@@ -270,7 +270,12 @@ namespace JacRed.Infrastructure.Persistence
                     }
                 }
 
-                if (string.Equals(t.trackerName, "lostfilm", StringComparison.OrdinalIgnoreCase))
+                // База шардируется по имени, поэтому запись, чьё имя изменилось,
+                // обязана переехать в шард своего ключа. Раньше это делалось
+                // ТОЛЬКО для lostfilm, а у остальных шестнадцати источников
+                // записи оставались сиротами в чужих шардах — отсюда и разовые
+                // миграции FixKnabenNames, FixBitruNames, FixAnimeToshoNames,
+                // которые лечили следствие. Теперь правило общее для всех.
                 {
                     string newKey = keyDb(t.name, t.originalname);
                     if (!string.IsNullOrEmpty(newKey) && newKey != fdbkey && newKey.IndexOf(':') > 0)

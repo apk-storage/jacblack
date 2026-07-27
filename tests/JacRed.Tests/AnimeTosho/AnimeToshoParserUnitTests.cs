@@ -147,7 +147,8 @@ public class AnimeToshoParserUnitTests
         Assert.NotNull(t);
         Assert.Equal("animetosho", t.trackerName);
         Assert.Equal(new[] { "anime" }, t.types);
-        Assert.Equal("https://animetosho.org/view/hokuto-no-ken-s01e07", t.url);
+        // Адрес строится из числового id, а не из slug: slug на сайте меняется.
+        Assert.Equal("https://animetosho.org/view/764689", t.url);
         Assert.Equal("Hokuto no Ken", t.name);
         Assert.Equal("Fist of the North Star", t.originalname);
         Assert.Equal(2026, t.relased);
@@ -158,11 +159,12 @@ public class AnimeToshoParserUnitTests
     }
 
     [Fact]
-    public void Без_link_собирает_адрес_из_идентификатора()
+    public void Адрес_строится_из_идентификатора_а_не_из_slug()
     {
         var item = new AnimeToshoItem
         {
             Id = 42,
+            Link = "https://animetosho.org/view/some-slug-that-can-change",
             Title = "[Group] Show - 01 [1080p]",
             MagnetUri = "magnet:?xt=urn:btih:abc",
             Status = "complete"
@@ -172,5 +174,20 @@ public class AnimeToshoParserUnitTests
 
         Assert.NotNull(t);
         Assert.Equal("https://animetosho.org/view/42", t.url);
+    }
+
+    [Fact]
+    public void Без_идентификатора_остаётся_ссылка_из_ленты()
+    {
+        var item = new AnimeToshoItem
+        {
+            Id = 0,
+            Link = "https://animetosho.org/view/fallback",
+            Title = "[Group] Show - 01 [1080p]",
+            MagnetUri = "magnet:?xt=urn:btih:abc",
+            Status = "complete"
+        };
+
+        Assert.Equal("https://animetosho.org/view/fallback", AnimeToshoParser.MapToTorrentDetails(item).url);
     }
 }

@@ -11,6 +11,7 @@ namespace JacRed.Application.Dev
         readonly RemoveDuplicateAnilibertyMigration _removeDuplicateAniliberty;
         readonly FixAnimelayerDuplicatesMigration _fixAnimelayerDuplicates;
         readonly FixAnimeToshoNamesMigration _fixAnimeToshoNames;
+        readonly FixAnimeToshoUrlsMigration _fixAnimeToshoUrls;
 
         public DevMigrationService(
             FixKnabenNamesMigration fixKnabenNames,
@@ -19,9 +20,11 @@ namespace JacRed.Application.Dev
             FixAnilibertyUrlsMigration fixAnilibertyUrls,
             RemoveDuplicateAnilibertyMigration removeDuplicateAniliberty,
             FixAnimelayerDuplicatesMigration fixAnimelayerDuplicates,
-            FixAnimeToshoNamesMigration fixAnimeToshoNames)
+            FixAnimeToshoNamesMigration fixAnimeToshoNames,
+            FixAnimeToshoUrlsMigration fixAnimeToshoUrls)
         {
             _fixAnimeToshoNames = fixAnimeToshoNames;
+            _fixAnimeToshoUrls = fixAnimeToshoUrls;
             _fixKnabenNames = fixKnabenNames;
             _fixBitruNames = fixBitruNames;
             _cleanup = cleanup;
@@ -48,5 +51,7 @@ namespace JacRed.Application.Dev
         public object FixAnimelayerDuplicates() => _fixAnimelayerDuplicates.Run();
 
         public object FixAnimeToshoNames() => _fixAnimeToshoNames.Run();
+
+        public object FixAnimeToshoUrls() => _fixAnimeToshoUrls.Run();
     }
 }
