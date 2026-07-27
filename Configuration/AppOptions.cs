@@ -162,6 +162,8 @@ namespace JacRed.Configuration
 
         public ScrapeSettings scrape = new ScrapeSettings();
 
+        public TlsSettings tls = new TlsSettings();
+
         public SweepSettings sweep = new SweepSettings();
 
         public TorznabSettings torznab = new TorznabSettings();
