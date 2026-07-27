@@ -26,7 +26,8 @@ namespace JacRed.Models.Details
 
         public DateTime updateTime { get; set; } = DateTime.UtcNow;
 
-        public DateTime checkTime { get; set; } = DateTime.Now;
+        /// <summary>Когда запись последний раз проверялась. В UTC, как createTime и updateTime.</summary>
+        public DateTime checkTime { get; set; } = DateTime.UtcNow;
 
         public string magnet { get; set; }
 
