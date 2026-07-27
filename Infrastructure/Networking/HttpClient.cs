@@ -123,7 +123,30 @@ namespace JacRed.Infrastructure.Networking
                     AllowAutoRedirect = true
                 };
 
-                handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+                // Проверка сертификатов включена. Раньше она была отключена
+                // жёстко для всех запросов, включая входы на трекеры с логином
+                // и паролем. Исключения перечислены в конфиге явно.
+                handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, errors) =>
+                {
+                    if (errors == System.Net.Security.SslPolicyErrors.None)
+                        return true;
+
+                    var tls = AppInit.conf?.tls;
+                    if (tls == null || !tls.validate)
+                        return true;
+
+                    string host = (sender as System.Net.Security.SslStream)?.TargetHostName
+                                  ?? (sender as HttpRequestMessage)?.RequestUri?.Host;
+
+                    if (tls.IsAllowedInvalid(host))
+                        return true;
+
+                    JacRed.Infrastructure.Logging.JacRedLog.Warning(
+                        JacRed.Infrastructure.Logging.JacRedLogCategories.Host,
+                        $"сертификат не прошёл проверку: {host ?? "неизвестный хост"} — {errors}");
+
+                    return false;
+                };
 
                 if (proxy != null)
                 {
