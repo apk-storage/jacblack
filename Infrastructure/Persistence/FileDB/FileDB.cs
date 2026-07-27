@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using JacRed.Infrastructure.Parsing;
 using JacRed.Infrastructure.Utils;
 using JacRed.Models;
 using JacRed.Models.Details;
@@ -86,6 +87,10 @@ namespace JacRed.Infrastructure.Persistence
 
             if (t != null)
             {
+                // Считаем здесь, а не в парсерах: через это место проходят записи
+                // всех семнадцати источников, а поштучный лог ведут только шесть.
+                ParseCounters.Updated(torrent.trackerName);
+
                 bool updateFull = false;
 
                 void upt(bool uptfull = false, bool updatetime = true)
@@ -334,6 +339,7 @@ namespace JacRed.Infrastructure.Persistence
 
                 Database.TryAdd(t.url, t);
                 AddOrUpdateMasterDb(t);
+                ParseCounters.Added(t.trackerName);
 
                 // Drop legacy bare episode/movie URL once a #quality row is stored.
                 if (string.Equals(t.trackerName, "lostfilm", StringComparison.OrdinalIgnoreCase)

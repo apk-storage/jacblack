@@ -109,7 +109,6 @@ namespace JacRed
 
             builder.Services.AddSingleton<ILiveSeeders, LiveSeedersService>();
             builder.Services.AddSingleton<AliveSweepService>();
-            builder.Services.AddSingleton<ParserHealthService>();
             builder.Services.AddScoped<IJackettSearchService, JackettSearchService>();
             builder.Services.AddScoped<ITorrentQueryService, TorrentQueryService>();
             builder.Services.AddScoped<IDevMaintenanceService, DevMaintenanceService>();
