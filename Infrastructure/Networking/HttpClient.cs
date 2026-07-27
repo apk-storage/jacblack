@@ -197,8 +197,24 @@ namespace JacRed.Infrastructure.Networking
             if (proxies.Count == 0)
                 proxies.Add(null);
 
+            string requestHost = null;
+            try { requestHost = new Uri(url).Host; } catch (UriFormatException) { }
+
+            // Про хост уже известно, что обычный клиент туда не пройдёт:
+            // не тратим запрос на заведомый 403, сразу идём браузером.
+            if (CloudflareClearance.IsGuarded(requestHost))
+            {
+                string viaBrowser = await CloudflareClearance.FetchAsync(url, cookie);
+                if (!string.IsNullOrWhiteSpace(viaBrowser))
+                    return (viaBrowser, OkResponse(url));
+            }
+
             foreach (var px in proxies)
             {
+                // Вторая попытка делается только если прилетел вызов Cloudflare
+                // и удалось получить cookie.
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
                 try
                 {
                     {
@@ -233,7 +249,22 @@ namespace JacRed.Infrastructure.Networking
                         using (HttpResponseMessage response = await client.SendAsync(req, timeoutCts.Token))
                         {
                             if (response.StatusCode != HttpStatusCode.OK)
-                                continue;
+                            {
+                                // Прилетел вызов Cloudflare: запоминаем хост и
+                                // забираем страницу браузером. Свой таймаут у
+                                // браузера, поэтому token вызывающего сюда не идёт —
+                                // с ним первое обращение всегда обрывалось бы.
+                                if (attempt == 0 && CloudflareClearance.IsChallenge(response))
+                                {
+                                    CloudflareClearance.MarkGuarded(requestHost);
+
+                                    string viaBrowser = await CloudflareClearance.FetchAsync(url, cookie);
+                                    if (!string.IsNullOrWhiteSpace(viaBrowser))
+                                        return (viaBrowser, OkResponse(url));
+                                }
+
+                                break;              // к следующему прокси
+                            }
 
                             using (HttpContent content = response.Content)
                             {
@@ -241,7 +272,7 @@ namespace JacRed.Infrastructure.Networking
                                 {
                                     string res = encoding.GetString(await content.ReadAsByteArrayAsync());
                                     if (string.IsNullOrWhiteSpace(res))
-                                        continue;
+                                        break;
 
                                     return (res, response);
                                 }
@@ -249,7 +280,7 @@ namespace JacRed.Infrastructure.Networking
                                 {
                                     string res = await content.ReadAsStringAsync();
                                     if (string.IsNullOrWhiteSpace(res))
-                                        continue;
+                                        break;
 
                                     return (res, response);
                                 }
@@ -259,7 +290,8 @@ namespace JacRed.Infrastructure.Networking
                 }
                 catch
                 {
-                    continue;
+                    break;
+                }
                 }
             }
 
@@ -268,6 +300,15 @@ namespace JacRed.Infrastructure.Networking
                 StatusCode = HttpStatusCode.InternalServerError,
                 RequestMessage = new HttpRequestMessage()
             });
+        }
+
+        /// <summary>Ответ-заглушка для страниц, добытых браузером: разборщики смотрят на код.</summary>
+        static HttpResponseMessage OkResponse(string url)
+        {
+            var request = new HttpRequestMessage();
+            try { request.RequestUri = new Uri(url); } catch (UriFormatException) { }
+
+            return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request };
         }
         #endregion
 

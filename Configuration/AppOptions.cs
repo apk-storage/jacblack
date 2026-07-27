@@ -164,6 +164,8 @@ namespace JacRed.Configuration
 
         public TlsSettings tls = new TlsSettings();
 
+        public FlareSolverrSettings flaresolverr = new FlareSolverrSettings();
+
         public SweepSettings sweep = new SweepSettings();
 
         public TorznabSettings torznab = new TorznabSettings();
