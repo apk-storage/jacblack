@@ -253,7 +253,10 @@ namespace JacRed.Infrastructure.Persistence
                 else if (AppInit.conf.logFdb)
                     AppendFdbLog(torrent, t);
 
-                t.checkTime = DateTime.Now;
+                // Было DateTime.Now при том, что createTime и updateTime в этой же
+                // записи пишутся в UTC. Смесь двух часов в одной записи уже
+                // приводила к неверным выводам при разборе.
+                t.checkTime = DateTime.UtcNow;
 
                 if (foundById)
                     Database.TryAdd(t.url, t);
