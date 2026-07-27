@@ -5,6 +5,7 @@
 // ParseLatest: TrackerLatestParseLock + RunParseLatestAsync
 
 using JacRed.Infrastructure.Logging;
+using JacRed.Infrastructure.Parsing;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -93,6 +94,9 @@ namespace JacRed.Infrastructure.Trackers
                 return WorkResult;
             }
 
+            var startedAt = System.DateTime.UtcNow;
+            ParseCounters.Begin(trackerName);
+
             try
             {
                 return await action();
@@ -100,6 +104,17 @@ namespace JacRed.Infrastructure.Trackers
             finally
             {
                 parseLock.End();
+
+                // Единая итоговая строка для всех парсеров. Раньше у каждого был
+                // свой формат: Bitru писал «saved N», Anidub «parsed=/added=»,
+                // Rutor и Toloka не писали ничего — сравнивать было нечем.
+                var c = ParseCounters.End(trackerName);
+                if (c != null)
+                {
+                    ParserLog.Write(trackerName,
+                        $"ИТОГ | добавлено={c.Added} обновлено={c.Updated} " +
+                        $"всего={c.Added + c.Updated} заняло={(System.DateTime.UtcNow - startedAt).TotalSeconds:F1}с");
+                }
             }
         }
 
