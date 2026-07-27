@@ -180,9 +180,15 @@ namespace JacRed.Infrastructure.Trackers.AnimeTosho
             if (string.IsNullOrWhiteSpace(parsed.Name))
                 return null;
 
-            string url = !string.IsNullOrWhiteSpace(item.Link)
-                ? item.Link
-                : $"https://animetosho.org/view/{item.Id}";
+            // Адрес строится из числового id, а не из item.Link со slug:
+            // slug на сайте меняется, и запись задваивалась бы. По такому адресу
+            // работает и защита от дублей в FileDB.GetTorrentIdFromUrl.
+            string url = item.Id > 0
+                ? $"https://animetosho.org/view/{item.Id}"
+                : item.Link;
+
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
 
             DateTime createTime = item.Timestamp > 0
                 ? DateTimeOffset.FromUnixTimeSeconds(item.Timestamp).UtcDateTime
