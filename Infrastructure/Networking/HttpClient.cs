@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JacRed.Infrastructure.Networking
@@ -96,6 +97,47 @@ namespace JacRed.Infrastructure.Networking
         }
         #endregion
 
+        #region Пул соединений
+        /// <summary>
+        /// Раньше на КАЖДЫЙ запрос создавался новый HttpClient со своим handler:
+        /// это полное TCP- и TLS-рукопожатие на каждую страницу и накопление
+        /// сокетов в TIME_WAIT. При обходе в 38 тысяч страниц — 38 тысяч
+        /// рукопожатий. Клиенты кешируются по ключу «прокси + распаковка»,
+        /// соединения переиспользуются.
+        /// </summary>
+        static readonly ConcurrentDictionary<string, System.Net.Http.HttpClient> _clients = new();
+
+        static System.Net.Http.HttpClient SharedClient(WebProxy proxy, DecompressionMethods decompression)
+        {
+            string key = (proxy?.Address?.ToString() ?? "direct") + "|" + (int)decompression;
+
+            return _clients.GetOrAdd(key, _ =>
+            {
+                var handler = new SocketsHttpHandler
+                {
+                    AutomaticDecompression = decompression,
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+                    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+                    MaxConnectionsPerServer = 8,
+                    ConnectTimeout = TimeSpan.FromSeconds(15),
+                    AllowAutoRedirect = true
+                };
+
+                handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+
+                if (proxy != null)
+                {
+                    handler.UseProxy = true;
+                    handler.Proxy = proxy;
+                }
+
+                // Таймаут задаётся на запрос через CancellationToken, а не на клиента:
+                // клиент общий и живёт долго.
+                return new System.Net.Http.HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+            });
+        }
+        #endregion
+
 
         #region Get
         async public static ValueTask<string> Get(string url, Encoding encoding = default, string cookie = null, string referer = null, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, long MaxResponseContentBufferSize = 0, bool useproxy = false, WebProxy proxy = null, int httpversion = 1)
@@ -136,31 +178,36 @@ namespace JacRed.Infrastructure.Networking
             {
                 try
                 {
-                    using (var handler = CreateHandler(px, DecompressionMethods.GZip | DecompressionMethods.Deflate))
-                    using (var client = new System.Net.Http.HttpClient(handler))
                     {
-                        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                        client.MaxResponseContentBufferSize = MaxResponseContentBufferSize == 0 ? 10_000_000 : MaxResponseContentBufferSize; // 10MB
-                        client.DefaultRequestHeaders.Add("user-agent", useragent);
+                        var client = SharedClient(px, DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli);
+
+                        // Заголовки задаются на запрос, а не на общего клиента:
+                        // клиент переиспользуется разными трекерами с разными cookie.
+                        var req = new HttpRequestMessage(HttpMethod.Get, url)
+                        {
+                            // Было HTTP/1.0, где keep-alive выключен по умолчанию —
+                            // соединение закрывалось после каждого ответа.
+                            Version = httpversion >= 2 ? new Version(2, 0) : new Version(1, 1),
+                            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                        };
+
+                        req.Headers.TryAddWithoutValidation("user-agent", useragent);
 
                         if (cookie != null)
-                            client.DefaultRequestHeaders.Add("cookie", cookie);
+                            req.Headers.TryAddWithoutValidation("cookie", cookie);
 
                         if (referer != null)
-                            client.DefaultRequestHeaders.Add("referer", referer);
+                            req.Headers.TryAddWithoutValidation("referer", referer);
 
                         if (addHeaders != null)
                         {
                             foreach (var item in addHeaders)
-                                client.DefaultRequestHeaders.Add(item.name, item.val);
+                                req.Headers.TryAddWithoutValidation(item.name, item.val);
                         }
 
-                        var req = new HttpRequestMessage(HttpMethod.Get, url)
-                        {
-                            Version = new Version(httpversion, 0)
-                        };
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
 
-                        using (HttpResponseMessage response = await client.SendAsync(req))
+                        using (HttpResponseMessage response = await client.SendAsync(req, timeoutCts.Token))
                         {
                             if (response.StatusCode != HttpStatusCode.OK)
                                 continue;
@@ -218,23 +265,29 @@ namespace JacRed.Infrastructure.Networking
             {
                 try
                 {
-                    using (var handler = CreateHandler(px, DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate))
-                    using (var client = new System.Net.Http.HttpClient(handler))
                     {
-                        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                        client.MaxResponseContentBufferSize = MaxResponseContentBufferSize != 0 ? MaxResponseContentBufferSize : 10_000_000; // 10MB
+                        var client = SharedClient(px, DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate);
 
-                        client.DefaultRequestHeaders.Add("user-agent", useragent);
+                        var req = new HttpRequestMessage(HttpMethod.Post, url)
+                        {
+                            Content = data,
+                            Version = new Version(1, 1),
+                            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                        };
+
+                        req.Headers.TryAddWithoutValidation("user-agent", useragent);
                         if (cookie != null)
-                            client.DefaultRequestHeaders.Add("cookie", cookie);
+                            req.Headers.TryAddWithoutValidation("cookie", cookie);
 
                         if (addHeaders != null)
                         {
                             foreach (var item in addHeaders)
-                                client.DefaultRequestHeaders.Add(item.name, item.val);
+                                req.Headers.TryAddWithoutValidation(item.name, item.val);
                         }
 
-                        using (HttpResponseMessage response = await client.PostAsync(url, data))
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+                        using (HttpResponseMessage response = await client.SendAsync(req, timeoutCts.Token))
                         {
                             if (response.StatusCode != HttpStatusCode.OK)
                                 continue;
@@ -309,29 +362,32 @@ namespace JacRed.Infrastructure.Networking
             {
                 try
                 {
-                    var handler = CreateHandler(px, DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate);
-                    handler.AllowAutoRedirect = true;
-
-                    using (handler)
-                    using (var client = new System.Net.Http.HttpClient(handler))
                     {
-                        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                        client.MaxResponseContentBufferSize = MaxResponseContentBufferSize == 0 ? 10_000_000 : MaxResponseContentBufferSize; // 10MB
-                        client.DefaultRequestHeaders.Add("user-agent", useragent);
+                        var client = SharedClient(px, DecompressionMethods.Brotli | DecompressionMethods.GZip | DecompressionMethods.Deflate);
+
+                        var req = new HttpRequestMessage(HttpMethod.Get, url)
+                        {
+                            Version = new Version(1, 1),
+                            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                        };
+
+                        req.Headers.TryAddWithoutValidation("user-agent", useragent);
 
                         if (cookie != null)
-                            client.DefaultRequestHeaders.Add("cookie", cookie);
+                            req.Headers.TryAddWithoutValidation("cookie", cookie);
 
                         if (referer != null)
-                            client.DefaultRequestHeaders.Add("referer", referer);
+                            req.Headers.TryAddWithoutValidation("referer", referer);
 
                         if (addHeaders != null)
                         {
                             foreach (var item in addHeaders)
-                                client.DefaultRequestHeaders.Add(item.name, item.val);
+                                req.Headers.TryAddWithoutValidation(item.name, item.val);
                         }
 
-                        using (HttpResponseMessage response = await client.GetAsync(url))
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+                        using (HttpResponseMessage response = await client.SendAsync(req, timeoutCts.Token))
                         {
                             if (response.StatusCode != HttpStatusCode.OK)
                                 continue;
