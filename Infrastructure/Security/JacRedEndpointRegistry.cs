@@ -56,6 +56,7 @@ namespace JacRed.Infrastructure.Security
                 || path.Equals("/settings/", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/health", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/version", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/version/build", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/lastupdatedb", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/openapi.yaml", StringComparison.OrdinalIgnoreCase)
                 || IsPublicWebPath(path)
