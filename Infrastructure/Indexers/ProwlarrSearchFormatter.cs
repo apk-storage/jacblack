@@ -17,6 +17,7 @@ namespace JacRed.Infrastructure.Indexers
             [2010] = "Movies/Foreign",
             [5000] = "TV",
             [5020] = "TV/Foreign",
+            [5060] = "TV/Sport",
             [5070] = "TV/Anime",
             [5080] = "TV/Documentary",
         };
