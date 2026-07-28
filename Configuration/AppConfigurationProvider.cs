@@ -1,5 +1,6 @@
 using JacRed.Configuration.Schema;
 using JacRed.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -141,7 +142,13 @@ namespace JacRed.Configuration
                 if (!ReferenceEquals(previous, current) && previous != null && forceLogLabel == null)
                     NotifyChange(current);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Испорченный init.yaml раньше давал молчание: приложение
+                // продолжало работать на прежних настройках, и понять, что правка
+                // не применилась, было нельзя.
+                JacRedLog.Swallowed(JacRedLogCategories.Config, "перечитывание настроек не удалось, работаем на прежних", ex, LogLevel.Error);
+            }
         }
 
         void ReloadFromDisk(string path)
@@ -163,7 +170,10 @@ namespace JacRed.Configuration
 
             foreach (var cb in callbacks)
             {
-                try { cb(current, Options.DefaultName); } catch { }
+                // Один сломавшийся подписчик не должен мешать остальным узнать
+                // о новых настройках, но и пропадать бесследно ему незачем.
+                try { cb(current, Options.DefaultName); }
+                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Config, "подписчик на смену настроек упал", ex); }
             }
         }
 

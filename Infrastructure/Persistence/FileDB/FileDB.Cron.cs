@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Logging;
 using JacRed.Models;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Persistence
 {
@@ -18,7 +19,12 @@ namespace JacRed.Infrastructure.Persistence
             if (!openWriteTask.TryRemove(key, out wtm))
                 return false;
 
-            try { wtm.db.SaveChangesIfNeeded(); } catch { }
+            // Запись вытесняется из кеша, и это последний шанс сохранить накопленное.
+            // Раньше сбой здесь проглатывался — накопленные торренты пропадали
+            // бесследно, а обход рапортовал, что всё сохранено.
+            try { wtm.db.SaveChangesIfNeeded(); }
+            catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, $"вытеснение {key}: сохранить не удалось", ex, LogLevel.Error); }
+
             return true;
         }
 
@@ -39,7 +45,7 @@ namespace JacRed.Infrastructure.Persistence
                     if (evicted > 0)
                         JacRedLog.Warning(JacRedLogCategories.Fdb, $"evicted {evicted} cache entries (validHour) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 }
-                catch { }
+                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, "уборка кеша по времени", ex); }
             }
         }
 
@@ -64,7 +70,7 @@ namespace JacRed.Infrastructure.Persistence
                             JacRedLog.Warning(JacRedLogCategories.Fdb, $"dropped {dropped} cache entries (maxOpenWriteTask) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                     }
                 }
-                catch { }
+                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, "уборка кеша по размеру", ex); }
             }
         }
         #endregion

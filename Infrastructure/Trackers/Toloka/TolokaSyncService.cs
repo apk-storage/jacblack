@@ -1,4 +1,5 @@
 using System;
+using JacRed.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -102,7 +103,10 @@ namespace JacRed.Infrastructure.Trackers.Toloka
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                JacRedLog.Swallowed(JacRedLogCategories.Parser, "toloka: вход не выполнен", ex);
+            }
 
             return false;
         }
@@ -195,7 +199,10 @@ namespace JacRed.Infrastructure.Trackers.Toloka
                         if (val.FirstOrDefault(i => i.page == page) == null)
                             val.Add(new TaskParse(page));
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        JacRedLog.Swallowed(JacRedLogCategories.Parser, $"toloka: очередь для категории {cat} не построена", ex);
+                    }
                 }
             }
 

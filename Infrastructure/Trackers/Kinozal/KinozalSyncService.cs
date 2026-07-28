@@ -1,4 +1,5 @@
 using System;
+using JacRed.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -303,7 +304,10 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                             if (val.FirstOrDefault(i => i.page == page) == null)
                                 val.Add(new TaskParse(page));
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            JacRedLog.Swallowed(JacRedLogCategories.Parser, $"kinozal: очередь для категории {cat}, год {year}, страница {page} не построена", ex);
+                        }
                     }
                 }
             }

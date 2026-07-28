@@ -1,4 +1,5 @@
 using System;
+using JacRed.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -96,7 +97,12 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Вход не удался — обход пойдёт гостем и не увидит закрытые
+                // разделы. Раньше это выглядело как обычная работа.
+                JacRedLog.Swallowed(JacRedLogCategories.Parser, "rutracker: вход не выполнен", ex);
+            }
 
             return false;
         }
@@ -167,7 +173,12 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                             val.Add(new TaskParse(1));
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Категория не попала в очередь обхода: раздачи из неё
+                    // просто не будут собраны, и заметить это было бы нечем.
+                    JacRedLog.Swallowed(JacRedLogCategories.Parser, $"rutracker: очередь для категории {cat} не построена", ex);
+                }
             }
 
             IO.File.WriteAllText("Data/temp/rutracker_taskParse.json", JsonConvert.SerializeObject(taskParse));

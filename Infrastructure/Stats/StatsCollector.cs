@@ -2,6 +2,7 @@ using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Tracks;
 using JacRed.Infrastructure.Logging;
 using JacRed.Models.Details;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -117,7 +118,14 @@ namespace JacRed.Infrastructure.Stats
                                 result.MagnetErrors++;
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Торрент выпал из подсчёта: статистика тихо занизится,
+                        // и расхождение с базой объяснить будет нечем. Счётчик уже
+                        // есть и виден в статистике дорожек — пользуемся им.
+                        result.TorrentDbErrors++;
+                        JacRedLog.Swallowed(JacRedLogCategories.Stats, $"торрент пропущен при подсчёте: {t?.url}", ex, LogLevel.Debug);
+                    }
                 }
             }
 

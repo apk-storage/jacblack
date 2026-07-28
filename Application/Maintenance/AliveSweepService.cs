@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Application.Search;
+using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Infrastructure.Persistence;
@@ -337,8 +338,12 @@ namespace JacRed.Application.Maintenance
                 Directory.CreateDirectory(Path.GetDirectoryName(CursorPath));
                 File.WriteAllText(CursorPath, key);
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // Без закладки чистка каждый раз начинает базу заново и никогда
+                // не доходит до конца — молчать об этом нельзя.
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "не записалась закладка чистки", ex);
+            }
         }
 
         static string HashOf(string magnet)

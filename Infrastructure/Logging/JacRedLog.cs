@@ -17,6 +17,25 @@ namespace JacRed.Infrastructure.Logging
         public static void Warning(string category, string message) => Write(category, LogLevel.Warning, message);
         public static void Error(string category, string message) => Write(category, LogLevel.Error, message);
 
+        /// <summary>
+        /// Сбой, который сознательно не прерывает работу, но и молчать о нём нельзя.
+        /// Заменяет пустой `catch {}`: раньше такие места выглядели как успешная
+        /// работа, и потеря записи ничем себя не выдавала.
+        ///
+        /// Пишет ровно одну строку и никогда не бросает сам: логирование не должно
+        /// становиться новой причиной падения.
+        /// </summary>
+        public static void Swallowed(string category, string where, Exception ex, LogLevel level = LogLevel.Warning)
+        {
+            try
+            {
+                Write(category, level, ex == null
+                    ? $"{where}: сбой без исключения"
+                    : $"{where}: {ex.GetType().Name}: {ex.Message}");
+            }
+            catch { /* писать больше некуда */ }
+        }
+
         public static void Write(string category, LogLevel level, string message)
         {
             if (!JacRedLogSettings.IsEnabled(category, level))
