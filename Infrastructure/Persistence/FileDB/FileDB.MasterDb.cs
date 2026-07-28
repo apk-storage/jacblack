@@ -9,6 +9,7 @@ using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Logging;
 using JacRed.Models;
 using JacRed.Models.Details;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Persistence
 {
@@ -59,7 +60,13 @@ namespace JacRed.Infrastructure.Persistence
                             return;
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Ожидаемо и не страшно: у базы нового формата разбор
+                        // старой схемы падает всегда. Поэтому Debug, а не тревога
+                        // при каждом запуске.
+                        JacRedLog.Swallowed(JacRedLogCategories.Fdb, "разбор masterDb в старой схеме", ex, LogLevel.Debug);
+                    }
                 }
                 #endregion
 
@@ -283,7 +290,13 @@ namespace JacRed.Infrastructure.Persistence
                 if (File.Exists($"Data/masterDb_{DateTime.Today.AddDays(-3):dd-MM-yyyy}.bz"))
                     File.Delete($"Data/masterDb_{DateTime.Today.AddDays(-3):dd-MM-yyyy}.bz");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Здесь пишется индекс всей базы и его суточная копия. Молчание
+                // означало бы, что копии просто нет, а узнать об этом было бы
+                // не от кого — до дня, когда она понадобится.
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "запись masterDb и суточной копии", ex, LogLevel.Error);
+            }
         }
         #endregion
 

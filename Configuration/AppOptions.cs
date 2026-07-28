@@ -166,6 +166,8 @@ namespace JacRed.Configuration
 
         public FlareSolverrSettings flaresolverr = new FlareSolverrSettings();
 
+        public TitleApiSettings titleapi = new TitleApiSettings();
+
         public SweepSettings sweep = new SweepSettings();
 
         public TorznabSettings torznab = new TorznabSettings();

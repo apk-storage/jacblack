@@ -1,16 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Tracks;
-using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Utils;
 using JacRed.Models.Details;
 using JacRed.Models;
 using Microsoft.Extensions.Caching.Memory;
-using Newtonsoft.Json.Linq;
 
 namespace JacRed.Application.Search
 {
@@ -19,33 +16,7 @@ namespace JacRed.Application.Search
         public async Task<object> QueryTorrentsAsync(string search, string altname, bool exact, string type, string sort, string tracker, string voice, string videotype, long relased, long quality, long season, IMemoryCache memoryCache)
         {
             #region search kp/imdb
-            if (!string.IsNullOrWhiteSpace(search) && Regex.IsMatch(search.Trim(), "^(tt|kp)[0-9]+$"))
-            {
-                string memkey = $"api/v1.0/torrents:{search}";
-                if (!memoryCache.TryGetValue(memkey, out (string original_name, string name) cache))
-                {
-                    search = search.Trim();
-                    string uri = $"&imdb={search}";
-                    if (search.StartsWith("kp"))
-                        uri = $"&kp={search.Remove(0, 2)}";
-
-                    var root = await HttpClient.Get<JObject>("https://api.apbugall.org/?token=04941a9a3ca3ac16e2b4327347bbc1" + uri, timeoutSeconds: 8);
-                    cache.original_name = root?.Value<JObject>("data")?.Value<string>("original_name");
-                    cache.name = root?.Value<JObject>("data")?.Value<string>("name");
-
-                    memoryCache.Set(memkey, cache, DateTime.Now.AddDays(1));
-                }
-
-                if (!string.IsNullOrWhiteSpace(cache.name) && !string.IsNullOrWhiteSpace(cache.original_name))
-                {
-                    search = cache.original_name;
-                    altname = cache.name;
-                }
-                else
-                {
-                    search = cache.original_name ?? cache.name;
-                }
-            }
+            (search, altname) = await TitleResolver.ResolveAsync(search, altname, memoryCache);
             #endregion
 
             #region Выборка

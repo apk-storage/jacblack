@@ -1,4 +1,5 @@
 using System;
+using JacRed.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -82,7 +83,10 @@ namespace JacRed.Infrastructure.Trackers.Rutor
                         if (val.FirstOrDefault(i => i.page == page) == null)
                             val.Add(new TaskParse(page));
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        JacRedLog.Swallowed(JacRedLogCategories.Parser, $"rutor: очередь для категории {cat} не построена", ex);
+                    }
                 }
             }
 
