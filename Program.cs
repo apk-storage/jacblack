@@ -22,6 +22,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Globalization;
 using System.IO;
+using JacRed.Infrastructure.Web;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -240,17 +241,28 @@ namespace JacRed
                 contentTypes.Mappings[".yaml"] = "application/yaml";
                 contentTypes.Mappings[".yml"] = "application/yaml";
 
+                // Без этой строки раздатчик статики отдаёт на `.br` ответ 404:
+                // неизвестные расширения он не обслуживает. У `.gz` тип есть
+                // по умолчанию, поэтому gzip работал, а brotli — нет.
+                // Настоящий тип потом проставит PrecompressedStaticFiles.
+                contentTypes.Mappings[".br"] = "application/octet-stream";
+
                 app.Use(async (context, next) =>
                 {
                     SecurityHeaders.Apply(context);
                     await next();
                 });
 
+                // Готовые .br и .gz с диска вместо сжатия на лету.
+                app.UsePrecompressedStaticFiles(app.Environment);
+
                 app.UseStaticFiles(new StaticFileOptions
                 {
                     ContentTypeProvider = contentTypes,
                     OnPrepareResponse = ctx =>
                     {
+                        JacRed.Infrastructure.Web.PrecompressedStaticFiles.FixContentType(ctx.Context, contentTypes);
+
                         var path = ctx.Context.Request.Path.Value ?? "";
                         if (path.Equals("/sw.js", StringComparison.OrdinalIgnoreCase))
                         {

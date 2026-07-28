@@ -240,6 +240,29 @@ namespace JacRed.Infrastructure.Indexers
         static Task<(string search, string altname)> ResolveImdbSearchAsync(string search, string altname, IMemoryCache cache)
             => Application.Search.TitleResolver.ResolveAsync(search, altname, cache);
 
+        /// <summary>
+        /// Тип раздачи в категории Newznab. Раньше сюда попадали только
+        /// movie, serial и anime, а documovie, docuserial, tvshow, multfilm,
+        /// multserial и sport уходили вообще без категории.
+        ///
+        /// Без категории запись проходит ЛЮБОЙ фильтр (см. FilterByCategory),
+        /// то есть спорт попадал и в поиск по фильмам. Раскладка сделана так,
+        /// чтобы запись оставалась в том разделе, где её ждут: документальный
+        /// фильм — фильм, мультсериал — сериал.
+        /// </summary>
+        internal static readonly Dictionary<string, (int[] cats, string desc)> TypeToCategory = new()
+        {
+            ["movie"] = (new[] { 2000 }, "Movies"),
+            ["documovie"] = (new[] { 2000 }, "Movies"),
+            ["multfilm"] = (new[] { 2000 }, "Movies"),
+            ["serial"] = (new[] { 5000 }, "TV"),
+            ["multserial"] = (new[] { 5000 }, "TV"),
+            ["tvshow"] = (new[] { 5000 }, "TV"),
+            ["docuserial"] = (new[] { 5000, 5080 }, "TV/Documentary"),
+            ["anime"] = (new[] { 5070 }, "TV/Anime"),
+            ["sport"] = (new[] { 5060 }, "TV/Sport")
+        };
+
         static Result MapV1(TorrentDetails i, bool rqnum)
         {
             var cats = new HashSet<int>();
@@ -248,12 +271,15 @@ namespace JacRed.Infrastructure.Indexers
             {
                 foreach (var type in i.types)
                 {
-                    switch (type)
-                    {
-                        case "movie": cats.Add(2000); catDesc = "Movies"; break;
-                        case "serial": cats.Add(5000); catDesc = "TV"; break;
-                        case "anime": cats.Add(5070); catDesc = "TV/Anime"; break;
-                    }
+                    if (type == null || !TypeToCategory.TryGetValue(type, out var mapped))
+                        continue;
+
+                    foreach (int c in mapped.cats)
+                        cats.Add(c);
+
+                    // У раздачи может быть несколько типов; для подписи берём
+                    // первый распознанный, чтобы результат не зависел от порядка.
+                    catDesc ??= mapped.desc;
                 }
             }
 
