@@ -148,14 +148,24 @@ namespace JacRed.Infrastructure.Networking
 
                 var solution = await RequestAsync(conf, url, cookie);
 
-                // Сессия могла умереть сама (браузер упал, служба перезапустилась) —
-                // пересоздаём один раз и пробуем снова.
-                if (solution == null && _sessionAlive == false)
+                // Отказ бывает не только от «сессии больше нет»: браузер может
+                // упасть посреди решения задачи, и тогда служба отвечает
+                // «Read timed out». Проверено 28.07.2026 — Chromium убивало
+                // по памяти. На свежей сессии тот же адрес открывается.
+                //
+                // Поэтому вторая попытка делается при ЛЮБОМ отказе, но ровно
+                // одна: если и она не прошла, значит дело не в браузере.
+                if (solution == null)
                 {
+                    await DestroySessionAsync(conf);
+
                     if (!await CreateSessionAsync(conf))
                         return null;
 
                     solution = await RequestAsync(conf, url, cookie);
+
+                    if (solution != null)
+                        JacRedLog.Warning(JacRedLogCategories.Host, $"{host}: получилось со второй попытки, сессия пересоздана");
                 }
 
                 if (solution == null)
@@ -260,6 +270,21 @@ namespace JacRed.Infrastructure.Networking
                 JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr: сессию создать не удалось: {root?.Value<string>("message")}");
 
             return ok;
+        }
+
+        /// <summary>Закрывает сессию, не поднимая шума: она могла уже умереть сама.</summary>
+        static async Task DestroySessionAsync(FlareSolverrSettingsView conf)
+        {
+            if (!_sessionAlive)
+                return;
+
+            await CallAsync(conf, new Dictionary<string, object>
+            {
+                ["cmd"] = "sessions.destroy",
+                ["session"] = SessionName
+            }, 60000);
+
+            _sessionAlive = false;
         }
 
         static void ArmIdleTimer(FlareSolverrSettingsView conf)
