@@ -19,8 +19,12 @@ namespace JacRed.Models.AppConf
         /// <summary>Адрес службы.</summary>
         public string url { get; set; } = "http://flaresolverr:8191/v1";
 
-        /// <summary>Сколько ждать ответа браузера, мс. Первое обращение долгое — там решается задача.</summary>
-        public int maxTimeoutMs { get; set; } = 120000;
+        /// <summary>
+        /// Сколько ждать ответа браузера, мс. Первое обращение долгое — там
+        /// решается задача: на rutracker замерено около 80 секунд. Со 120 000
+        /// оно не укладывалось под нагрузкой, поэтому 180 000.
+        /// </summary>
+        public int maxTimeoutMs { get; set; } = 180000;
 
         /// <summary>
         /// Через сколько минут простоя закрывать сессию браузера.
