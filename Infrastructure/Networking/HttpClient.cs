@@ -274,6 +274,7 @@ namespace JacRed.Infrastructure.Networking
                                     if (string.IsNullOrWhiteSpace(res))
                                         break;
 
+                                    Parsing.PageBlockDetector.ReportIfBlocked(requestHost, url, res);
                                     return (res, response);
                                 }
                                 else
@@ -282,6 +283,7 @@ namespace JacRed.Infrastructure.Networking
                                     if (string.IsNullOrWhiteSpace(res))
                                         break;
 
+                                    Parsing.PageBlockDetector.ReportIfBlocked(requestHost, url, res);
                                     return (res, response);
                                 }
                             }
