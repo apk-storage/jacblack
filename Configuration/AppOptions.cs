@@ -138,7 +138,7 @@ namespace JacRed.Configuration
 
         public TrackerSettings Selezen = new TrackerSettings("https://use.selezen.club");
 
-        public TrackerSettings Lostfilm = new TrackerSettings("https://www.lostfilm.tv");
+        public LostfilmSettings Lostfilm = new LostfilmSettings("https://www.lostfilm.tv");
 
         public TrackerSettings Animelayer = new TrackerSettings("https://animelayer.ru");
 

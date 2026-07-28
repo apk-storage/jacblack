@@ -5,9 +5,12 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
+using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
+using JacRed.Infrastructure.Stats;
+using Microsoft.Extensions.Logging;
 using JacRed.Models.Details;
 
 namespace JacRed.Infrastructure.Trackers.Lostfilm
@@ -234,14 +237,51 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
             };
         }
 
-        /// <summary>Статистика по раздачам lostfilm в базе: количество, с магнитом, примеры ключей.</summary>
-        public object GetStats()
+        /// <summary>
+        /// Статистика по раздачам lostfilm в базе.
+        ///
+        /// Обычный вызов отдаёт готовые счётчики, которые раз в `timeStatsUpdate`
+        /// минут считает StatsCron — он обходит базу один раз сразу для всех
+        /// трекеров. Раньше здесь шёл собственный обход **всей** базы прямо в
+        /// обработчике запроса: 260 тысяч файлов с диска мимо кеша, да ещё с
+        /// поиском по списку через `Contains` — квадратично по числу ключей.
+        ///
+        /// Список ключей — вещь отладочная и дешёвой не бывает, поэтому он
+        /// собирается только по явной просьбе: `?deep=true`.
+        /// </summary>
+        public object GetStats(bool deep = false)
         {
             if (!EnsureConfig())
                 return new { error = "conf" };
 
-            var keysWithLostfilm = new List<string>();
+            if (!deep)
+            {
+                var row = StatsSummary.ForTracker(TrackerName);
+                if (row == null)
+                {
+                    return new
+                    {
+                        note = "статистика ещё не посчитана, StatsCron обходит базу раз в " + AppInit.conf.timeStatsUpdate + " мин; для полного обхода прямо сейчас — ?deep=true",
+                        updatedAt = StatsSummary.UpdatedAt()
+                    };
+                }
+
+                return new
+                {
+                    total = row.Value<int?>("alltorrents") ?? 0,
+                    newtor = row.Value<int?>("newtor") ?? 0,
+                    updated = row.Value<int?>("update") ?? 0,
+                    lastnewtor = row.Value<string>("lastnewtor"),
+                    updatedAt = StatsSummary.UpdatedAt(),
+                    note = "готовые счётчики; ?deep=true — полный обход базы с примерами ключей"
+                };
+            }
+
+            // Полный обход: дорого и по запросу.
+            var keysWithLostfilm = new HashSet<string>(StringComparer.Ordinal);
             int total = 0, withMagnet = 0;
+            var sw = Stopwatch.StartNew();
+
             if (FileDB.masterDb != null)
             {
                 foreach (var item in FileDB.masterDb.ToArray())
@@ -252,25 +292,33 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
                         {
                             if (t.trackerName != TrackerName)
                                 continue;
+
                             total++;
                             if (!string.IsNullOrEmpty(t.magnet))
                                 withMagnet++;
-                            if (!keysWithLostfilm.Contains(item.Key))
-                                keysWithLostfilm.Add(item.Key);
+
+                            keysWithLostfilm.Add(item.Key);
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        JacRedLog.Swallowed(JacRedLogCategories.Stats, $"lostfilm: шард {item.Key} не прочитался", ex, LogLevel.Debug);
+                    }
                 }
             }
-            keysWithLostfilm.Sort();
+
+            var keys = keysWithLostfilm.ToList();
+            keys.Sort(StringComparer.Ordinal);
+
             return new
             {
                 total,
                 withMagnet,
                 withoutMagnet = total - withMagnet,
-                keysCount = keysWithLostfilm.Count,
-                keys = keysWithLostfilm.Take(50).ToArray(),
-                keysMore = keysWithLostfilm.Count > 50 ? keysWithLostfilm.Count - 50 : 0
+                keysCount = keys.Count,
+                keys = keys.Take(50).ToArray(),
+                keysMore = keys.Count > 50 ? keys.Count - 50 : 0,
+                tookSeconds = Math.Round(sw.Elapsed.TotalSeconds, 1)
             };
         }
 
@@ -398,7 +446,7 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
         async Task<(List<TorrentDetails> list, int expandFailed)> ExpandSerialEpisodesToQualities(string host, string cookie, List<TorrentDetails> list)
         {
             var result = new List<TorrentDetails>(list.Count * 2);
-            int expandFailed = 0;
+            int expandFailed = 0, reused = 0;
             int delay = AppInit.conf.Lostfilm.parseDelay;
 
             foreach (var t in list)
@@ -413,6 +461,18 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
                 }
 
                 string bareUrl = LostfilmParser.StripUrlFragment(t.url);
+
+                // Лента /new/ меняется медленно, поэтому при каждом прогоне в неё
+                // попадают те же серии. Раньше на каждую уходило до трёх запросов
+                // заново — при том, что раздача уже лежит в базе с магнитом.
+                var known = TakeKnownQualities(t, bareUrl);
+                if (known != null)
+                {
+                    result.AddRange(known);
+                    reused += known.Count;
+                    continue;
+                }
+
                 var magnets = await GetMagnetsForEpisode(host, cookie, bareUrl);
                 if (magnets.Count == 0)
                 {
@@ -429,7 +489,63 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
                     await Task.Delay(Math.Min(delay, 2000));
             }
 
+            if (reused > 0)
+                ParserLog.Write(TrackerName, $"  повторно не запрашивали: {reused} раздач уже были в базе");
+
             return (result, expandFailed);
+        }
+
+        /// <summary>
+        /// Раздачи этой серии, уже лежащие в базе с магнитом и обновлённые
+        /// недавно. Возвращает null, если их нет или они пора обновить: тогда
+        /// идём на сайт, как раньше.
+        ///
+        /// Окно в `expandReuseDays` нужно затем, что список качеств у серии
+        /// со временем пополняется — 2160p появляется позже 1080p.
+        /// </summary>
+        List<TorrentDetails> TakeKnownQualities(TorrentDetails t, string bareUrl)
+        {
+            int reuseDays = AppInit.conf.Lostfilm.expandReuseDays;
+            if (reuseDays <= 0 || string.IsNullOrEmpty(bareUrl))
+                return null;
+
+            try
+            {
+                string key = FileDB.KeyForTorrent(t.name, t.originalname);
+                if (string.IsNullOrEmpty(key))
+                    return null;
+
+                var shard = FileDB.OpenRead(key);
+                if (shard == null || shard.Count == 0)
+                    return null;
+
+                string prefix = bareUrl + "#";
+                var cutoff = DateTime.UtcNow.AddDays(-reuseDays);
+                var found = new List<TorrentDetails>();
+
+                foreach (var pair in shard)
+                {
+                    if (!pair.Key.StartsWith(prefix, StringComparison.Ordinal))
+                        continue;
+
+                    var known = pair.Value;
+                    if (known == null || string.IsNullOrEmpty(known.magnet) || known.updateTime < cutoff)
+                        return null;   // есть, но протухло — обновим с сайта
+
+                    // Качество берём из самого ключа — там оно уже в готовом виде
+                    // («…#1080p»), а не собираем заново из числового поля.
+                    string quality = pair.Key.Substring(prefix.Length);
+                    found.Add(LostfilmParser.CloneWithQuality(t, known.magnet, quality, known.sizeName));
+                }
+
+                return found.Count > 0 ? found : null;
+            }
+            catch (Exception ex)
+            {
+                // Не смогли заглянуть в базу — просто пойдём на сайт.
+                JacRedLog.Swallowed(JacRedLogCategories.Parser, $"lostfilm: не проверилось наличие {bareUrl} в базе", ex, LogLevel.Debug);
+                return null;
+            }
         }
 
         /// <summary>Собирает фильмы с /new/: ссылки на /movies/ и блоки с «Фильм» + дата. Для каждого получает V-страницу и добавляет 1080p / 2160p.</summary>

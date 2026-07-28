@@ -45,11 +45,15 @@ namespace JacRed.Controllers.Cron
             return Json(await _syncService.VerifyPageAsync(series));
         }
 
-        /// <summary>Статистика по раздачам lostfilm в базе: количество, с магнитом, примеры ключей.</summary>
+        /// <summary>
+        /// Статистика по раздачам lostfilm в базе. По умолчанию — готовые счётчики
+        /// от StatsCron. `?deep=true` запускает полный обход базы с примерами
+        /// ключей: это сотни тысяч файлов с диска, вызывать осознанно.
+        /// </summary>
         [HttpGet]
-        public IActionResult Stats()
+        public IActionResult Stats(bool deep = false)
         {
-            return Json(_syncService.GetStats());
+            return Json(_syncService.GetStats(deep));
         }
     }
 }
