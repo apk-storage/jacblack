@@ -294,7 +294,7 @@ namespace JacRed.Infrastructure.Indexers
                 CategoryDesc = catDesc,
                 Seeders = i.sid,
                 Peers = i.pir,
-                MagnetUri = i.magnet,
+                MagnetUri = Application.Search.MagnetHygiene.Clean(i.magnet),
                 ffprobe = rqnum || !AppInit.conf.tracks ? null : i.ffprobe,
                 languages = i.languages,
                 info = rqnum ? null : new TorrentInfo

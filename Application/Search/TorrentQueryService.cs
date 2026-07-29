@@ -100,7 +100,10 @@ namespace JacRed.Application.Search
             if (torrents.Count == 0)
                 return (torrents);
 
-            IEnumerable<TorrentDetails> query = torrents.Values;
+            // Одна и та же тема трекера может лежать под двумя доменами —
+            // адрес это ключ записи, а домены меняются. Для человека это
+            // просто повтор в списке.
+            IEnumerable<TorrentDetails> query = DuplicateFilter.RemoveSameTrackerDuplicates(torrents.Values, t => t);
 
             #region sort
             switch (sort ?? string.Empty)
@@ -153,7 +156,7 @@ namespace JacRed.Application.Search
                 i.updateTime,
                 i.sid,
                 i.pir,
-                i.magnet,
+                magnet = MagnetHygiene.Clean(i.magnet),
                 i.name,
                 i.originalname,
                 i.relased,
