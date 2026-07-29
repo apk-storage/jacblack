@@ -352,7 +352,12 @@ namespace JacRed.Infrastructure.Tracks
                     result.writeErrors
                 }, Formatting.Indented), Encoding.UTF8);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Сам вывод состоялся, не записалась только опись. Молчание здесь
+                // означало бы, что итог экспорта проверить нечем.
+                JacRedLog.Swallowed(JacRedLogCategories.TracksExport, "опись экспорта не записалась", ex);
+            }
 
             return result;
         }
@@ -436,7 +441,12 @@ namespace JacRed.Infrastructure.Tracks
                     result.writeErrors
                 }, Formatting.Indented), Encoding.UTF8);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Сам вывод состоялся, не записалась только опись. Молчание здесь
+                // означало бы, что итог экспорта проверить нечем.
+                JacRedLog.Swallowed(JacRedLogCategories.TracksExport, "опись экспорта не записалась", ex);
+            }
 
             return result;
         }
