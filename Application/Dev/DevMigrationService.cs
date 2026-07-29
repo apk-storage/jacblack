@@ -12,6 +12,7 @@ namespace JacRed.Application.Dev
         readonly FixAnimelayerDuplicatesMigration _fixAnimelayerDuplicates;
         readonly FixAnimeToshoNamesMigration _fixAnimeToshoNames;
         readonly FixAnimeToshoUrlsMigration _fixAnimeToshoUrls;
+        readonly FixDomainDuplicatesMigration _fixDomainDuplicates;
 
         public DevMigrationService(
             FixKnabenNamesMigration fixKnabenNames,
@@ -21,10 +22,12 @@ namespace JacRed.Application.Dev
             RemoveDuplicateAnilibertyMigration removeDuplicateAniliberty,
             FixAnimelayerDuplicatesMigration fixAnimelayerDuplicates,
             FixAnimeToshoNamesMigration fixAnimeToshoNames,
-            FixAnimeToshoUrlsMigration fixAnimeToshoUrls)
+            FixAnimeToshoUrlsMigration fixAnimeToshoUrls,
+            FixDomainDuplicatesMigration fixDomainDuplicates)
         {
             _fixAnimeToshoNames = fixAnimeToshoNames;
             _fixAnimeToshoUrls = fixAnimeToshoUrls;
+            _fixDomainDuplicates = fixDomainDuplicates;
             _fixKnabenNames = fixKnabenNames;
             _fixBitruNames = fixBitruNames;
             _cleanup = cleanup;
@@ -53,5 +56,9 @@ namespace JacRed.Application.Dev
         public object FixAnimeToshoNames() => _fixAnimeToshoNames.Run();
 
         public object FixAnimeToshoUrls() => _fixAnimeToshoUrls.Run();
+
+        /// <summary>Слияние записей, задвоившихся при смене домена трекера. dryRun считает, не трогая базу.</summary>
+        public object FixDomainDuplicates(bool dryRun) =>
+            dryRun ? _fixDomainDuplicates.DryRun() : _fixDomainDuplicates.Run();
     }
 }
