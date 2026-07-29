@@ -212,35 +212,69 @@ namespace JacRed.Application.Maintenance
             }
 
             var result = new Dictionary<string, TrackerScrapeClient.Counts>(StringComparer.OrdinalIgnoreCase);
+            var resultLock = new object();
 
-            foreach (var (announce, hashes) in byTracker.OrderByDescending(x => x.Value.Count))
-            {
-                token.ThrowIfCancellationRequested();
+            // Трекеры опрашиваем одновременно, а внутри одного — по очереди
+            // с паузой. Пауза про вежливость к конкретному трекеру, и разным
+            // трекерам она общей быть не должна: раньше из-за этого каждый
+            // мёртвый анонс стоил целого таймаута всей очереди.
+            int degree = Math.Max(1, conf.trackerConcurrency);
+            var gate = new SemaphoreSlim(degree, degree);
 
-                var unique = hashes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-                for (int i = 0; i < unique.Count; i += Math.Max(1, conf.maxHashesPerRequest))
+            var tasks = byTracker
+                .OrderByDescending(x => x.Value.Count)
+                .Select(async pair =>
                 {
-                    token.ThrowIfCancellationRequested();
+                    string announce = pair.Key;
+                    await gate.WaitAsync(token);
 
-                    var chunk = unique.Skip(i).Take(Math.Max(1, conf.maxHashesPerRequest))
-                                      .Select(FromHex).Where(b => b != null).ToList();
-                    if (chunk.Count == 0)
-                        continue;
-
-                    var answer = await TrackerScrapeClient.ScrapeAsync(announce, chunk, conf.trackerTimeoutMs, token);
-
-                    foreach (var pair in answer)
+                    try
                     {
-                        // Раздачу могут знать несколько трекеров — берём лучший ответ.
-                        if (result.TryGetValue(pair.Key, out var had) && had.Seeders >= pair.Value.Seeders)
-                            continue;
-                        result[pair.Key] = pair.Value;
-                    }
+                        var unique = pair.Value.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-                    if (conf.delayMs > 0)
-                        await Task.Delay(conf.delayMs, token);
-                }
+                        for (int i = 0; i < unique.Count; i += Math.Max(1, conf.maxHashesPerRequest))
+                        {
+                            token.ThrowIfCancellationRequested();
+
+                            var chunk = unique.Skip(i).Take(Math.Max(1, conf.maxHashesPerRequest))
+                                              .Select(FromHex).Where(b => b != null).ToList();
+                            if (chunk.Count == 0)
+                                continue;
+
+                            var answer = await TrackerScrapeClient.ScrapeAsync(announce, chunk, conf.trackerTimeoutMs, token);
+
+                            lock (resultLock)
+                            {
+                                foreach (var got in answer)
+                                {
+                                    // Раздачу могут знать несколько трекеров — берём лучший ответ.
+                                    if (result.TryGetValue(got.Key, out var had) && had.Seeders >= got.Value.Seeders)
+                                        continue;
+
+                                    result[got.Key] = got.Value;
+                                }
+                            }
+
+                            if (conf.delayMs > 0)
+                                await Task.Delay(conf.delayMs, token);
+                        }
+                    }
+                    finally
+                    {
+                        gate.Release();
+                    }
+                })
+                .ToList();
+
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (OperationCanceledException)
+            {
+                // Вышли за отведённое время: отдаём то, что успели собрать.
+                // Прежнее поведение было тем же, просто оно достигалось
+                // прерыванием единственного цикла.
             }
 
             return result;
