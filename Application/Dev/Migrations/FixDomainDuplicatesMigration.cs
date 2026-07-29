@@ -69,8 +69,15 @@ namespace JacRed.Application.Dev.Migrations
                     foreach (var kv in rows)
                     {
                         var t = kv.Value;
-                        if (t == null || string.IsNullOrEmpty(t.trackerName) || !CanonicalHost.ContainsKey(t.trackerName))
+                        if (t == null || string.IsNullOrEmpty(t.trackerName))
                             continue;
+
+                        // Раньше здесь стоял отбор только по трекерам со сменой
+                        // домена. Сплошная проверка 29.07.2026 показала, что
+                        // повторы есть и у остальных: megapeer 325 и lostfilm 235
+                        // на выборке в 71 тысячу записей. Признак «тот же трекер,
+                        // тот же хеш» работает для всех, а какой из адресов
+                        // основной — решает CanonicalHost, если он для трекера задан.
 
                         var m = RxHash.Match(t.magnet ?? "");
                         if (!m.Success)
@@ -93,13 +100,18 @@ namespace JacRed.Application.Dev.Migrations
                             continue;
 
                         string tracker = pair.Value[0].Value.trackerName;
-                        string canonical = CanonicalHost[tracker];
 
-                        // Оставляем запись на основном домене; если такой нет —
-                        // самую живую, трогать её адрес не станем.
-                        var keep = pair.Value.FirstOrDefault(kv => HostOf(kv.Key) == canonical);
+                        // Оставляем запись на основном домене, если он для этого
+                        // трекера задан. Иначе — самую живую: у остальных трекеров
+                        // двойники берутся не от смены домена, и «правильного»
+                        // адреса среди них нет, есть только более свежий.
+                        var keep = default(KeyValuePair<string, Models.Details.TorrentDetails>);
+
+                        if (CanonicalHost.TryGetValue(tracker, out string canonical))
+                            keep = pair.Value.FirstOrDefault(kv => HostOf(kv.Key) == canonical);
+
                         if (keep.Key == null)
-                            keep = pair.Value.OrderByDescending(kv => kv.Value.sid).First();
+                            keep = pair.Value.OrderByDescending(kv => kv.Value.sid).ThenByDescending(kv => kv.Value.updateTime).First();
 
                         foreach (var kv in pair.Value)
                         {
