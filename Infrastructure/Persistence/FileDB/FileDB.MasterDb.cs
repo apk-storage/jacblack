@@ -239,6 +239,38 @@ namespace JacRed.Infrastructure.Persistence
         }
         #endregion
 
+        /// <summary>
+        /// Годится ли раздача по типу содержимого.
+        ///
+        /// Лампа работает с TMDB, поэтому всё, чего в TMDB нет, до человека
+        /// не дойдёт: спортивные трансляции, книги, музыка, программы.
+        /// Замер 29.07.2026 показал в базе 2.5% спорта (около 27 тысяч
+        /// записей), почти весь с rutor — они лежали мёртвым грузом.
+        ///
+        /// Пустой список типов пропускаем: часть трекеров тип не проставляет,
+        /// и молча терять такие раздачи хуже, чем оставить лишнее.
+        /// </summary>
+        public static bool IsWantedContent(string[] types)
+        {
+            if (types == null || types.Length == 0)
+                return true;
+
+            var wanted = AppInit.conf?.contentTypes;
+            if (wanted == null || wanted.Length == 0)
+                return true;
+
+            foreach (string type in types)
+            {
+                foreach (string ok in wanted)
+                {
+                    if (string.Equals(type, ok, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
         #region AddOrUpdate
         public static void AddOrUpdate(IReadOnlyCollection<TorrentBaseDetails> torrents)
         {
@@ -251,6 +283,13 @@ namespace JacRed.Infrastructure.Persistence
 
             foreach (var torrent in torrents)
             {
+                // Берём только то, что есть в TMDB: Лампа работает с ней, и
+                // раздача, которой там нет, до человека всё равно не дойдёт.
+                // Отсекаем здесь, в единственной точке входа в базу, — тогда
+                // правило работает и для трекеров, которые появятся потом.
+                if (!IsWantedContent(torrent.types))
+                    continue;
+
                 string key = keyDb(torrent.name, torrent.originalname);
                 if (!temp.ContainsKey(key))
                     temp.Add(key, new List<T>());

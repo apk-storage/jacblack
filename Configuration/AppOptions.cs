@@ -99,6 +99,19 @@ namespace JacRed.Configuration
 
         public string[] disable_trackers = new string[] { };
 
+        /// <summary>
+        /// Типы раздач, которые вообще берём в базу.
+        ///
+        /// Лампа работает с TMDB, поэтому всё, чего в TMDB нет, до человека
+        /// не дойдёт. Спорт, книги, музыка и программы отсеиваются на входе.
+        /// Пустой список отключает отбор.
+        /// </summary>
+        public string[] contentTypes = new[]
+        {
+            "movie", "serial", "anime", "multfilm", "multserial",
+            "documovie", "docuserial", "tvshow", "dorama", "ova", "special"
+        };
+
         public bool syncsport = true;
 
         public bool syncspidr = true;
