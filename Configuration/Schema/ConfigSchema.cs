@@ -15,8 +15,8 @@ namespace JacRed.Configuration.Schema
 
         public static readonly HashSet<string> TrackerBlockNames = new HashSet<string>(StringComparer.Ordinal)
         {
-            "Rutor", "Megapeer", "TorrentBy", "Kinozal", "NNMClub", "Bitru", "Toloka", "Mazepa",
-            "Rutracker", "Selezen", "Lostfilm", "Animelayer", "Anidub", "Aniliberty", "Knaben", "Baibako"
+            "Rutor", "Megapeer", "TorrentBy", "Kinozal", "NNMClub", "Bitru", "Toloka",
+            "Rutracker", "Selezen", "Lostfilm", "Animelayer", "Anidub", "Aniliberty", "Knaben", "Nyaa"
         };
 
         public static readonly HashSet<string> SensitiveFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
