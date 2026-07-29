@@ -24,15 +24,33 @@ namespace JacRed.Application.Search
         /// Оставляет из каждой группы «трекер + хеш» одну запись — с бо́льшим
         /// числом сидов, а при равенстве более свежую.
         /// </summary>
-        public static List<T> RemoveSameTrackerDuplicates<T>(IEnumerable<T> items, Func<T, TorrentDetails> selector)
+        public static List<TorrentDetails> RemoveSameTrackerDuplicates(IEnumerable<TorrentDetails> items, Func<TorrentDetails, TorrentDetails> selector)
+            => Remove(items, t => t.trackerName, t => t.magnet, t => t.sid, t => t.updateTime);
+
+        /// <summary>
+        /// То же для выдачи индексаторов. Раньше повторы схлопывались только
+        /// в родном API — то самое, из-за чего правки разъезжаются по путям
+        /// выдачи: их три, а делаешь в одном.
+        /// </summary>
+        public static List<Models.Api.Result> RemoveSameTrackerDuplicates(IEnumerable<Models.Api.Result> items)
+            => Remove(items, r => r.Tracker, r => r.MagnetUri, r => r.Seeders, r => r.PublishDate);
+
+        static List<T> Remove<T>(
+            IEnumerable<T> items,
+            Func<T, string> trackerOf,
+            Func<T, string> magnetOf,
+            Func<T, int> seedersOf,
+            Func<T, DateTime> updatedOf)
         {
-            var best = new Dictionary<string, (T item, TorrentDetails details)>(StringComparer.OrdinalIgnoreCase);
+            if (items == null)
+                return new List<T>();
+
+            var best = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
             var result = new List<T>();
 
             foreach (var raw in items)
             {
-                var t = selector(raw);
-                string key = KeyOf(t);
+                string key = KeyOf(trackerOf(raw), magnetOf(raw));
 
                 if (key == null)
                 {
@@ -43,38 +61,32 @@ namespace JacRed.Application.Search
 
                 if (!best.TryGetValue(key, out var had))
                 {
-                    best[key] = (raw, t);
+                    best[key] = raw;
                     continue;
                 }
 
-                if (IsBetter(t, had.details))
-                    best[key] = (raw, t);
+                if (seedersOf(raw) != seedersOf(had)
+                    ? seedersOf(raw) > seedersOf(had)
+                    : updatedOf(raw) > updatedOf(had))
+                {
+                    best[key] = raw;
+                }
             }
 
-            foreach (var pair in best.Values)
-                result.Add(pair.item);
-
+            result.AddRange(best.Values);
             return result;
         }
 
-        static string KeyOf(TorrentDetails t)
+        static string KeyOf(string tracker, string magnet)
         {
-            if (t == null || string.IsNullOrEmpty(t.magnet))
+            if (string.IsNullOrEmpty(magnet))
                 return null;
 
-            var m = RxHash.Match(t.magnet);
+            var m = RxHash.Match(magnet);
             if (!m.Success)
                 return null;
 
-            return (t.trackerName ?? "?") + ":" + m.Groups[1].Value.ToLowerInvariant();
-        }
-
-        static bool IsBetter(TorrentDetails candidate, TorrentDetails current)
-        {
-            if (candidate.sid != current.sid)
-                return candidate.sid > current.sid;
-
-            return candidate.updateTime > current.updateTime;
+            return (tracker ?? "?") + ":" + m.Groups[1].Value.ToLowerInvariant();
         }
     }
 }

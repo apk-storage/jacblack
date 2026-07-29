@@ -16,10 +16,12 @@ namespace JacRed.Controllers
     public class TorznabController : BaseController
     {
         readonly IJackettSearchService _searchService;
+        readonly ILiveSeeders _liveSeeders;
 
-        public TorznabController(IMemoryCache memoryCache, IJackettSearchService searchService) : base(memoryCache)
+        public TorznabController(IMemoryCache memoryCache, IJackettSearchService searchService, ILiveSeeders liveSeeders) : base(memoryCache)
         {
             _searchService = searchService;
+            _liveSeeders = liveSeeders;
         }
 
         public static bool IsTorznabXmlEnabled() =>
@@ -61,7 +63,7 @@ namespace JacRed.Controllers
                 return XmlSearchResult(new List<Result>(), t, query, origin, torznabApiUrl);
 
             var req = IndexerSearchHelper.BuildRequest(query, apikey, rqnum: false, boundQuery: resolvedQuery);
-            var results = await IndexerSearchEngine.SearchCombinedAsync(req, memoryCache, _searchService);
+            var results = await IndexerSearchEngine.SearchCombinedAsync(req, memoryCache, _searchService, _liveSeeders);
             results = IndexerSearchHelper.ApplyPostFilters(results, query, req, t);
             return XmlSearchResult(results, t, query, origin, torznabApiUrl);
         }
@@ -92,10 +94,12 @@ namespace JacRed.Controllers
     public class JackettMetaController : BaseController
     {
         readonly IJackettSearchService _searchService;
+        readonly ILiveSeeders _liveSeeders;
 
-        public JackettMetaController(IMemoryCache memoryCache, IJackettSearchService searchService) : base(memoryCache)
+        public JackettMetaController(IMemoryCache memoryCache, IJackettSearchService searchService, ILiveSeeders liveSeeders) : base(memoryCache)
         {
             _searchService = searchService;
+            _liveSeeders = liveSeeders;
         }
 
         [Route("/api/v2.0/indexers")]
@@ -230,7 +234,7 @@ namespace JacRed.Controllers
             if (!string.IsNullOrWhiteSpace(parsed.Genre) && string.IsNullOrWhiteSpace(req.Genres))
                 req.Genres = parsed.Genre;
 
-            var results = await IndexerSearchEngine.SearchCombinedAsync(req, memoryCache, _searchService);
+            var results = await IndexerSearchEngine.SearchCombinedAsync(req, memoryCache, _searchService, _liveSeeders);
             results = IndexerSearchHelper.ApplyPostFilters(results, query, req, torznabAction);
 
             bool enrich = AppInit.conf.torznab?.enrichTitles ?? true;
