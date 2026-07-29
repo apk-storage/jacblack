@@ -4,7 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Application.Maintenance;
+using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Persistence;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -26,11 +28,65 @@ namespace JacRed.Controllers.Cron
             return Json(await _sweep.RunAsync(cancellationToken));
         }
 
+        const string StatsCachePath = "Data/temp/sweep-stats.json";
+
         /// <summary>
-        /// Сколько раздач сколько раз подряд показали ноль. Полный обход базы,
-        /// поэтому дёргать вручную, а не по расписанию.
+        /// Сколько раздач сколько раз подряд показали ноль.
+        ///
+        /// Это полный обход базы: на 1.27 миллиона раздач он занимает две с
+        /// половиной минуты и держит поток запроса всё это время. Поэтому по
+        /// умолчанию отдаётся последний посчитанный отчёт, а пересчёт идёт
+        /// только по явной просьбе — `?fresh=true`.
         /// </summary>
-        public JsonResult Stats()
+        public IActionResult Stats(bool fresh = false)
+        {
+            if (!fresh)
+            {
+                var cached = ReadCachedStats();
+                if (cached != null)
+                {
+                    // Отдаём готовым текстом, а не через Json(): у приложения
+                    // системный сериализатор, и JObject от Newtonsoft он
+                    // превращает в пустые массивы — на этом я и попался.
+                    return Content(cached.ToString(Newtonsoft.Json.Formatting.None), "application/json; charset=utf-8");
+                }
+            }
+
+            var report = BuildStats();
+
+            try
+            {
+                System.IO.File.WriteAllText(StatsCachePath,
+                    Newtonsoft.Json.JsonConvert.SerializeObject(report, Newtonsoft.Json.Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "отчёт проверки живости не сохранился", ex);
+            }
+
+            return Json(report);
+        }
+
+        static Newtonsoft.Json.Linq.JObject ReadCachedStats()
+        {
+            try
+            {
+                if (!System.IO.File.Exists(StatsCachePath))
+                    return null;
+
+                var jo = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(StatsCachePath));
+                jo["посчитано"] = System.IO.File.GetLastWriteTimeUtc(StatsCachePath);
+                jo["подсказка"] = "это последний посчитанный отчёт; пересчёт — ?fresh=true, он обходит всю базу";
+                return jo;
+            }
+            catch (Exception ex)
+            {
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "отчёт проверки живости не прочитался", ex, LogLevel.Debug);
+                return null;
+            }
+        }
+
+        object BuildStats()
         {
             var byCount = new SortedDictionary<int, int>();
             var deadByTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -65,7 +121,7 @@ namespace JacRed.Controllers.Cron
                 }
             }
 
-            return Json(new
+            return new
             {
                 ok = true,
                 порог = threshold,
@@ -82,7 +138,7 @@ namespace JacRed.Controllers.Cron
                         всего = x.Value,
                         мёртвых = deadByTracker.GetValueOrDefault(x.Key)
                     })
-            });
+            };
         }
     }
 }
