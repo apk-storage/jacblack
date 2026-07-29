@@ -200,7 +200,10 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                             {
                                 _cookie = cookieHeader;
                                 _lastLoginError = null;
-                                ParserLog.Write(TrackerName, $"TakeLogin OK {_cookie}");
+                                // Раньше сюда писалась сама cookie целиком — то есть
+                                // логин и пароль сессии ложились в файл лога открытым
+                                // текстом. Полезного в этом ничего: важен лишь факт входа.
+                                ParserLog.Write(TrackerName, "TakeLogin OK");
                                 return true;
                             }
 
