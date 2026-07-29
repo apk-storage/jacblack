@@ -8,6 +8,7 @@ using JacRed.Infrastructure.Trackers.Knaben;
 using JacRed.Infrastructure.Trackers.Lostfilm;
 using JacRed.Infrastructure.Trackers.Megapeer;
 using JacRed.Infrastructure.Trackers.NNMClub;
+using JacRed.Infrastructure.Trackers.PirateBay;
 using JacRed.Infrastructure.Trackers.Nyaa;
 using JacRed.Infrastructure.Trackers.Rutor;
 using JacRed.Infrastructure.Trackers.Rutracker;
@@ -26,6 +27,7 @@ namespace JacRed.Infrastructure.Trackers
             services.AddSingleton<AnimeLayerSyncService>();
             services.AddSingleton<AnimeToshoSyncService>();
             services.AddSingleton<NyaaSyncService>();
+            services.AddSingleton<PirateBaySyncService>();
             services.AddSingleton<AnilibertySyncService>();
             services.AddSingleton<LostfilmSyncService>();
             services.AddSingleton<RutrackerSyncService>();
