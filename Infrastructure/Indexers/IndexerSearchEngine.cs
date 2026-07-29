@@ -286,7 +286,7 @@ namespace JacRed.Infrastructure.Indexers
             return new Result
             {
                 Tracker = i.trackerName,
-                Details = i.url != null && i.url.StartsWith("http") ? i.url : null,
+                Details = i.url != null && i.url.StartsWith("http") ? Application.Search.TrackerUrlHygiene.Canonical(i.url) : null,
                 Title = i.title,
                 Size = i.size,
                 PublishDate = i.createTime,

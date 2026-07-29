@@ -145,7 +145,7 @@ namespace JacRed.Application.Search
             return (query.Take(2_000).Select(i => new
             {
                 tracker = i.trackerName,
-                url = i.url != null && i.url.StartsWith("http") ? i.url : null,
+                url = i.url != null && i.url.StartsWith("http") ? TrackerUrlHygiene.Canonical(i.url) : null,
                 i.title,
                 i.size,
                 i.sizeName,

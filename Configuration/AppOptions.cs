@@ -166,6 +166,8 @@ namespace JacRed.Configuration
 
         public MagnetSettings magnet = new MagnetSettings();
 
+        public UrlHygieneSettings urlhygiene = new UrlHygieneSettings();
+
         public ScrapeSettings scrape = new ScrapeSettings();
 
         public TlsSettings tls = new TlsSettings();
