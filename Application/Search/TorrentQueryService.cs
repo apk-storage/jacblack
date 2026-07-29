@@ -13,6 +13,13 @@ namespace JacRed.Application.Search
 {
     public class TorrentQueryService : ITorrentQueryService
     {
+        readonly ILiveSeeders _liveSeeders;
+
+        public TorrentQueryService(ILiveSeeders liveSeeders)
+        {
+            _liveSeeders = liveSeeders;
+        }
+
         public async Task<object> QueryTorrentsAsync(string search, string altname, bool exact, string type, string sort, string tracker, string voice, string videotype, long relased, long quality, long season, IMemoryCache memoryCache)
         {
             #region search kp/imdb
@@ -103,7 +110,15 @@ namespace JacRed.Application.Search
             // Одна и та же тема трекера может лежать под двумя доменами —
             // адрес это ключ записи, а домены меняются. Для человека это
             // просто повтор в списке.
-            IEnumerable<TorrentDetails> query = DuplicateFilter.RemoveSameTrackerDuplicates(torrents.Values, t => t);
+            var deduped = DuplicateFilter.RemoveSameTrackerDuplicates(torrents.Values, t => t);
+
+            // Сиды из базы могут быть годовалой давности. Опрашиваем трекеры
+            // и подменяем на живые — раньше это делалось только для выдачи
+            // индексаторов, а Лампа ходит сюда.
+            if (_liveSeeders != null)
+                deduped = await _liveSeeders.ApplyAsync(deduped);
+
+            IEnumerable<TorrentDetails> query = deduped;
 
             #region sort
             switch (sort ?? string.Empty)
