@@ -14,7 +14,7 @@ namespace JacRed.Infrastructure.Indexers
 {
     public static class IndexerSearchEngine
     {
-        public static async Task<List<Result>> SearchCombinedAsync(IndexerSearchRequest req, IMemoryCache cache, IJackettSearchService jackettSearch)
+        public static async Task<List<Result>> SearchCombinedAsync(IndexerSearchRequest req, IMemoryCache cache, IJackettSearchService jackettSearch, ILiveSeeders liveSeeders = null)
         {
             var settings = IndexerSearchOptions.Resolve();
             string query = IndexerRequestParams.NormalizeQuery(req.Query);
@@ -34,7 +34,7 @@ namespace JacRed.Infrastructure.Indexers
             if (imdbMode)
             {
                 batches.Add(await V1SearchAsync(query, null, exact: true, settings.v1Sort, req.Trackers, req.Season, cache, req.RqNum));
-                return IndexerResultMerger.MergeAndSort(batches.ToArray());
+                return await FinishAsync(batches, liveSeeders);
             }
 
             var category = BuildCategoryDict(req.Categories);
@@ -59,7 +59,23 @@ namespace JacRed.Infrastructure.Indexers
             foreach (var pair in V1Pairs(query, titleRu, titleEn, settings, req.CardMode))
                 batches.Add(await V1SearchAsync(pair.search, pair.altname, exact: false, settings.v1Sort, req.Trackers, req.Season, cache, req.RqNum));
 
-            return IndexerResultMerger.MergeAndSort(batches.ToArray());
+            return await FinishAsync(batches, liveSeeders);
+        }
+
+        /// <summary>
+        /// Общая доводка выдачи индексаторов: схлопнуть повторы и подменить сиды
+        /// на живые. Раньше повторы убирались только в родном API, а живые сиды
+        /// не доходили до пути Prowlarr — правки разъезжались по трём выдачам.
+        /// </summary>
+        static async Task<List<Result>> FinishAsync(List<IEnumerable<Result>> batches, ILiveSeeders liveSeeders)
+        {
+            var merged = IndexerResultMerger.MergeAndSort(batches.ToArray());
+            merged = DuplicateFilter.RemoveSameTrackerDuplicates(merged);
+
+            if (liveSeeders != null)
+                merged = await liveSeeders.ApplyAsync(merged);
+
+            return merged;
         }
 
         static Dictionary<string, string> BuildCategoryDict(List<int> categories)
