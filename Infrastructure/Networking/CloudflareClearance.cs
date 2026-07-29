@@ -31,8 +31,16 @@ namespace JacRed.Infrastructure.Networking
     {
         const string SessionName = "jacblack";
 
+        sealed class GuardState
+        {
+            public DateTime Since;
+
+            /// <summary>Когда последний раз давали дешёвому пути шанс.</summary>
+            public DateTime LastProbe;
+        }
+
         /// <summary>Хосты, про которые уже известно, что они за проверкой: туда идём сразу браузером.</summary>
-        static readonly ConcurrentDictionary<string, DateTime> _guarded = new(StringComparer.OrdinalIgnoreCase);
+        static readonly ConcurrentDictionary<string, GuardState> _guarded = new(StringComparer.OrdinalIgnoreCase);
 
         // Браузер на машине один, и ядер всего два. Запросы к нему строго по очереди:
         // параллельные вызовы разгоняли нагрузку до 22 при двух ядрах.
@@ -62,6 +70,7 @@ namespace JacRed.Infrastructure.Networking
             public readonly int MaxTimeoutMs;
             public readonly int SessionIdleMinutes;
             public readonly int GuardedHours;
+            public readonly int RecheckMinutes;
 
             public FlareSolverrSettingsView(Models.AppConf.FlareSolverrSettings c)
             {
@@ -69,6 +78,7 @@ namespace JacRed.Infrastructure.Networking
                 MaxTimeoutMs = c.maxTimeoutMs;
                 SessionIdleMinutes = c.sessionIdleMinutes;
                 GuardedHours = c.guardedHours;
+                RecheckMinutes = c.recheckMinutes;
             }
         }
 
@@ -94,13 +104,27 @@ namespace JacRed.Infrastructure.Networking
             if (conf.Url == null || string.IsNullOrWhiteSpace(host))
                 return false;
 
-            if (!_guarded.TryGetValue(host, out var since))
+            if (!_guarded.TryGetValue(host, out var state))
                 return false;
 
+            var now = DateTime.UtcNow;
+
             // Отметка не вечная: защиту могут снять, и тогда дешёвый путь вернётся.
-            if (DateTime.UtcNow > since.AddHours(conf.GuardedHours))
+            if (now > state.Since.AddHours(conf.GuardedHours))
             {
                 _guarded.TryRemove(host, out _);
+                return false;
+            }
+
+            // Раз в recheckMinutes пропускаем один запрос обычным путём.
+            // Без этого мы гоняли браузер все шесть часов подряд, даже если
+            // трекер снял проверку через десять минут — так и случилось
+            // 29.07.2026 с nnmclub: он давно отвечал 200, а мы всё ходили
+            // через Chromium. Ошибиться тут дёшево: не пройдёт — вернёмся
+            // к браузеру той же попыткой.
+            if (now > state.LastProbe.AddMinutes(conf.RecheckMinutes))
+            {
+                state.LastProbe = now;
                 return false;
             }
 
@@ -112,8 +136,18 @@ namespace JacRed.Infrastructure.Networking
             if (string.IsNullOrWhiteSpace(host))
                 return;
 
-            if (_guarded.TryAdd(host, DateTime.UtcNow))
-                JacRedLog.Warning(JacRedLogCategories.Host, $"{host} закрыт проверкой Cloudflare, переходим на браузер");
+            var now = DateTime.UtcNow;
+
+            if (_guarded.TryGetValue(host, out var state))
+            {
+                // Проба показала, что проверка на месте — отсчёт заново.
+                state.Since = now;
+                state.LastProbe = now;
+                return;
+            }
+
+            _guarded[host] = new GuardState { Since = now, LastProbe = now };
+            JacRedLog.Warning(JacRedLogCategories.Host, $"{host} закрыт проверкой Cloudflare, переходим на браузер");
         }
 
         /// <summary>Снять отметку вручную.</summary>
