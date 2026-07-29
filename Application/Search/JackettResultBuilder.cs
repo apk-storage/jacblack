@@ -259,7 +259,7 @@ namespace JacRed.Application.Search
                 Results.Add(new Result()
                 {
                     Tracker = i.trackerName,
-                    Details = i.url != null && i.url.StartsWith("http") ? i.url : null,
+                    Details = i.url != null && i.url.StartsWith("http") ? TrackerUrlHygiene.Canonical(i.url) : null,
                     Title = i.title,
                     Size = i.size,
                     PublishDate = i.createTime,
