@@ -185,21 +185,38 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
             return "ok";
         }
 
+        /// <summary>Записывает очередь на диск: без этого ход обхода теряется при перезапуске.</summary>
+        static void SaveTaskParse()
+            => IO.File.WriteAllText("Data/temp/rutracker_taskParse.json", JsonConvert.SerializeObject(taskParse));
+
         public async Task<string> ParseAllTaskAsync()
         {
             return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: false, async () =>
             {
+                var progress = new TrackerQueueProgress(TrackerName, SaveTaskParse,
+                    taskParse.Sum(i => i.Value.Count));
+
                 foreach (var task in taskParse.ToArray())
                 {
                     foreach (var val in task.Value.ToArray())
                     {
+                        // У остальных трекеров разобранная сегодня страница
+                        // пропускается, а здесь этой проверки не было — обход
+                        // ходил бы по кругу за одно и то же.
+                        if (DateTime.Today == val.updateTime)
+                            continue;
+
                         await Task.Delay(AppInit.conf.Rutracker.parseDelay);
 
                         bool res = await parsePage(task.Key, val.page);
                         if (res)
                             val.updateTime = DateTime.Today;
+
+                        progress.PageDone(res);
                     }
                 }
+
+                progress.Finish();
             });
         }
 

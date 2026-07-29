@@ -316,10 +316,17 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
             return "ok";
         }
 
+        /// <summary>Записывает очередь на диск: без этого ход обхода теряется при перезапуске.</summary>
+        static void SaveTaskParse()
+            => IO.File.WriteAllText("Data/temp/kinozal_taskParse.json", JsonConvert.SerializeObject(taskParse));
+
         public async Task<string> ParseAllTaskAsync()
         {
             return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: false, async () =>
             {
+                var progress = new TrackerQueueProgress(TrackerName, SaveTaskParse,
+                    taskParse.Sum(c => c.Value.Sum(a => a.Value.Count)));
+
                 foreach (var cat in taskParse.ToArray())
                 {
                     foreach (var arg in cat.Value.ToArray())
@@ -334,9 +341,13 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                             bool res = await parsePage(cat.Key, val.page, arg.Key);
                             if (res)
                                 val.updateTime = DateTime.Today;
+
+                            progress.PageDone(res);
                         }
                     }
                 }
+
+                progress.Finish();
             });
         }
 

@@ -98,10 +98,17 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
             return "ok";
         }
 
+        /// <summary>Записывает очередь на диск: без этого ход обхода теряется при перезапуске.</summary>
+        static void SaveTaskParse()
+            => IO.File.WriteAllText("Data/temp/megapeer_taskParse.json", JsonConvert.SerializeObject(taskParse));
+
         public async Task<string> ParseAllTaskAsync(CancellationToken cancellationToken = default)
         {
             return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: true, async () =>
             {
+                var progress = new TrackerQueueProgress(TrackerName, SaveTaskParse,
+                    taskParse.Sum(i => i.Value.Count));
+
                 foreach (var task in taskParse.ToArray())
                 {
                     foreach (var val in task.Value.ToArray())
@@ -112,8 +119,12 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
                         bool res = await MegapeerParser.ParsePageAsync(task.Key, val.page);
                         if (res)
                             val.updateTime = DateTime.Today;
+
+                        progress.PageDone(res);
                     }
                 }
+
+                progress.Finish();
             }, cancellationToken);
         }
 

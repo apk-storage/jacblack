@@ -6,6 +6,7 @@
 
 using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Parsing;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -146,7 +147,15 @@ namespace JacRed.Infrastructure.Trackers
             {
                 throw;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Глубокий обход идёт часами. Раньше сбой на любой странице
+                // обрывал его молча, и со стороны это выглядело как «прошёл
+                // до конца»: очередь оставалась неразобранной без единого
+                // слова в логе.
+                ParserLog.Write(trackerName, $"глубокий обход прерван: {ex.GetType().Name}: {ex.Message}");
+                JacRedLog.Swallowed(JacRedLogCategories.Parser, $"{trackerName}: глубокий обход прерван", ex, LogLevel.Error);
+            }
             finally
             {
                 workFlag.End();
