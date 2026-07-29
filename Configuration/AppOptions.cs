@@ -156,6 +156,10 @@ namespace JacRed.Configuration
         // Хеш приходит прямо в ленте, поэтому magnet собирается без лишних запросов.
         public TrackerSettings Nyaa = new TrackerSettings("https://nyaa.si", reqMinute: 20);
 
+        // Массовый источник: сиды на два порядка выше наших. Русской озвучки
+        // почти нет, но в Лампе есть фильтр по трекерам.
+        public TrackerSettings PirateBay = new TrackerSettings("https://apibay.org", reqMinute: 30);
+
         public ProxySettings proxy = new ProxySettings();
 
         public SearchSettings search = new SearchSettings();
