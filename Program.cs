@@ -60,7 +60,7 @@ namespace JacRed
             // (Regex.Match(строка, шаблон)), а кеш .NET по умолчанию — 15 записей.
             // Кеш непрерывно вытесняется, и почти каждый вызов компилирует шаблон
             // заново. Правильное решение — статические поля с RegexOptions.Compiled,
-            // как у Baibako и Kinozal; до тех пор эта строка снимает основную потерю.
+            // как у Kinozal; до тех пор эта строка снимает основную потерю.
             System.Text.RegularExpressions.Regex.CacheSize = 256;
 
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -135,7 +135,6 @@ namespace JacRed
 
             builder.Services.AddHostedService<FastDbRefreshWorker>();
             builder.Services.AddHostedService<SyncWorker>();
-            builder.Services.AddHostedService<TrackersWorker>();
             builder.Services.AddHostedService<StatsWorker>();
             builder.Services.AddHostedService<FileDbWorker>();
             builder.Services.AddHostedService<TracksWorker>();

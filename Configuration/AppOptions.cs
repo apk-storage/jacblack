@@ -132,7 +132,6 @@ namespace JacRed.Configuration
 
         public TrackerSettings Toloka = new TrackerSettings("https://toloka.to");
 
-        public TrackerSettings Mazepa = new TrackerSettings("https://mazepa.to");
 
         public TrackerSettings Rutracker = new TrackerSettings("https://rutracker.org");
 
@@ -156,9 +155,6 @@ namespace JacRed.Configuration
         // Источник аниме взамен вставшего AnimeTosho, который был витриной над ним.
         // Хеш приходит прямо в ленте, поэтому magnet собирается без лишних запросов.
         public TrackerSettings Nyaa = new TrackerSettings("https://nyaa.si", reqMinute: 20);
-
-        // TODO: fix parser
-        public TrackerSettings Baibako = new TrackerSettings("http://baibako.tv");
 
         public ProxySettings proxy = new ProxySettings();
 

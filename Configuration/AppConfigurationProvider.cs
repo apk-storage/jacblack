@@ -75,12 +75,10 @@ namespace JacRed.Configuration
                 case "anidub": return config.Anidub.log;
                 case "aniliberty": return config.Aniliberty.log;
                 case "animelayer": return config.Animelayer.log;
-                case "baibako": return config.Baibako.log;
                 case "bitru": return config.Bitru.log;
                 case "knaben": return config.Knaben.log;
                 case "kinozal": return config.Kinozal.log;
                 case "lostfilm": return config.Lostfilm.log;
-                case "mazepa": return config.Mazepa.log;
                 case "megapeer": return config.Megapeer.log;
                 case "nnmclub": return config.NNMClub.log;
                 case "rutor": return config.Rutor.log;
