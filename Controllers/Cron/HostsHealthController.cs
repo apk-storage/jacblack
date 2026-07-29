@@ -95,8 +95,62 @@ namespace JacRed.Controllers.Cron
                 посмотреноШардов = Math.Min(sample, keys.Length),
                 доменов = hosts.Count,
                 мёртвые = dead,
-                живые = alive
+                живые = alive,
+                анонсы = await CheckDefaultTrackersAsync(cancellationToken)
             });
+        }
+
+        /// <summary>
+        /// Проверяет трекеры, которые мы САМИ дописываем в ссылки без анонсов.
+        ///
+        /// Их пять, и они уходят в 262 тысячи раздач kinozal и nnmclub. Если
+        /// один умрёт, мы будем дописывать мёртвый адрес всем подряд и никогда
+        /// об этом не узнаем — как это уже вышло с доменом kinozal.tv.
+        /// </summary>
+        async Task<object> CheckDefaultTrackersAsync(CancellationToken cancellationToken)
+        {
+            var conf = AppInit.conf?.magnet;
+            var list = conf?.defaultTrackers;
+
+            if (conf == null || !conf.addDefaultTrackers || list == null || list.Count == 0)
+                return new { note = "дописывание анонсов выключено" };
+
+            var alive = new List<string>();
+            var silent = new List<string>();
+
+            // Пустой запрос: нам нужен сам факт ответа, а не числа.
+            var probe = new List<byte[]> { new byte[20] };
+
+            foreach (string announce in list)
+            {
+                if (string.IsNullOrWhiteSpace(announce))
+                    continue;
+
+                try
+                {
+                    var answer = await Infrastructure.Networking.TrackerScrapeClient
+                        .ScrapeAsync(announce, probe, 4000, cancellationToken);
+
+                    // Ответ есть — трекер жив, даже если про эту раздачу не знает.
+                    if (answer != null)
+                        alive.Add(announce);
+                    else
+                        silent.Add(announce);
+                }
+                catch (Exception)
+                {
+                    silent.Add(announce);
+                }
+            }
+
+            foreach (string announce in silent)
+            {
+                JacRedLog.Warning(JacRedLogCategories.Host,
+                    $"анонс {announce} не отвечает, а мы дописываем его в ссылки без трекеров. " +
+                    "Замените в magnet.defaultTrackers, иначе клиент будет стучаться в пустоту");
+            }
+
+            return new { живых = alive.Count, молчат = silent };
         }
 
         static string HostOf(string url)
