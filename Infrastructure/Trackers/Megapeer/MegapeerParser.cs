@@ -74,10 +74,45 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
         {
             string html = await GetMegapeerBrowsePage($"{AppInit.conf.Megapeer.rqHost()}/browse.php?cat={cat}&page={page}", cat);
 
-            if (html == null || !html.Contains(BrowsePageValidMarker))
+            var torrents = ParseTorrentsFromPage(html, cat);
+            if (torrents.Count == 0)
                 return false;
 
+            await FileDB.AddOrUpdate(torrents, async (t, db) =>
+            {
+                if (db.TryGetValue(t.url, out TorrentDetails _tcache) && _tcache.title == t.title)
+                    return true;
+
+                byte[] _t = await HttpClient.Download($"{AppInit.conf.Megapeer.host}/download/{t.downloadId}", referer: AppInit.conf.Megapeer.host);
+                string magnet = BencodeTo.Magnet(_t);
+
+                if (!string.IsNullOrWhiteSpace(magnet))
+                {
+                    t.magnet = magnet;
+                    return true;
+                }
+
+                return false;
+            });
+
+            return torrents.Count > 0;
+        }
+
+        /// <summary>
+        /// Разбор страницы списка, отделённый от загрузки.
+        ///
+        /// Раньше разбор жил внутри ParsePageAsync вперемешку с запросом
+        /// и записью в базу — проверить его снимком страницы было нельзя,
+        /// и Megapeer оставался единственным трекером без тестов на разбор.
+        /// Magnet здесь не добывается: он лежит в torrent-файле, за которым
+        /// всё равно нужен отдельный запрос.
+        /// </summary>
+        public static List<MegapeerDetails> ParseTorrentsFromPage(string html, string cat)
+        {
             var torrents = new List<MegapeerDetails>();
+
+            if (html == null || !html.Contains(BrowsePageValidMarker))
+                return torrents;
 
             foreach (string row in html.Split("class=\"table_fon\"").Skip(1))
             {
@@ -88,7 +123,12 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
                     return res.Replace(" ", " ").Trim();
                 }
 
-                DateTime createTime = tParse.ParseCreateTime(Match("<td>([0-9]+ [^ ]+ [0-9]+)</td><td>"), "dd.MM.yy");
+                // Раньше здесь требовалось, чтобы сразу за ячейкой с датой шло
+                // ровно «<td>». На живой странице у следующей ячейки почти всегда
+                // есть атрибуты, поэтому дату находило лишь в 6 строках из 50 —
+                // остальные 44 молча отбрасывались. Замер на снимке страницы
+                // 29.07.2026: было 6, стало 50.
+                DateTime createTime = tParse.ParseCreateTime(Match(@"<td>([0-9]+ [^ <]+ [0-9]+)</td>\s*<td"), "dd.MM.yy");
                 if (createTime == default)
                     continue;
 
@@ -291,24 +331,7 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
                 }
             }
 
-            await FileDB.AddOrUpdate(torrents, async (t, db) =>
-            {
-                if (db.TryGetValue(t.url, out TorrentDetails _tcache) && _tcache.title == t.title)
-                    return true;
-
-                byte[] _t = await HttpClient.Download($"{AppInit.conf.Megapeer.host}/download/{t.downloadId}", referer: AppInit.conf.Megapeer.host);
-                string magnet = BencodeTo.Magnet(_t);
-
-                if (!string.IsNullOrWhiteSpace(magnet))
-                {
-                    t.magnet = magnet;
-                    return true;
-                }
-
-                return false;
-            });
-
-            return torrents.Count > 0;
+            return torrents;
         }
     }
 }
