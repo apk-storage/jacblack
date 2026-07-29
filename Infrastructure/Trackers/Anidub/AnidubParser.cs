@@ -45,7 +45,7 @@ namespace JacRed.Infrastructure.Trackers.Anidub
             {
                 string Match(string pattern, int index = 1)
                 {
-                    string res = new Regex(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim();
+                    string res = JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim();
                     res = Regex.Replace(res, "[\n\r\t ]+", " ");
                     return res.Trim();
                 }
