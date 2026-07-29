@@ -14,10 +14,58 @@ namespace JacRed.Application.Search
     public class TorrentQueryService : ITorrentQueryService
     {
         readonly ILiveSeeders _liveSeeders;
+        readonly JacRed.Application.Index.IFastDbIndex _fastDbIndex;
 
-        public TorrentQueryService(ILiveSeeders liveSeeders)
+        public TorrentQueryService(ILiveSeeders liveSeeders, JacRed.Application.Index.IFastDbIndex fastDbIndex)
         {
             _liveSeeders = liveSeeders;
+            _fastDbIndex = fastDbIndex;
+        }
+
+        /// <summary>
+        /// Ключи базы, у которых одна из половин точно равна искомому имени.
+        ///
+        /// Индекс FastDb хранит обе половины ключа отдельно, поэтому здесь
+        /// достаточно двух обращений по словарю вместо обхода всех ключей.
+        /// Если индекс почему-то пуст — откатываемся на обход, но уже с
+        /// побайтовым сравнением и без лишних строк на каждый ключ.
+        /// </summary>
+        IEnumerable<string> ExactKeys(string search, string altsearch)
+        {
+            var index = _fastDbIndex?.Get();
+
+            if (index != null && index.Count > 0)
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (string name in new[] { search, altsearch })
+                {
+                    if (string.IsNullOrEmpty(name) || !index.TryGetValue(name, out var keys))
+                        continue;
+
+                    foreach (string key in keys)
+                    {
+                        if (seen.Add(key))
+                            yield return key;
+                    }
+                }
+
+                yield break;
+            }
+
+            string prefix = search == null ? null : search + ":";
+            string suffix = search == null ? null : ":" + search;
+
+            foreach (var item in FileDB.masterDb)
+            {
+                bool hit =
+                    (prefix != null && (item.Key.StartsWith(prefix, StringComparison.Ordinal) ||
+                                        item.Key.EndsWith(suffix, StringComparison.Ordinal))) ||
+                    (altsearch != null && item.Key.Contains(altsearch, StringComparison.Ordinal));
+
+                if (hit)
+                    yield return item.Key;
+            }
         }
 
         public async Task<object> QueryTorrentsAsync(string search, string altname, bool exact, string type, string sort, string tracker, string voice, string videotype, long relased, long quality, long season, IMemoryCache memoryCache)
@@ -62,9 +110,16 @@ namespace JacRed.Application.Search
             if (exact)
             {
                 #region Точный поиск
-                foreach (var mdb in FileDB.masterDb.Where(i => (_s != null && (i.Key.StartsWith($"{_s}:") || i.Key.EndsWith($":{_s}"))) || (_altsearch != null && i.Key.Contains(_altsearch))))
+                // Ключ базы это «имя:оригинальноеимя», и индекс FastDb как раз
+                // хранит обе половины отдельно. Раньше здесь шёл перебор всех
+                // 296 тысяч ключей, причём внутри проверки на КАЖДЫЙ ключ
+                // строились две новые строки ($"{_s}:") и сравнение шло с учётом
+                // культуры. Замер 29.07.2026: пустой точный запрос занимал
+                // 1401 мс против 184 мс у нечёткого. Теперь это выборка по
+                // индексу — сразу нужные ключи, без обхода.
+                foreach (string key in ExactKeys(_s, _altsearch))
                 {
-                    foreach (var t in FileDB.OpenRead(mdb.Key, true).Values)
+                    foreach (var t in FileDB.OpenRead(key, true).Values)
                     {
                         if (t.types == null)
                             continue;
@@ -85,7 +140,12 @@ namespace JacRed.Application.Search
             else
             {
                 #region Поиск по совпадению ключа в имени
-                var mdb = FileDB.masterDb.Where(i => (_s != null && i.Key.Contains(_s)) || (_altsearch != null && i.Key.Contains(_altsearch)));
+                // Здесь обход неизбежен: ищем подстроку, а индекс хранит целые
+                // половины ключа. Но сравнение — побайтовое: по умолчанию
+                // Contains у строк учитывает культуру и работает заметно дольше.
+                var mdb = FileDB.masterDb.Where(i =>
+                    (_s != null && i.Key.Contains(_s, StringComparison.Ordinal)) ||
+                    (_altsearch != null && i.Key.Contains(_altsearch, StringComparison.Ordinal)));
                 if (!AppInit.conf.evercache.enable || AppInit.conf.evercache.validHour > 0)
                     mdb = mdb.Take(AppInit.conf.maxreadfile);
 
