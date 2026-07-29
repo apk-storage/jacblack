@@ -149,7 +149,13 @@ namespace JacRed.Configuration
         public TrackerSettings Knaben = new TrackerSettings("https://api.knaben.org");
 
         // JSON-лента, авторизация не нужна, magnet приходит прямо в ответе.
+        // ВНИМАНИЕ: лента встала 08.05.2026, и это подтверждается на самом сайте —
+        // на его главной единственная дата. Оставлен на случай, если оживёт.
         public TrackerSettings AnimeTosho = new TrackerSettings("https://feed.animetosho.org");
+
+        // Источник аниме взамен вставшего AnimeTosho, который был витриной над ним.
+        // Хеш приходит прямо в ленте, поэтому magnet собирается без лишних запросов.
+        public TrackerSettings Nyaa = new TrackerSettings("https://nyaa.si", reqMinute: 20);
 
         // TODO: fix parser
         public TrackerSettings Baibako = new TrackerSettings("http://baibako.tv");
