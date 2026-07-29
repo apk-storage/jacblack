@@ -46,6 +46,7 @@ public class ParserYieldTests
         yield return new object[] { "toloka", "Toloka/f16.html", @"download\.php\?id=\d+", 0.9 };
         yield return new object[] { "selezen", "Selezen/list_page1.html", "card overflow-hidden", 0.9 };
         yield return new object[] { "anidub", "Anidub/list_page1.html", "<article", 0.9 };
+        yield return new object[] { "animelayer", "AnimeLayer/list_page1.html", "torrent-item torrent-item-medium panel", 0.9 };
     }
 
     static List<TorrentBaseDetails> Parse(string tracker, string html)
@@ -73,6 +74,10 @@ public class ParserYieldTests
             case "anidub":
                 return JacRed.Infrastructure.Trackers.Anidub.AnidubParser
                     .ParseTorrentListFromHtml(html, "https://tr.anidub.com", 1)
+                    .Cast<TorrentBaseDetails>().ToList();
+            case "animelayer":
+                return JacRed.Infrastructure.Trackers.AnimeLayer.AnimeLayerParser
+                    .ParseTorrentListFromHtml(html, "https://animelayer.ru", 1)
                     .Cast<TorrentBaseDetails>().ToList();
             default:
                 throw new ArgumentOutOfRangeException(nameof(tracker), tracker, "неизвестный трекер");
