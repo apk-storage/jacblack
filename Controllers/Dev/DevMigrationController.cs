@@ -33,5 +33,11 @@ namespace JacRed.Controllers.Dev
         public JsonResult FixAnimeToshoNames() => Json(_migrationService.FixAnimeToshoNames());
 
         public JsonResult FixAnimeToshoUrls() => Json(_migrationService.FixAnimeToshoUrls());
+
+        /// <summary>
+        /// Слияние записей, задвоившихся при смене домена трекера.
+        /// Сначала запускать с `?dryRun=true` — посчитает, ничего не трогая.
+        /// </summary>
+        public JsonResult FixDomainDuplicates(bool dryRun = true) => Json(_migrationService.FixDomainDuplicates(dryRun));
     }
 }

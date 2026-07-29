@@ -12,5 +12,7 @@ namespace JacRed.Application.Dev
         object FixAnimelayerDuplicates();
         object FixAnimeToshoNames();
         object FixAnimeToshoUrls();
+
+        object FixDomainDuplicates(bool dryRun);
     }
 }
