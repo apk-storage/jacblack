@@ -13,17 +13,52 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
         public static Dictionary<string, (string name, string originalname)> BuildHorBreakerNameMap(string html)
         {
             var map = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
-            foreach (string row in html.Split(new[] { "class=\"hor-breaker dashed\"" }, StringSplitOptions.None).Skip(1))
+
+            var document = Parsing.Html.Parse(html);
+
+            foreach (var breaker in document.QuerySelectorAll(".hor-breaker.dashed"))
             {
-                if (string.IsNullOrWhiteSpace(row))
-                    continue;
-                string url = Regex.Match(row, @"href=""/([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string name = Regex.Match(row, @"<div class=""name-ru"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string originalname = Regex.Match(row, @"<div class=""name-en"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
+                // Сам разделитель пустой — данные лежат в блоках ПОСЛЕ него, до
+                // следующего разделителя. Прежний разбор резал страницу по строке
+                // с этим классом и брал первое совпадение в куске; берём так же,
+                // но по соседям в дереве, а не по позиции в тексте.
+                string url = null, name = null, originalname = null;
+
+                void take(AngleSharp.Dom.IElement scope)
+                {
+                    if (string.IsNullOrEmpty(url))
+                        url = Parsing.Html.Attr(scope.QuerySelector("a[href^='/']"), "href").TrimStart('/');
+                    if (string.IsNullOrEmpty(name))
+                        name = Parsing.Html.Text(scope.QuerySelector(".name-ru"));
+                    if (string.IsNullOrEmpty(originalname))
+                        originalname = Parsing.Html.Text(scope.QuerySelector(".name-en"));
+                }
+
+                // На живой странице названия лежат ПОСЛЕ разделителя, а бывает
+                // вёрстка, где они внутри него самого. Прежний разбор охватывал
+                // оба случая просто потому, что смотрел всё подряд после маркера.
+                take(breaker);
+
+                for (var sibling = breaker.NextElementSibling; sibling != null; sibling = sibling.NextElementSibling)
+                {
+                    if (sibling.ClassList.Contains("hor-breaker"))
+                        break;
+
+                    take(sibling);
+
+                    if (!string.IsNullOrEmpty(url) && !string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(originalname))
+                        break;
+                }
+
+                url ??= string.Empty;
+                name ??= string.Empty;
+                originalname ??= string.Empty;
+
                 if (string.IsNullOrEmpty(url) || !url.StartsWith("series/") || string.IsNullOrEmpty(name) || string.IsNullOrEmpty(originalname))
                     continue;
+
                 string key = url.TrimEnd('/');
-                var pair = (HttpUtility.HtmlDecode(name), HttpUtility.HtmlDecode(originalname));
+                var pair = (name, originalname);
                 if (!map.ContainsKey(key))
                     map[key] = pair;
                 // Ключ по сериалу (series/Slug), чтобы эпизоды, которых нет в hor-breaker на этой странице, тоже получили русское имя (например Пони вместо Ponies).

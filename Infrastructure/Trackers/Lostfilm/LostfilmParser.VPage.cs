@@ -11,13 +11,15 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
             if (string.IsNullOrEmpty(searchHtml) || !searchHtml.Contains("inner-box--link"))
                 return new List<(string, string)>();
 
-            string flat = Regex.Replace(searchHtml, @"[\n\r\t]+", " ");
-            var linkRe = new Regex(@"<div\s+class=""inner-box--link\s+main""[^>]*><a\s+href=""([^""]+)""[^>]*>([^<]+)</a></div>", RegexOptions.IgnoreCase);
+            var document = Parsing.Html.Parse(searchHtml);
             var results = new List<(string torrentUrl, string quality)>();
 
-            foreach (Match m in linkRe.Matches(flat))
+            // Прежний шаблон требовал, чтобы <a> шёл вплотную за <div>, без единого
+            // пробела, и чтобы внутри ссылки не было ни одного вложенного тега.
+            // Любая правка вёрстки на сайте — и ссылки на качество молча исчезали.
+            foreach (var link in document.QuerySelectorAll("div.inner-box--link.main > a"))
             {
-                string linkText = m.Groups[2].Value;
+                string linkText = Parsing.Html.Text(link);
                 string quality = Regex.Match(linkText, @"(2160p|1080p)", RegexOptions.IgnoreCase).Groups[1].Value;
                 if (string.IsNullOrEmpty(quality))
                     quality = Regex.Match(linkText, @"\b(2160|1080)\b", RegexOptions.IgnoreCase).Groups[1].Value;
@@ -26,7 +28,7 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
                 quality = NormalizeQuality(quality);
                 if (!IsPreferredQuality(quality))
                     continue;
-                string torrentUrl = m.Groups[1].Value;
+                string torrentUrl = Parsing.Html.Attr(link, "href");
                 if (string.IsNullOrEmpty(torrentUrl))
                     continue;
                 results.Add((torrentUrl, quality));
