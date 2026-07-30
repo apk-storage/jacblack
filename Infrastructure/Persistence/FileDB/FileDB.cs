@@ -249,6 +249,9 @@ namespace JacRed.Infrastructure.Persistence
                     upt();
                 }
 
+                if (!string.IsNullOrWhiteSpace(t.imdb))
+                    ImdbIndex.Remember(t.imdb, t.name, t.originalname, t.relased);
+
                 if (torrent.ffprobe != null && t.ffprobe == null)
                 {
                     t.ffprobe = torrent.ffprobe;
@@ -338,6 +341,9 @@ namespace JacRed.Infrastructure.Persistence
                     ffprobe = torrent.ffprobe,
                     imdb = torrent.imdb
                 };
+
+                    if (!string.IsNullOrWhiteSpace(t.imdb))
+                        ImdbIndex.Remember(t.imdb, t.name, t.originalname, t.relased);
 
                 // Всегда заполняем _sn и _so, даже если name или originalname пустые
                 // Используем fallback на title если нужно

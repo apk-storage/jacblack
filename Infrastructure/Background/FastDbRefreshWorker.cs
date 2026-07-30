@@ -23,6 +23,12 @@ namespace JacRed.Infrastructure.Background
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("fastdb worker started");
+
+            // Словарь кодов IMDB нужен поиску по идентификатору. Файл маленький,
+            // грузится мгновенно, поэтому делаем это до всего остального.
+            try { Infrastructure.Persistence.ImdbIndex.Load(); }
+            catch (Exception ex) { _logger.LogWarning(ex, "imdb index load"); }
+
             try { TracksDB.StartupInit(); }
             catch (IOException ex) { _logger.LogWarning(ex, "tracks startup"); }
             catch (UnauthorizedAccessException ex) { _logger.LogWarning(ex, "tracks startup"); }
