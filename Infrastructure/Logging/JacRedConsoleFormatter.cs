@@ -21,8 +21,6 @@ namespace JacRed.Infrastructure.Logging
         }
     }
 
-    public sealed class JacRedConsoleFormatterOptions : ConsoleFormatterOptions { }
-
     public sealed class JacRedConsoleFormatterConfigureOptions : IConfigureOptions<ConsoleLoggerOptions>
     {
         public void Configure(ConsoleLoggerOptions options)

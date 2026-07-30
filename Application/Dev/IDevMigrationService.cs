@@ -16,5 +16,7 @@ namespace JacRed.Application.Dev
         object FixDomainDuplicates(bool dryRun);
 
         object RemoveNonTmdbContent(bool dryRun);
+
+        object NormalizeWhitespace(bool dryRun);
     }
 }

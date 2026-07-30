@@ -22,12 +22,6 @@ namespace JacRed
         public static bool TrackerLogEnabled(string trackerName)
             => AppConfigurationProvider.TrackerLogEnabled(conf, trackerName);
 
-        public static class TracksIntervalStatic
-        {
-            public static int task0 => conf?.TracksInterval?.task0 ?? 180;
-            public static int task1 => conf?.TracksInterval?.task1 ?? 60;
-        }
-
         #region ConfigManagement facade
         public static ConfigSourceInfo GetConfigSourceInfo() => Provider.GetConfigSourceInfo();
 

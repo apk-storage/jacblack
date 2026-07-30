@@ -14,24 +14,15 @@ namespace JacRed.Infrastructure.Trackers.AnimeLayer
 
         static readonly Regex ShortDate = new Regex(@"^(.+?) в", RegexOptions.Compiled);
 
+
         static readonly Regex TorrentPath = new Regex(@"/?(torrent/[a-z0-9]+)/?", RegexOptions.Compiled);
-
-        static readonly Regex Breaks = new Regex("[\n\r\t]+", RegexOptions.Compiled);
-
         /// <summary>
-        /// Прежний разбор вырезал неразрывные пробелы из ВСЕЙ страницы до начала
-        /// работы: разметка animelayer держится на них как на разделителях, и без
-        /// этого числа не отделялись от значков. Повторяем ровно то же, но на
-        /// отдельных значениях, а не на всём документе.
+        /// Разметка animelayer держится на неразрывных пробелах как на
+        /// разделителях. Прежний разбор вырезал их из ВСЕЙ страницы до начала
+        /// работы; теперь это делает общая нормализация — на отдельных значениях,
+        /// а не на всём документе.
         /// </summary>
-        static string Clean(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            value = value.Replace(" ", string.Empty);
-            return Breaks.Replace(value, " ").Trim();
-        }
+        static string Clean(string value) => Parsing.Html.Normalize(value);
 
         static string NumberAfterIcon(AngleSharp.Dom.IElement card, string iconClass)
         {

@@ -20,7 +20,7 @@ namespace JacRed.Infrastructure.Trackers.Selezen
             if (icon?.NextSibling == null)
                 return string.Empty;
 
-            return Parsing.Html.Normalize(icon.NextSibling.TextContent, Parsing.Html.Whitespace.CollapseAll);
+            return Parsing.Html.Normalize(icon.NextSibling.TextContent);
         }
 
         public static List<TorrentDetails> ParseTorrentsFromListPage(string html)
@@ -35,7 +35,7 @@ namespace JacRed.Infrastructure.Trackers.Selezen
                 bool anime = false;
                 foreach (var link in card.QuerySelectorAll("a"))
                 {
-                    if (Parsing.Html.Text(link, Parsing.Html.Whitespace.CollapseAll) == "Аниме")
+                    if (Parsing.Html.Text(link) == "Аниме")
                     {
                         anime = true;
                         break;
@@ -52,8 +52,8 @@ namespace JacRed.Infrastructure.Trackers.Selezen
                 var titleNode = card.QuerySelector("h4.card-title");
                 var titleLink = titleNode?.Closest("a");
 
-                string url = Parsing.Html.Attr(titleLink, "href", Parsing.Html.Whitespace.CollapseAll);
-                string title = Parsing.Html.Text(titleNode, Parsing.Html.Whitespace.CollapseAll);
+                string url = Parsing.Html.Attr(titleLink, "href");
+                string title = Parsing.Html.Text(titleNode);
                 if (string.IsNullOrWhiteSpace(url) || !url.Contains(".html", StringComparison.OrdinalIgnoreCase))
                     continue;
 
