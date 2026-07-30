@@ -1,14 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Text.RegularExpressions;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Utils;
 using JacRed.Models.Details;
 using JacRed.Models;
-using JacRed.Infrastructure.Logging;
-using Microsoft.Extensions.Logging;
 
 namespace JacRed.Application.Dev
 {
@@ -17,42 +13,6 @@ namespace JacRed.Application.Dev
 
         public object UpdateSize()
         {
-
-            #region getSizeInfo
-            long getSizeInfo(string sizeName)
-            {
-                if (string.IsNullOrWhiteSpace(sizeName))
-                    return 0;
-
-                try
-                {
-                    double size = 0.1;
-                    var gsize = Regex.Match(sizeName, "([0-9\\.,]+) (Mb|МБ|GB|ГБ|TB|ТБ)", RegexOptions.IgnoreCase).Groups;
-                    if (!string.IsNullOrWhiteSpace(gsize[2].Value))
-                    {
-                        if (double.TryParse(gsize[1].Value.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out size) && size != 0)
-                        {
-                            if (gsize[2].Value.ToLower() is "gb" or "гб")
-                                size *= 1024;
-
-                            if (gsize[2].Value.ToLower() is "tb" or "тб")
-                                size *= 1048576;
-
-                            return (long)(size * 1048576);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Размер уйдёт нулём. Debug: обслуживание идёт по всей базе,
-                    // на битых строках иначе зальёт лог.
-                    JacRedLog.Swallowed(JacRedLogCategories.Fdb,
-                        $"не разобрался размер \"{sizeName}\"", ex, LogLevel.Debug);
-                }
-
-                return 0;
-            }
-            #endregion
 
             foreach (var item in FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToArray())
             {
@@ -66,7 +26,7 @@ namespace JacRed.Application.Dev
                             keysToRemove.Add(torrent.Key);
                             continue;
                         }
-                        torrent.Value.size = getSizeInfo(torrent.Value.sizeName);
+                        torrent.Value.size = Infrastructure.Parsing.SizeParser.ToBytes(torrent.Value.sizeName);
                         torrent.Value.updateTime = DateTime.UtcNow;
                         FileDB.masterDb[item.Key] = new MasterDbShard() { updateTime = torrent.Value.updateTime, fileTime = torrent.Value.updateTime.ToFileTimeUtc() };
                     }

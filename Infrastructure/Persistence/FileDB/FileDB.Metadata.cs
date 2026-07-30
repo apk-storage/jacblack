@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using JacRed.Infrastructure.Tracks;
@@ -15,43 +14,7 @@ namespace JacRed.Infrastructure.Persistence
         #region updateFullDetails
         public static void updateFullDetails(TorrentDetails t)
         {
-            #region getSizeInfo
-            long getSizeInfo(string sizeName)
-            {
-                if (string.IsNullOrWhiteSpace(sizeName))
-                    return 0;
-
-                try
-                {
-                    double size;
-                    var gsize = Regex.Match(sizeName, "([0-9\\.,]+) (Mb|МБ|GB|ГБ|TB|ТБ)", RegexOptions.IgnoreCase).Groups;
-                    if (!string.IsNullOrWhiteSpace(gsize[2].Value))
-                    {
-                        if (double.TryParse(gsize[1].Value.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out size) && size != 0)
-                        {
-                            if (gsize[2].Value.ToLower() is "gb" or "гб")
-                                size *= 1024;
-
-                            if (gsize[2].Value.ToLower() is "tb" or "тб")
-                                size *= 1048576;
-
-                            return (long)(size * 1048576);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Размер уйдёт нулём — раздача будет выглядеть пустой.
-                    // Debug, потому что это горячий путь: сюда заходит каждая запись.
-                    JacRedLog.Swallowed(JacRedLogCategories.Fdb,
-                        $"не разобрался размер \"{sizeName}\"", ex, LogLevel.Debug);
-                }
-
-                return 0;
-            }
-            #endregion
-
-            t.size = getSizeInfo(t.sizeName);
+            t.size = Parsing.SizeParser.ToBytes(t.sizeName);
 
             #region quality
             t.quality = 480;

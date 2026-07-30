@@ -227,26 +227,6 @@ namespace JacRed.Infrastructure.Parsing
         }
 
         /// <summary>
-        /// Writes a log entry with statistics including parsed, processed, updated, and failed counts.
-        /// </summary>
-        /// <param name="trackerName">The name of the tracker to log for.</param>
-        /// <param name="message">The message to write to the log.</param>
-        /// <param name="parsed">The number of items parsed. Only included if greater than 0.</param>
-        /// <param name="processed">The number of items processed. Only included if greater than 0.</param>
-        /// <param name="updated">The number of items updated. Only included if greater than 0.</param>
-        /// <param name="failed">The number of items that failed. Only included if greater than 0.</param>
-        public static void WriteStats(string trackerName, string message, int parsed = 0, int processed = 0, int updated = 0, int failed = 0)
-        {
-            var data = new Dictionary<string, object>();
-            if (parsed > 0) data["parsed"] = parsed;
-            if (processed > 0) data["processed"] = processed;
-            if (updated > 0) data["updated"] = updated;
-            if (failed > 0) data["failed"] = failed;
-
-            Write(trackerName, message, data);
-        }
-
-        /// <summary>
         /// Builds log data dictionary for torrent operations.
         /// </summary>
         /// <param name="action">The action being performed (e.g., "added", "updated", "skipped", "failed").</param>

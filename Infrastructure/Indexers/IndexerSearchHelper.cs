@@ -60,18 +60,6 @@ namespace JacRed.Infrastructure.Indexers
             };
         }
 
-        public static Dictionary<string, string> MergeCategoryDict(List<int> categories, Dictionary<string, string> bound)
-        {
-            if (categories != null && categories.Count > 0)
-            {
-                var dict = new Dictionary<string, string>();
-                for (int i = 0; i < categories.Count; i++)
-                    dict[$"Category[{i}]"] = categories[i].ToString();
-                return dict;
-            }
-            return bound;
-        }
-
         /// <summary>Same hint logic as legacy JackettSearchResults category block.</summary>
         public static int ApplyCategoryIsSerialHint(int isSerial, List<int> categories)
         {

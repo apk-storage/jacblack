@@ -34,15 +34,6 @@ namespace JacRed.Infrastructure.Tracks
             TracksIndexManager.StartIndexPersistLoop();
         }
 
-        public static bool HasTrackOnDisk(string infohash)
-        {
-            infohash = TracksPathResolver.NormalizeInfohash(infohash);
-            if (TracksIndexManager.TrackIndex.ContainsKey(infohash))
-                return true;
-
-            return TracksPathResolver.ResolveTrackPath(infohash) != null;
-        }
-
         public static bool HasTrackForTorrent(TorrentDetails t)
         {
             if (t?.ffprobe != null && t.ffprobe.Count > 0)
