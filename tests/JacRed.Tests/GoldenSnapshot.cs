@@ -28,11 +28,20 @@ namespace JacRed.Tests;
 /// </summary>
 public static class GoldenSnapshot
 {
+    /// <summary>
+    /// То же для парсеров, которые отдают не раздачи, а что-то своё —
+    /// у lostfilm, например, кортежи. Сравнивается сериализованный вид.
+    /// </summary>
+    public static void AssertJson(string tracker, string caseName, object parsed) =>
+        Compare(tracker, caseName, JsonConvert.SerializeObject(parsed, Formatting.Indented));
+
     /// <param name="tracker">Каталог снимков, например "Rutracker".</param>
     /// <param name="caseName">Имя случая, обычно идентификатор раздела.</param>
-    public static void Assert<T>(string tracker, string caseName, List<T> parsed) where T : TorrentBaseDetails
+    public static void Assert<T>(string tracker, string caseName, List<T> parsed) where T : TorrentBaseDetails =>
+        Compare(tracker, caseName, Serialize(parsed));
+
+    static void Compare(string tracker, string caseName, string actual)
     {
-        string actual = Serialize(parsed);
         string path = Path.Combine(FixtureLoader.FixturesRoot, tracker, "Golden", $"{caseName}.json");
 
         if (Environment.GetEnvironmentVariable("JACRED_UPDATE_GOLDEN") == "1")

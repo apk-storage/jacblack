@@ -31,13 +31,26 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
             var sinfoRe = new Regex(@"(\d+)\s*сезон\s*(\d+)\s*серия", RegexOptions.IgnoreCase);
             var dateRe = new Regex(@"(\d{2}\.\d{2}\.\d{4})");
 
-            var linkRe = new Regex(@"<a\s[^>]*href=""[^""]*?(/series/([^/""]+)/season_(\d+)/episode_(\d+)/)[^""]*""[^>]*>([\s\S]*?)</a>", RegexOptions.IgnoreCase);
+            // Адрес серии: /series/{имя}/season_{N}/episode_{M}/
+            var episodeRe = new Regex(@"(/series/([^/""]+)/season_(\d+)/episode_(\d+)/)", RegexOptions.IgnoreCase);
+
+            var document = Parsing.Html.Parse(html);
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (Match m in linkRe.Matches(html))
+
+            foreach (var link in document.QuerySelectorAll("a[href*='/series/']"))
             {
-                string urlPath = m.Groups[1].Value.TrimStart('/');
-                string serieName = m.Groups[2].Value;
-                string block = m.Groups[5].Value;
+                var href = episodeRe.Match(Parsing.Html.Attr(link, "href"));
+                if (!href.Success)
+                    continue;
+
+                string urlPath = href.Groups[1].Value.TrimStart('/');
+                string serieName = href.Groups[2].Value;
+
+                // Раньше сюда попадала РАЗМЕТКА внутри ссылки, и сезон с датой
+                // искались прямо в ней. Теперь берём текст: тот же смысл, но
+                // не рассыпается от вложенных тегов.
+                string block = Parsing.Html.Text(link);
+
                 if (string.IsNullOrEmpty(serieName) || seen.Contains(urlPath))
                     continue;
                 var sm = sinfoRe.Match(block);

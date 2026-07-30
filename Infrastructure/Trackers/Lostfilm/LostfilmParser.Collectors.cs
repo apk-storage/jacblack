@@ -14,15 +14,24 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
         public static Task CollectFromEpisodeLinks(string html, string host, string cookie, List<TorrentDetails> list, int page, Dictionary<string, (string name, string originalname)> horBreakerNameMap = null)
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var linkRe = new Regex(@"<a\s[^>]*href=""[^""]*?(/series/([^/""]+)/season_(\d+)/episode_(\d+)/)[^""]*""[^>]*>([\s\S]*?)</a>", RegexOptions.IgnoreCase);
+            var episodeRe = new Regex(@"(/series/([^/""]+)/season_(\d+)/episode_(\d+)/)", RegexOptions.IgnoreCase);
             var sinfoRe = new Regex(@"(\d+)\s*сезон\s*(\d+)\s*серия", RegexOptions.IgnoreCase);
             var dateRe = new Regex(@"(\d{2}\.\d{2}\.\d{4})");
 
-            foreach (Match m in linkRe.Matches(html))
+            var document = Parsing.Html.Parse(html);
+
+            foreach (var link in document.QuerySelectorAll("a[href*='/series/']"))
             {
-                string urlPath = m.Groups[1].Value.TrimStart('/');
-                string serieName = m.Groups[2].Value;
-                string block = m.Groups[5].Value;
+                var href = episodeRe.Match(Parsing.Html.Attr(link, "href"));
+                if (!href.Success)
+                    continue;
+
+                string urlPath = href.Groups[1].Value.TrimStart('/');
+                string serieName = href.Groups[2].Value;
+
+                // Сезон и дату ищем в ТЕКСТЕ ссылки, а не в её разметке.
+                string block = Parsing.Html.Text(link);
+
                 if (string.IsNullOrEmpty(serieName) || seen.Contains(urlPath))
                     continue;
                 var sm = sinfoRe.Match(block);

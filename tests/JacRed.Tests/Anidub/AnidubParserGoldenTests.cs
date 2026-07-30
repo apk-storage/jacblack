@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using JacRed.Infrastructure.Trackers.Anidub;
 using Xunit;
 
@@ -12,6 +14,36 @@ public class AnidubParserGoldenTests
         string host = AppInit.conf.Anidub.host;
 
         string html = FixtureLoader.Read("Anidub/list_page1.html");
-        GoldenSnapshot.Assert("Anidub", "list_page1", AnidubParser.ParseTorrentListFromHtml(html, host, 1));
+        var parsed = AnidubParser.ParseTorrentListFromHtml(html, host, 1);
+
+        // Часть дат парсер берёт не со страницы, а с часов: «сегодня» — это
+        // текущее время, «вчера» — оно же минус сутки, и та же подстановка идёт
+        // для раздач, где дату разобрать не удалось. Такие значения в эталон
+        // класть нельзя — снимок разошёлся бы при первом же повторном прогоне.
+        // Заменяем отметкой: сам факт подстановки сверять полезно, секунда — нет.
+        var now = DateTime.UtcNow;
+        bool fromClock(DateTime value) =>
+            Math.Abs((now - value).TotalMinutes) < 30 ||
+            Math.Abs((now.AddDays(-1) - value).TotalMinutes) < 30;
+
+        var stable = parsed.Select(t => new
+        {
+            t.trackerName,
+            t.types,
+            t.url,
+            t.title,
+            t.sid,
+            t.pir,
+            t.sizeName,
+            t.magnet,
+            createTime = fromClock(t.createTime)
+                ? "<подставлено с часов>"
+                : t.createTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+            t.name,
+            t.originalname,
+            t.relased
+        }).ToList();
+
+        GoldenSnapshot.AssertJson("Anidub", "list_page1", stable);
     }
 }
