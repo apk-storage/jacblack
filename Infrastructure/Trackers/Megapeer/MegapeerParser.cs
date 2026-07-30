@@ -104,6 +104,35 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
         /// Раньше разбор жил внутри ParsePageAsync вперемешку с запросом
         /// и записью в базу — проверить его снимком страницы было нельзя,
         /// и Megapeer оставался единственным трекером без тестов на разбор.
+
+        /// <summary>Ячейка размера: «1.37 GB».</summary>
+        static readonly Regex SizeCell = new Regex(
+            @"^[0-9]+([.,][0-9]+)?\s*(KB|MB|GB|TB|КБ|МБ|ГБ|ТБ)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        static readonly Regex Digits = new Regex("[0-9]+", RegexOptions.Compiled);
+
+        /// <summary>Из «/torrent/210402/fejerverki-dnyom» берём «torrent/210402».</summary>
+        static readonly Regex TorrentPath = new Regex(@"/?(torrent/[0-9]+)", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Число рядом с картинкой-меткой: сиды помечены alt="S", пиры alt="L".
+        /// Значение лежит либо в соседнем font, либо просто текстом за картинкой —
+        /// у megapeer встречаются оба вида.
+        /// </summary>
+        static string NumberAfterMarker(AngleSharp.Dom.IElement row, string alt)
+        {
+            var img = row.QuerySelector($"img[alt='{alt}']");
+            if (img == null)
+                return string.Empty;
+
+            var next = img.NextElementSibling;
+            if (next != null && string.Equals(next.LocalName, "font", StringComparison.OrdinalIgnoreCase))
+                return Digits.Match(Parsing.Html.Text(next)).Value;
+
+            var text = img.NextSibling?.TextContent;
+            return text == null ? string.Empty : Digits.Match(Parsing.Html.Normalize(text)).Value;
+        }
         /// Magnet здесь не добывается: он лежит в torrent-файле, за которым
         /// всё равно нужен отдельный запрос.
         /// </summary>
@@ -114,40 +143,43 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
             if (html == null || !html.Contains(BrowsePageValidMarker))
                 return torrents;
 
-            foreach (string row in html.Split("class=\"table_fon\"").Skip(1))
-            {
-                string Match(string pattern, int index = 1)
-                {
-                    string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-                    res = Regex.Replace(res, "[\n\r\t ]+", " ");
-                    return res.Replace(" ", " ").Trim();
-                }
+            var document = Parsing.Html.Parse(html);
 
-                // Раньше здесь требовалось, чтобы сразу за ячейкой с датой шло
-                // ровно «<td>». На живой странице у следующей ячейки почти всегда
-                // есть атрибуты, поэтому дату находило лишь в 6 строках из 50 —
-                // остальные 44 молча отбрасывались. Замер на снимке страницы
-                // 29.07.2026: было 6, стало 50.
-                DateTime createTime = tParse.ParseCreateTime(Match(@"<td>([0-9]+ [^ <]+ [0-9]+)</td>\s*<td"), "dd.MM.yy");
+            foreach (var row in document.QuerySelectorAll("tr.table_fon"))
+            {
+                // Дата стоит в первой ячейке строки. Прежний разбор искал её
+                // шаблоном, который требовал определённого вида у СЛЕДУЮЩЕЙ
+                // ячейки, и однажды это уже стоило 44 строк из 50.
+                DateTime createTime = tParse.ParseCreateTime(
+                    Parsing.Html.Text(row.QuerySelector("td")), "dd.MM.yy");
+
                 if (createTime == default)
                     continue;
 
-                string url = Match("href=\"/(torrent/[0-9]+)");
-                string title = Match("class=\"url\"[^>]*>([^<]+)</a>", 1);
-                if (string.IsNullOrWhiteSpace(title))
-                    title = Match("class=\"url\">([^<]+)</a></td>");
+                var detailsLink = row.QuerySelector("a.url") ?? row.QuerySelector("a[href^='/torrent/']");
 
-                string sizeName = Match("<td align=\"right\">([^<\n\r]+)", 1).Trim();
+                // В адрес берём только номер, без словесного хвоста: так было
+                // раньше, и по этому адресу раздачи уже лежат в базе.
+                string url = TorrentPath.Match(
+                    Parsing.Html.Attr(row.QuerySelector("a[href^='/torrent/']"), "href")).Groups[1].Value;
+                string title = Parsing.Html.Text(detailsLink);
+
+                string sizeName = string.Empty;
+                foreach (var cell in row.QuerySelectorAll("td[align=right]"))
+                {
+                    string text = Parsing.Html.Text(cell);
+                    if (SizeCell.IsMatch(text))
+                    {
+                        sizeName = text;
+                        break;
+                    }
+                }
 
                 if (string.IsNullOrWhiteSpace(title))
                     continue;
 
-                string _sid = Match("alt=\"S\"><font [^>]+>([0-9]+)</font>", 1);
-                if (string.IsNullOrWhiteSpace(_sid))
-                    _sid = Match("alt=\"S\"[^>]*>\\s*([0-9]+)", 1);
-                string _pir = Match("alt=\"L\"><font [^>]+>([0-9]+)</font>", 1);
-                if (string.IsNullOrWhiteSpace(_pir))
-                    _pir = Match("alt=\"L\"[^>]*>\\s*([0-9]+)", 1);
+                string _sid = NumberAfterMarker(row, "S");
+                string _pir = NumberAfterMarker(row, "L");
 
                 url = $"{AppInit.conf.Megapeer.host}/{url}";
 
@@ -306,7 +338,10 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
                             break;
                     }
 
-                    string downloadid = Match("href=\"/?download/([0-9]+)\"");
+                    // Идентификатор для скачивания берём из ссылки-картинки в той же строке.
+                    string downloadid = Digits.Match(
+                        Parsing.Html.Attr(row.QuerySelector("a[href*='download/']"), "href")).Value;
+
                     if (string.IsNullOrWhiteSpace(downloadid))
                         continue;
 
