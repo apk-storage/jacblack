@@ -149,12 +149,6 @@ namespace JacRed.Infrastructure.Networking
             JacRedLog.Warning(JacRedLogCategories.Host, $"{host} закрыт проверкой Cloudflare, переходим на браузер");
         }
 
-        /// <summary>Снять отметку вручную.</summary>
-        public static void Forget(string host)
-        {
-            if (!string.IsNullOrWhiteSpace(host))
-                _guarded.TryRemove(host, out _);
-        }
         #endregion
 
         #region получение страницы

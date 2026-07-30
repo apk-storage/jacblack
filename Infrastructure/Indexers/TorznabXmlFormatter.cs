@@ -210,26 +210,7 @@ namespace JacRed.Infrastructure.Indexers
             return ParseSizeNameToBytes(torrent.info?.sizeName);
         }
 
-        static long ParseSizeNameToBytes(string sizeName)
-        {
-            if (string.IsNullOrWhiteSpace(sizeName))
-                return 0;
-
-            var match = Regex.Match(sizeName, @"([0-9\.,]+)\s*(Mb|МБ|GB|ГБ|TB|ТБ|KB|КБ|B|Б)?", RegexOptions.IgnoreCase);
-            if (!match.Success || !double.TryParse(match.Groups[1].Value.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out double value) || value <= 0)
-                return 0;
-
-            string unit = match.Groups[2].Value.ToLowerInvariant();
-            return unit switch
-            {
-                "kb" or "кб" => (long)(value * 1024),
-                "mb" or "мб" => (long)(value * 1048576),
-                "gb" or "гб" => (long)(value * 1073741824),
-                "tb" or "тб" => (long)(value * 1099511627776),
-                "b" or "б" or "" => (long)value,
-                _ => (long)(value * 1048576),
-            };
-        }
+        static long ParseSizeNameToBytes(string sizeName) => Parsing.SizeParser.ToBytes(sizeName);
 
         static string EscapeXml(string value)
         {
