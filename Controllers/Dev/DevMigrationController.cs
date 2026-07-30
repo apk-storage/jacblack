@@ -48,5 +48,8 @@ namespace JacRed.Controllers.Dev
 
         /// <summary>Уборка осиротевших файлов шардов. Сначала ?dryRun=true.</summary>
         public JsonResult RemoveOrphanShards(bool dryRun = true) => Json(_migrationService.RemoveOrphanShards(dryRun));
+
+        /// <summary>Проставить код IMDB по названию и году. Сначала ?dryRun=true.</summary>
+        public JsonResult FillImdbFromDictionary(bool dryRun = true) => Json(_migrationService.FillImdbFromDictionary(dryRun));
     }
 }

@@ -134,6 +134,7 @@ namespace JacRed
             builder.Services.AddScoped<RemoveNonTmdbContentMigration>();
             builder.Services.AddScoped<NormalizeWhitespaceMigration>();
             builder.Services.AddScoped<RemoveOrphanShardsMigration>();
+            builder.Services.AddScoped<FillImdbFromDictionaryMigration>();
             builder.Services.AddScoped<ITracksAdminService, TracksAdminService>();
 
             builder.Services.AddHostedService<FastDbRefreshWorker>();
