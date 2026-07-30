@@ -12,4 +12,22 @@ static class FixtureLoader
         Assert.True(File.Exists(path), $"Fixture missing: {path}");
         return File.ReadAllText(path);
     }
+
+    /// <summary>
+    /// Каталог снимков в ИСХОДНИКАХ, а не в сборке. Нужен там, где тест не читает,
+    /// а пишет — эталон должен попасть в репозиторий, а не в bin, откуда его смоет
+    /// первой же пересборкой.
+    /// </summary>
+    public static string FixturesRoot
+    {
+        get
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "JacRed.Tests.csproj")))
+                dir = dir.Parent;
+
+            Assert.True(dir != null, "не нашёлся каталог тестов от " + AppContext.BaseDirectory);
+            return Path.Combine(dir.FullName, "Fixtures");
+        }
+    }
 }

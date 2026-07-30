@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
-using System.Web;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.Details;
 
@@ -12,6 +10,13 @@ namespace JacRed.Infrastructure.Trackers.Rutor
     {
         const string TrackerName = "rutor";
 
+        /// <summary>Ячейка размера: «2.45 GB», «700 MB». Отличает её от соседних.</summary>
+        static readonly Regex SizeCell = new Regex(
+            @"^[0-9]+([.,][0-9]+)?\s*(KB|MB|GB|TB|КБ|МБ|ГБ|ТБ)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        static readonly Regex Digits = new Regex("[0-9]+", RegexOptions.Compiled);
+
         public static List<TorrentBaseDetails> ParseTorrentsFromPage(string html, string cat)
         {
             var torrents = new List<TorrentBaseDetails>();
@@ -19,28 +24,43 @@ namespace JacRed.Infrastructure.Trackers.Rutor
             if (!RutorCategories.Map.TryGetValue(cat, out var meta))
                 return torrents;
 
-            foreach (string row in Regex.Split(Regex.Replace(html, "[\n\r\t]+", ""), "<tr class=\"(gai|tum)\">").Skip(1))
-            {
-                string Match(string pattern, int index = 1)
-                {
-                    string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-                    res = Regex.Replace(res, "[\n\r\t ]+", " ");
-                    return res.Replace(" ", " ").Trim();
-                }
+            var document = Parsing.Html.Parse(html);
 
-                if (string.IsNullOrWhiteSpace(row) || !row.Contains("magnet:?xt=urn"))
+            foreach (var row in document.QuerySelectorAll("tr.gai, tr.tum"))
+            {
+                var magnetLink = row.QuerySelector("a[href^='magnet:?xt=urn']");
+                if (magnetLink == null)
                     continue;
 
-                DateTime createTime = tParse.ParseCreateTime(Match("<td>([^<]+)</td><td([^>]+)?><a class=\"downgif\""), "dd.MM.yy");
+                // Дата лежит в ячейке слева от той, где кнопка скачивания.
+                var downgif = row.QuerySelector("a.downgif");
+                var dateCell = downgif?.Closest("td")?.PreviousElementSibling;
+
+                DateTime createTime = tParse.ParseCreateTime(Parsing.Html.Text(dateCell), "dd.MM.yy");
                 if (createTime == default)
                     continue;
 
-                string url = Match("<a href=\"/(torrent/[^\"]+)\">");
-                string title = Match("<a href=\"/torrent/[^\"]+\">([^<]+)</a>");
-                string _sid = Match("<span class=\"green\"><img [^>]+>&nbsp;([0-9]+)</span>");
-                string _pir = Match("<span class=\"red\">&nbsp;([0-9]+)</span>");
-                string sizeName = Match("<td align=\"right\">([^<]+)</td>");
-                string magnet = Match("href=\"(magnet:\\?xt=[^\"]+)\"");
+                var detailsLink = row.QuerySelector("a[href^='/torrent/']");
+
+                string url = Parsing.Html.Attr(detailsLink, "href").TrimStart('/');
+                string title = Parsing.Html.Text(detailsLink);
+                string _sid = FirstNumber(row.QuerySelector("span.green"));
+                string _pir = FirstNumber(row.QuerySelector("span.red"));
+                string magnet = Parsing.Html.Attr(magnetLink, "href");
+
+                // Ячеек, выровненных вправо, бывает две: число комментариев и размер.
+                // Прежний разбор попадал в нужную по случайности — мешала картинка
+                // внутри соседней. Теперь выбираем по существу содержимого.
+                string sizeName = string.Empty;
+                foreach (var cell in row.QuerySelectorAll("td[align=right]"))
+                {
+                    string text = Parsing.Html.Text(cell);
+                    if (SizeCell.IsMatch(text))
+                    {
+                        sizeName = text;
+                        break;
+                    }
+                }
 
                 if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || title.ToLower().Contains("трейлер") || string.IsNullOrWhiteSpace(_sid) || string.IsNullOrWhiteSpace(_pir) || string.IsNullOrWhiteSpace(sizeName) || string.IsNullOrWhiteSpace(magnet))
                     continue;
@@ -82,6 +102,19 @@ namespace JacRed.Infrastructure.Trackers.Rutor
             }
 
             return torrents;
+        }
+
+        /// <summary>
+        /// Первое число в узле. Сиды и пиры лежат внутри span вперемешку
+        /// с картинкой-стрелкой и неразрывным пробелом.
+        /// </summary>
+        static string FirstNumber(AngleSharp.Dom.IElement element)
+        {
+            if (element == null)
+                return string.Empty;
+
+            var m = Digits.Match(Parsing.Html.Text(element));
+            return m.Success ? m.Value : string.Empty;
         }
 
         static (string name, string originalname, int relased) ParseTitleNames(RutorTitleKind titleKind, string title)
