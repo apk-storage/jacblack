@@ -2,7 +2,6 @@ using System;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Configuration;
 using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Networking;
 using Microsoft.Extensions.Caching.Memory;

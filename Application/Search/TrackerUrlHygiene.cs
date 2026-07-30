@@ -1,5 +1,4 @@
 using System;
-using JacRed.Configuration;
 
 namespace JacRed.Application.Search
 {

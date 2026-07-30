@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Web;
 using System.Xml.Linq;
 using JacRed.Infrastructure.Trackers.AnimeTosho;

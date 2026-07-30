@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using JacRed.Application.Index;
 using JacRed.Infrastructure.Persistence;
-using JacRed.Models.Details;
 
 namespace JacRed.Application.Dev.Migrations
 {
