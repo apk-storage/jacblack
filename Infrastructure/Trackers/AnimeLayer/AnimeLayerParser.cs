@@ -12,39 +12,74 @@ namespace JacRed.Infrastructure.Trackers.AnimeLayer
     {
         const string TrackerName = "animelayer";
 
+        static readonly Regex FullDate = new Regex(@"[0-9]+ [^ ]+ [0-9]{4}", RegexOptions.Compiled);
+
+        static readonly Regex ShortDate = new Regex(@"^(.+?) в", RegexOptions.Compiled);
+
+        static readonly Regex TorrentPath = new Regex(@"/?(torrent/[a-z0-9]+)/?", RegexOptions.Compiled);
+
+        static readonly Regex Breaks = new Regex("[\n\r\t]+", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Прежний разбор вырезал неразрывные пробелы из ВСЕЙ страницы до начала
+        /// работы: разметка animelayer держится на них как на разделителях, и без
+        /// этого числа не отделялись от значков. Повторяем ровно то же, но на
+        /// отдельных значениях, а не на всём документе.
+        /// </summary>
+        static string Clean(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            value = value.Replace(" ", string.Empty);
+            return Breaks.Replace(value, " ").Trim();
+        }
+
+        static string NumberAfterIcon(AngleSharp.Dom.IElement card, string iconClass)
+        {
+            var icon = card.QuerySelector("." + iconClass);
+            if (icon?.NextSibling == null)
+                return string.Empty;
+
+            var m = Regex.Match(Clean(icon.NextSibling.TextContent), "^[0-9]+");
+            return m.Success ? m.Value : string.Empty;
+        }
+
         public static List<TorrentDetails> ParseTorrentListFromHtml(string html, string baseHost, int page)
         {
             var torrents = new List<TorrentDetails>();
-            foreach (string row in tParse.ReplaceBadNames(HttpUtility.HtmlDecode(html.Replace("&nbsp;", ""))).Split("class=\"torrent-item torrent-item-medium panel\"").Skip(1))
+            var document = Parsing.Html.Parse(tParse.ReplaceBadNames(html));
+
+            foreach (var card in document.QuerySelectorAll(".torrent-item.torrent-item-medium.panel"))
             {
-
-                #region Local method - Match
-                string Match(string pattern, int index = 1)
-                {
-                    string res = JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim();
-                    res = Regex.Replace(res, "[\n\r\t\xa0]+", " ");
-                    return res.Trim();
-                }
-                #endregion
-
-                if (string.IsNullOrWhiteSpace(row))
-                    continue;
-
                 #region Creation date
                 DateTime createTime = default;
 
-                // Match Russian text: "Добавл" (Added) or "Обновл" (Updated)
-                if (Regex.IsMatch(row, "(Добавл|Обновл)[^<]+</span>[0-9]+ [^ ]+ [0-9]{4}"))
+                // Дата стоит текстом сразу за подписью «Добавлен:» / «Обновлён:».
+                string dateText = string.Empty;
+                foreach (var label in card.QuerySelectorAll("span"))
                 {
-                    createTime = tParse.ParseCreateTime(Match(">(Добавл|Обновл)[^<]+</span>([0-9]+ [^ ]+ [0-9]{4})", 2), "dd.MM.yyyy");
+                    string text = Clean(label.TextContent);
+                    if (!text.StartsWith("Добавл", StringComparison.Ordinal) && !text.StartsWith("Обновл", StringComparison.Ordinal))
+                        continue;
+
+                    dateText = Clean(label.NextSibling?.TextContent);
+                    if (!string.IsNullOrWhiteSpace(dateText))
+                        break;
+                }
+
+                var withYear = FullDate.Match(dateText);
+                if (withYear.Success)
+                {
+                    createTime = tParse.ParseCreateTime(withYear.Value, "dd.MM.yyyy");
                 }
                 else
                 {
-                    string date = Match("(Добавл|Обновл)[^<]+</span>([^\n]+) в", 2);
-                    if (string.IsNullOrWhiteSpace(date))
+                    var short_ = ShortDate.Match(dateText);
+                    if (!short_.Success)
                         continue;
 
-                    createTime = tParse.ParseCreateTime($"{date} {DateTime.Today.Year}", "dd.MM.yyyy");
+                    createTime = tParse.ParseCreateTime($"{short_.Groups[1].Value} {DateTime.Today.Year}", "dd.MM.yyyy");
                 }
 
                 if (createTime == default)
@@ -57,21 +92,21 @@ namespace JacRed.Infrastructure.Trackers.AnimeLayer
                 #endregion
 
                 #region Release data
-                var gurl = Regex.Match(row, "<a href=\"/(torrent/[a-z0-9]+)/?\">([^<]+)</a>").Groups;
+                var titleLink = card.QuerySelector("a[href^='/torrent/']");
 
-                string urlPath = gurl[1].Value;
-                string title = gurl[2].Value;
+                string urlPath = TorrentPath.Match(Parsing.Html.Attr(titleLink, "href")).Groups[1].Value;
+                string title = Clean(titleLink?.TextContent);
 
-                string _sid = Match("class=\"icon s-icons-upload\"></i>([0-9]+)");
-                string _pir = Match("class=\"icon s-icons-download\"></i>([0-9]+)");
+                string _sid = NumberAfterIcon(card, "s-icons-upload");
+                string _pir = NumberAfterIcon(card, "s-icons-download");
 
                 if (string.IsNullOrWhiteSpace(urlPath) || string.IsNullOrWhiteSpace(title))
                     continue;
 
                 // Match Russian text: "Разрешение" (Resolution)
-                if (Regex.IsMatch(row, "Разрешение: ?</strong>1920x1080"))
+                if (Regex.IsMatch(card.InnerHtml, "Разрешение: ?</strong>1920x1080"))
                     title += " [1080p]";
-                else if (Regex.IsMatch(row, "Разрешение: ?</strong>1280x720"))
+                else if (Regex.IsMatch(card.InnerHtml, "Разрешение: ?</strong>1280x720"))
                     title += " [720p]";
 
                 string fullUrl = $"{baseHost}/{urlPath}/";
@@ -100,7 +135,7 @@ namespace JacRed.Infrastructure.Trackers.AnimeLayer
                 #endregion
 
                 // Release year (matches Russian text: "Год выхода")
-                if (!int.TryParse(Match("Год выхода: ?</strong>([0-9]{4})"), out int relased) || relased == 0)
+                if (!int.TryParse(Regex.Match(card.InnerHtml, "Год выхода: ?</strong>([0-9]{4})").Groups[1].Value, out int relased) || relased == 0)
                     continue;
 
                 if (string.IsNullOrWhiteSpace(name))
