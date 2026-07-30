@@ -8,6 +8,8 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using JacRed.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Tracks
 {
@@ -369,15 +371,31 @@ namespace JacRed.Infrastructure.Tracks
                 string legacyPath = TracksPathResolver.ResolveLegacyTrackPath(infohash);
                 if (legacyPath != null && !string.Equals(path, legacyPath, StringComparison.OrdinalIgnoreCase))
                 {
-                    try { File.Delete(legacyPath); }
-                    catch { }
+                    try
+                    {
+                        File.Delete(legacyPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Дорожки уже записаны по новому пути, старый файл просто
+                        // останется лежать. Debug: на работу не влияет.
+                        JacRedLog.Swallowed(JacRedLogCategories.Tracks,
+                            $"не удалился старый файл дорожек {infohash}", ex, LogLevel.Debug);
+                    }
                 }
 
                 string uppercaseJson = TracksPathResolver.UppercaseLayoutPath("Data/tracks", infohash, withExtension: true);
                 if (File.Exists(uppercaseJson) && !string.Equals(uppercaseJson, path, StringComparison.OrdinalIgnoreCase))
                 {
-                    try { File.Delete(uppercaseJson); }
-                    catch { }
+                    try
+                    {
+                        File.Delete(uppercaseJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        JacRedLog.Swallowed(JacRedLogCategories.Tracks,
+                            $"не удалился файл дорожек в верхнем регистре {infohash}", ex, LogLevel.Debug);
+                    }
                 }
 
                 var audioLanguages = result.streams

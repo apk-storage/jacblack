@@ -32,6 +32,8 @@ namespace JacRed.Controllers.Cron
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
             string host = null;
+            // Битый адрес оставит хост пустым — MarkGuarded такой молча пропустит,
+            // а сам прогрев всё равно упадёт ниже с внятной ошибкой.
             try { host = new System.Uri(url).Host; } catch (System.UriFormatException) { }
 
             // Даже если хост ещё не помечен закрытым, помечаем: прогрев вызывают

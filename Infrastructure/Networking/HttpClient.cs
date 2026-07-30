@@ -198,6 +198,8 @@ namespace JacRed.Infrastructure.Networking
                 proxies.Add(null);
 
             string requestHost = null;
+            // Битый адрес оставляет хост пустым, и это нормально: IsGuarded на null
+            // ответит false, запрос пойдёт обычным путём и упадёт уже со своей ошибкой.
             try { requestHost = new Uri(url).Host; } catch (UriFormatException) { }
 
             // Про хост уже известно, что обычный клиент туда не пройдёт:
@@ -308,6 +310,8 @@ namespace JacRed.Infrastructure.Networking
         static HttpResponseMessage OkResponse(string url)
         {
             var request = new HttpRequestMessage();
+            // Адрес тут только для сведения: разборщики смотрят на код ответа.
+            // Битый адрес оставит заглушку без него, и это ничего не меняет.
             try { request.RequestUri = new Uri(url); } catch (UriFormatException) { }
 
             return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request };

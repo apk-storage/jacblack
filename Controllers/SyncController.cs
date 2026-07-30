@@ -32,7 +32,16 @@ namespace JacRed.Controllers
                 while (true)
                 {
                     await Task.Delay(TimeSpan.FromMinutes(10));
-                    try { masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value); } catch { }
+                    try
+                    {
+                        masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Кеш останется прежним — и те, кто синхронизируется с нами,
+                        // будут получать всё более устаревшую картину базы.
+                        JacRedLog.Swallowed(JacRedLogCategories.Sync, "не обновился кеш masterDb", ex);
+                    }
                 }
             });
         }

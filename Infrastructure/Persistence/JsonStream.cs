@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.IO.Compression;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Persistence
 {
@@ -76,8 +77,13 @@ namespace JacRed.Infrastructure.Persistence
                 if (File.Exists(path))
                     File.Move(path, dest, overwrite: true);
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (Exception moveEx) when (moveEx is IOException || moveEx is UnauthorizedAccessException)
+            {
+                // Битый шард не удалось увести в карантин — он останется на месте
+                // и будет падать при каждом чтении, каждый раз заново.
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                    $"битый шард {Path.GetFileName(path)} не увёлся в карантин", moveEx);
+            }
         }
         #endregion
 
@@ -112,8 +118,18 @@ namespace JacRed.Infrastructure.Persistence
                     JacRedLog.Error(JacRedLogCategories.Fdb,
                         $"не удалось записать шард {path} — {ex.GetType().Name}: {ex.Message}");
 
-                    try { if (File.Exists(tempPath)) File.Delete(tempPath); }
-                    catch (IOException) { }
+                    try
+                    {
+                        if (File.Exists(tempPath))
+                            File.Delete(tempPath);
+                    }
+                    catch (IOException cleanupEx)
+                    {
+                        // Временный файл останется мусором рядом с шардом.
+                        // Debug: о самом сбое записи уже сказано строкой выше.
+                        JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                            $"не удалился временный файл {Path.GetFileName(tempPath)}", cleanupEx, LogLevel.Debug);
+                    }
                 }
             }
         }

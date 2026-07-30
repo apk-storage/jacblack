@@ -39,5 +39,8 @@ namespace JacRed.Controllers.Dev
         /// Сначала запускать с `?dryRun=true` — посчитает, ничего не трогая.
         /// </summary>
         public JsonResult FixDomainDuplicates(bool dryRun = true) => Json(_migrationService.FixDomainDuplicates(dryRun));
+
+        /// <summary>Чистка того, чего нет в TMDB (спорт и прочее). Сначала ?dryRun=true.</summary>
+        public JsonResult RemoveNonTmdbContent(bool dryRun = true) => Json(_migrationService.RemoveNonTmdbContent(dryRun));
     }
 }

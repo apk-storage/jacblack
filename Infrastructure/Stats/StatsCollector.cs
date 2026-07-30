@@ -44,7 +44,12 @@ namespace JacRed.Infrastructure.Stats
                 if (DateTime.TryParse(token.ToString(), null, DateTimeStyles.RoundtripKind, out var dt))
                     return dt;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Отметка времени не прочиталась — статистика будет считаться
+                // устаревшей и пересобираться каждый раз, а это полторы минуты.
+                JacRedLog.Swallowed(JacRedLogCategories.Stats, "не прочиталась отметка времени статистики", ex);
+            }
 
             return null;
         }

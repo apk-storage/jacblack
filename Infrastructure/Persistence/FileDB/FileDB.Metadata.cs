@@ -5,6 +5,8 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using JacRed.Infrastructure.Tracks;
 using JacRed.Models.Details;
+using JacRed.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Persistence
 {
@@ -37,7 +39,13 @@ namespace JacRed.Infrastructure.Persistence
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Размер уйдёт нулём — раздача будет выглядеть пустой.
+                    // Debug, потому что это горячий путь: сюда заходит каждая запись.
+                    JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                        $"не разобрался размер \"{sizeName}\"", ex, LogLevel.Debug);
+                }
 
                 return 0;
             }
@@ -234,7 +242,13 @@ namespace JacRed.Infrastructure.Persistence
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Сезоны и голоса останутся незаполненными — раздача найдётся,
+                    // но фильтры по сезону её пропустят. Debug: путь горячий.
+                    JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                        "не разобрались сезоны из заголовка", ex, LogLevel.Debug);
+                }
             }
             #endregion
         }

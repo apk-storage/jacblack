@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.tParse;
@@ -79,7 +80,13 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
                         if (val.FirstOrDefault(i => i.page == page) == null)
                             val.Add(new TaskParse(page));
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Страница просто не попадёт в задание — обход её пропустит
+                        // и ничем этого не покажет. Поэтому пишем.
+                        JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                            $"torrentby: страница {page} категории {cat} не попала в задание", ex);
+                    }
                 }
             }
 

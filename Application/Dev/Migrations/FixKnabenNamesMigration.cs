@@ -82,7 +82,7 @@ namespace JacRed.Application.Dev.Migrations
             }
 
             FileDB.SaveChangesToFile();
-            try { TryRebuildFastDb(); } catch { }
+            TryRebuildFastDb();
 
             return new { ok = true, processed, updated, migrated };
 
