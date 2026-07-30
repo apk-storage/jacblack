@@ -2,6 +2,8 @@ using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Linq;
+using JacRed.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Tracks
 {
@@ -139,8 +141,17 @@ namespace JacRed.Infrastructure.Tracks
                         {
                             if (!dryRun)
                             {
-                                try { File.Delete(file); }
-                                catch { }
+                                try
+                                {
+                                    File.Delete(file);
+                                }
+                                catch (Exception ex)
+                                {
+                                    // Старый файл дорожек останется рядом с новым:
+                                    // место занято, работе не мешает. Debug.
+                                    JacRedLog.Swallowed(JacRedLogCategories.Tracks,
+                                        $"не удалился старый файл дорожек {Path.GetFileName(file)}", ex, LogLevel.Debug);
+                                }
                             }
 
                             migrated++;

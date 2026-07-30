@@ -183,7 +183,12 @@ namespace JacRed.Configuration
                 JacRedLog.Information(JacRedLogCategories.Config, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {label}{src} applied (sensitive data redacted):");
                 JacRedLog.Information(JacRedLogCategories.Config, GetSafeConfigJson());
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Конфигурация уже применена, её сводка — дело справочное. Но без этой
+                // строки молчание не отличить от «сводку вывели, просто она пустая».
+                JacRedLog.Swallowed(JacRedLogCategories.Config, $"не вывелась сводка конфигурации ({label})", ex);
+            }
         }
 
         public ConfigSourceInfo GetConfigSourceInfo() => AppConfigurationLoader.GetConfigSourceInfo();

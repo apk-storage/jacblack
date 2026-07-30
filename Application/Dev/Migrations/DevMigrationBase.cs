@@ -1,4 +1,6 @@
+using System;
 using JacRed.Application.Index;
+using JacRed.Infrastructure.Logging;
 
 namespace JacRed.Application.Dev.Migrations
 {
@@ -8,9 +10,24 @@ namespace JacRed.Application.Dev.Migrations
 
         protected DevMigrationBase(IFastDbIndex fastDbIndex) => FastDbIndex = fastDbIndex;
 
+        /// <summary>
+        /// Пересобирает индекс после правки базы. Сбой не отменяет саму миграцию —
+        /// данные уже записаны, а индекс всё равно перестроится по расписанию.
+        /// Но молчать нельзя: до следующей плановой пересборки поиск будет отдавать
+        /// старую картину, и без этой строки причину не найти.
+        ///
+        /// Ловит здесь, поэтому оборачивать вызовы своим try не нужно.
+        /// </summary>
         protected void TryRebuildFastDb()
         {
-            try { FastDbIndex.Rebuild(); } catch { }
+            try
+            {
+                FastDbIndex.Rebuild();
+            }
+            catch (Exception ex)
+            {
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "индекс после миграции не пересобрался", ex);
+            }
         }
     }
 }

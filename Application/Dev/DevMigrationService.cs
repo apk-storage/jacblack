@@ -13,6 +13,7 @@ namespace JacRed.Application.Dev
         readonly FixAnimeToshoNamesMigration _fixAnimeToshoNames;
         readonly FixAnimeToshoUrlsMigration _fixAnimeToshoUrls;
         readonly FixDomainDuplicatesMigration _fixDomainDuplicates;
+        readonly RemoveNonTmdbContentMigration _removeNonTmdb;
 
         public DevMigrationService(
             FixKnabenNamesMigration fixKnabenNames,
@@ -23,11 +24,13 @@ namespace JacRed.Application.Dev
             FixAnimelayerDuplicatesMigration fixAnimelayerDuplicates,
             FixAnimeToshoNamesMigration fixAnimeToshoNames,
             FixAnimeToshoUrlsMigration fixAnimeToshoUrls,
-            FixDomainDuplicatesMigration fixDomainDuplicates)
+            FixDomainDuplicatesMigration fixDomainDuplicates,
+            RemoveNonTmdbContentMigration removeNonTmdb)
         {
             _fixAnimeToshoNames = fixAnimeToshoNames;
             _fixAnimeToshoUrls = fixAnimeToshoUrls;
             _fixDomainDuplicates = fixDomainDuplicates;
+            _removeNonTmdb = removeNonTmdb;
             _fixKnabenNames = fixKnabenNames;
             _fixBitruNames = fixBitruNames;
             _cleanup = cleanup;
@@ -58,6 +61,10 @@ namespace JacRed.Application.Dev
         public object FixAnimeToshoUrls() => _fixAnimeToshoUrls.Run();
 
         /// <summary>Слияние записей, задвоившихся при смене домена трекера. dryRun считает, не трогая базу.</summary>
+        /// <summary>Чистка того, чего нет в TMDB. dryRun считает, не трогая базу.</summary>
+        public object RemoveNonTmdbContent(bool dryRun) =>
+            dryRun ? _removeNonTmdb.DryRun() : _removeNonTmdb.Run();
+
         public object FixDomainDuplicates(bool dryRun) =>
             dryRun ? _fixDomainDuplicates.DryRun() : _fixDomainDuplicates.Run();
     }

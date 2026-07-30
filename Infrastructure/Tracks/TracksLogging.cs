@@ -78,7 +78,11 @@ namespace JacRed.Infrastructure.Tracks
                     string timeNow = DateTime.Now.ToString("HH:mm:ss");
                     JacRedLog.Error(JacRedLogCategories.Tracks, $"[{timeNow}] Ошибка записи в лог файл: {ex.Message}");
                 }
-                catch { }
+                catch
+                {
+                    // Сообщить о сбое записи в лог тоже не вышло — писать больше некуда.
+                    // Единственное место, где пустой catch уместен по существу.
+                }
             }
         }
     }

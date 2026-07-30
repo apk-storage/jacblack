@@ -8,6 +8,8 @@ using JacRed.Infrastructure.Utils;
 using JacRed.Models;
 using JacRed.Models.Details;
 using Newtonsoft.Json;
+using JacRed.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Persistence
 {
@@ -387,7 +389,19 @@ namespace JacRed.Infrastructure.Persistence
                     {
                         string name = Path.GetFileNameWithoutExtension(path);
                         if (name.Length > FdbLogPrefix.Length && DateTime.TryParseExact(name.Substring(FdbLogPrefix.Length), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fileDate) && fileDate < cutoff)
-                            try { File.Delete(path); } catch { }
+                        {
+                            try
+                            {
+                                File.Delete(path);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Просроченный файл останется лежать. Разово не страшно,
+                                // но если повторяется — уборка не работает и диск растёт.
+                                JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                                    $"не удалился просроченный лог {Path.GetFileName(path)}", ex, LogLevel.Debug);
+                            }
+                        }
                     }
                 }
 
@@ -397,7 +411,13 @@ namespace JacRed.Infrastructure.Persistence
 
                 PurgeFdbLogBySizeAndCount();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Диагностический лог базы вести не удалось. Сама запись в базу уже
+                // прошла, поэтому работу не рвём — но раньше это выглядело так,
+                // будто лог просто пуст.
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "не записался лог изменений базы", ex);
+            }
         }
 
         static void PurgeFdbLogBySizeAndCount()
@@ -416,7 +436,17 @@ namespace JacRed.Infrastructure.Persistence
                     if (name.Length <= FdbLogPrefix.Length || !DateTime.TryParseExact(name.Substring(FdbLogPrefix.Length), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fileDate))
                         continue;
                     long len = 0;
-                    try { len = new FileInfo(path).Length; } catch { }
+                    try
+                    {
+                        len = new FileInfo(path).Length;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Файл посчитается нулевым, и общий размер выйдет заниженным —
+                        // то есть уборка недоберёт. Молча такое не отследить.
+                        JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                            $"не прочитался размер {Path.GetFileName(path)}", ex, LogLevel.Debug);
+                    }
                     list.Add((path, len, fileDate));
                 }
                 list.Sort((a, b) => a.date.CompareTo(b.date));
@@ -432,10 +462,19 @@ namespace JacRed.Infrastructure.Persistence
                         total -= item.length;
                         count--;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                            $"не удалился лог {Path.GetFileName(item.path)} при уборке по размеру", ex, LogLevel.Debug);
+                    }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Уборка логов целиком не отработала — значит ограничения по размеру
+                // и числу файлов не действуют. Именно так лог однажды вырос до 3.4 ГБ.
+                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "уборка логов базы не отработала", ex);
+            }
         }
         #endregion
 

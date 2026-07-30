@@ -7,6 +7,8 @@ using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Utils;
 using JacRed.Models.Details;
 using JacRed.Models;
+using JacRed.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Application.Dev
 {
@@ -40,7 +42,13 @@ namespace JacRed.Application.Dev
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Размер уйдёт нулём. Debug: обслуживание идёт по всей базе,
+                    // на битых строках иначе зальёт лог.
+                    JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                        $"не разобрался размер \"{sizeName}\"", ex, LogLevel.Debug);
+                }
 
                 return 0;
             }

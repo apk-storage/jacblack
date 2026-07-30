@@ -232,7 +232,7 @@ namespace JacRed.Application.Dev.Migrations
             FileDB.SaveChangesToFile();
 
             // Пересобираем fastdb после исправлений
-            try { TryRebuildFastDb(); } catch { }
+            TryRebuildFastDb();
 
             return new
             {

@@ -7,6 +7,8 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using JacRed.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace JacRed.Infrastructure.Indexers
 {
@@ -179,7 +181,13 @@ namespace JacRed.Infrastructure.Indexers
                 if (m.Success)
                     return m.Groups[1].Value.ToLowerInvariant();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Без infohash клиент Torznab не сможет сопоставить раздачу
+                // с уже скачанной. Debug: вызывается на каждый элемент выдачи.
+                JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                    "не извлёкся infohash из magnet", ex, LogLevel.Debug);
+            }
 
             return null;
         }

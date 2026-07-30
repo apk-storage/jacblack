@@ -189,7 +189,13 @@ namespace JacRed.Infrastructure.Background
                             File.WriteAllText(LastSyncPath, lastsync.ToString());
                         }
                     }
-                    catch { }
+                    catch (Exception saveEx)
+                    {
+                        // Отметка не сохранилась — следующий проход начнёт с прежнего
+                        // места и заново перекачает уже взятое.
+                        JacRedLog.Swallowed(JacRedLogCategories.Sync,
+                            "не сохранилась отметка синхронизации после сбоя", saveEx);
+                    }
 
                     JacRedLog.Error(JacRedLogCategories.Sync, $"error / {DateTime.Now.ToString(TimeFormat)} / {ex.Message}");
                 }

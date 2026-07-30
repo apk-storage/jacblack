@@ -156,12 +156,7 @@ namespace JacRed.Application.Dev.Migrations
             if (!dryRun)
             {
                 FileDB.SaveChangesToFile();
-                try { TryRebuildFastDb(); }
-                catch (Exception ex)
-                {
-                    Infrastructure.Logging.JacRedLog.Swallowed(
-                        Infrastructure.Logging.JacRedLogCategories.Fdb, "индекс после слияния не пересобрался", ex);
-                }
+                TryRebuildFastDb();
             }
 
             return new

@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Persistence;
+using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.tParse;
@@ -87,7 +88,13 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
                         if (val.FirstOrDefault(i => i.page == page) == null)
                             val.Add(new TaskParse(page));
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Страница просто не попадёт в задание — обход её пропустит
+                        // и ничем этого не покажет. Поэтому пишем.
+                        JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                            $"nnmclub: страница {page} категории {cat} не попала в задание", ex);
+                    }
                 }
             }
 

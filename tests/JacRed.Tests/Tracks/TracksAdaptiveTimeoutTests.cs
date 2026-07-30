@@ -190,7 +190,10 @@ public class TracksAdaptiveTimeoutTests : IAsyncLifetime
     [Fact]
     public async Task AnalyzeWithExternalApi_respects_custom_timeout()
     {
-        _ffpDelayMs = 5000;
+        // Сервер отвечает через полминуты, умолчание таймаута — 60 секунд.
+        // Значит и само исключение, и то, что мы уложились сильно раньше,
+        // доказывают: сработал переданный таймаут, а не какой-то другой.
+        _ffpDelayMs = 30_000;
         var sw = Stopwatch.StartNew();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -202,7 +205,9 @@ public class TracksAdaptiveTimeoutTests : IAsyncLifetime
                 ffpTimeout: TimeSpan.FromMilliseconds(800));
         });
 
-        Assert.InRange(sw.ElapsedMilliseconds, 400, 3000);
+        // Верхняя граница с большим запасом: на загруженной машине замер
+        // плавает, а тесту важно лишь то, что ждали не 30 и не 60 секунд.
+        Assert.InRange(sw.ElapsedMilliseconds, 400, 10_000);
     }
 
     [Fact]

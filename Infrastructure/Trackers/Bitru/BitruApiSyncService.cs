@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Persistence;
+using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Models.Details;
@@ -228,7 +229,13 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                 if (lastTor != null)
                     IO.File.WriteAllText(LastNewTorPath, lastTor.createTime.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Отметка не сдвинется — следующий проход снова начнёт со старой даты
+                // и молча перелопатит уже пройденное.
+                JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                    "bitru: не записалась отметка последней раздачи", ex);
+            }
         }
     }
 }
