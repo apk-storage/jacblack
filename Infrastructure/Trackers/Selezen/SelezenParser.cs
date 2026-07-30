@@ -12,42 +12,62 @@ namespace JacRed.Infrastructure.Trackers.Selezen
     {
         const string TrackerName = "selezen";
 
+        /// <summary>
+        /// Текст сразу за иконкой. У selezen значения не в отдельных ячейках,
+        /// а текстом после значка: «&lt;i class="bx bx-chevrons-up"&gt;&lt;/i&gt; 1335».
+        /// </summary>
+        static string TextAfterIcon(AngleSharp.Dom.IElement card, string iconClass)
+        {
+            var icon = card.QuerySelector("." + iconClass);
+            if (icon?.NextSibling == null)
+                return string.Empty;
+
+            return Parsing.Html.Normalize(icon.NextSibling.TextContent, Parsing.Html.Whitespace.CollapseAll);
+        }
+
         public static List<TorrentDetails> ParseTorrentsFromListPage(string html)
         {
             var torrents = new List<TorrentDetails>();
 
-            foreach (string row in tParse.ReplaceBadNames(html).Split("card overflow-hidden").Skip(1))
-            {
-                if (row.Contains(">Аниме</a>"))
-                    continue;
+            var document = Parsing.Html.Parse(tParse.ReplaceBadNames(html));
 
-                string Match(string pattern, int index = 1)
+            foreach (var card in document.QuerySelectorAll(".card.overflow-hidden"))
+            {
+                // Аниме у selezen лежит отдельным разделом и в базу не берётся.
+                bool anime = false;
+                foreach (var link in card.QuerySelectorAll("a"))
                 {
-                    string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-                    res = Regex.Replace(res, @"\s+", " ");
-                    return res.Trim();
+                    if (Parsing.Html.Text(link, Parsing.Html.Whitespace.CollapseAll) == "Аниме")
+                    {
+                        anime = true;
+                        break;
+                    }
                 }
 
-                if (string.IsNullOrWhiteSpace(row)) continue;
+                if (anime)
+                    continue;
 
-                DateTime createTime = tParse.ParseCreateTime(Match(@"class=""bx bx-calendar""></span>\s*([0-9]{2}\.[0-9]{2}\.[0-9]{4} [0-9]{2}:[0-9]{2})</a>"), "dd.MM.yyyy HH:mm");
+                // Значения стоят текстом СРАЗУ ЗА иконкой: <span class="bx bx-calendar"></span> 28.07.2026 21:07
+                DateTime createTime = tParse.ParseCreateTime(TextAfterIcon(card, "bx-calendar"), "dd.MM.yyyy HH:mm");
                 if (createTime == default) continue;
 
-                var g = Regex.Match(row, @"<a href=""(https?://[^""]+)""><h4 class=""card-title"">([^<]+)</h4>").Groups;
-                string url = g[1].Value;
-                string title = g[2].Value;
+                var titleNode = card.QuerySelector("h4.card-title");
+                var titleLink = titleNode?.Closest("a");
+
+                string url = Parsing.Html.Attr(titleLink, "href", Parsing.Html.Whitespace.CollapseAll);
+                string title = Parsing.Html.Text(titleNode, Parsing.Html.Whitespace.CollapseAll);
                 if (string.IsNullOrWhiteSpace(url) || !url.Contains(".html", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                string _sid = Match(@"<i class=""bx bx-chevrons-up""></i>([0-9 ]+)").Trim();
-                string _pir = Match(@"<i class=""bx bx-chevrons-down""></i>([0-9 ]+)").Trim();
-                string sizeName = Match(@"<span class=""bx bx-download""></span>([^<]+)</a>").Trim();
+                string _sid = TextAfterIcon(card, "bx-chevrons-up");
+                string _pir = TextAfterIcon(card, "bx-chevrons-down");
+                string sizeName = TextAfterIcon(card, "bx-download");
                 if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(_sid) || string.IsNullOrWhiteSpace(_pir) || string.IsNullOrWhiteSpace(sizeName))
                     continue;
 
                 int relased = 0;
                 string name = null, originalname = null;
-                g = Regex.Match(title, "^([^/\\(]+) / [^/]+ / ([^/\\(]+) \\(([0-9]{4})\\)").Groups;
+                var g = Regex.Match(title, "^([^/\\(]+) / [^/]+ / ([^/\\(]+) \\(([0-9]{4})\\)").Groups;
                 if (!string.IsNullOrWhiteSpace(g[1].Value) && !string.IsNullOrWhiteSpace(g[2].Value) && !string.IsNullOrWhiteSpace(g[3].Value))
                 {
                     name = g[1].Value;
@@ -67,7 +87,7 @@ namespace JacRed.Infrastructure.Trackers.Selezen
 
                 // Тип: мультфильм по жанру в карточке; сериал по [S01]/[01x01-02 из 09] или TVShows в title/url; иначе movie
                 string[] types = new string[] { "movie" };
-                if (row.Contains(">Мульт") || row.Contains(">мульт"))
+                if (card.InnerHtml.Contains(">Мульт") || card.InnerHtml.Contains(">мульт"))
                     types = new string[] { "multfilm" };
                 else if (title.IndexOf("TVShows", StringComparison.OrdinalIgnoreCase) >= 0
                     || Regex.IsMatch(title, @"\[S\d+\]")
