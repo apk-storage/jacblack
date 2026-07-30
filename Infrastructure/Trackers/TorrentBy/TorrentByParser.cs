@@ -27,6 +27,13 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
             return torrents.Count > 0;
         }
 
+        /// <summary>Ячейка размера: «4.11 GB», «700 MB».</summary>
+        static readonly Regex SizeCell = new Regex(
+            @"^[0-9]+([.,][0-9]+)?\s*(KB|MB|GB|TB|КБ|МБ|ГБ|ТБ)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        static readonly Regex Digits = new Regex("[0-9]+", RegexOptions.Compiled);
+
         public static List<TorrentBaseDetails> ParseTorrentsFromHtml(string html, string cat)
         {
             var torrents = new List<TorrentBaseDetails>();
@@ -34,41 +41,48 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
             if (!TorrentByCategories.Map.TryGetValue(cat, out var meta))
                 return torrents;
 
-            foreach (string row in tParse.ReplaceBadNames(html).Split("<tr class=\"ttable_col").Skip(1))
-            {
-                string Match(string pattern, int index = 1)
-                {
-                    string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-                    res = Regex.Replace(res, "[\n\r\t ]+", " ");
-                    return res.Trim();
-                }
+            var document = Parsing.Html.Parse(tParse.ReplaceBadNames(html));
 
-                if (string.IsNullOrWhiteSpace(row) || !row.Contains("magnet:?xt=urn"))
+            foreach (var row in document.QuerySelectorAll("tr[class^='ttable_col']"))
+            {
+                var magnetLink = row.QuerySelector("a[href^='magnet:?xt=urn']");
+                if (magnetLink == null)
                     continue;
 
-                DateTime createTime = default;
+                // Дата стоит в первой ячейке: «2026-07-09», «Сегодня» или «Вчера».
+                string rawDate = Parsing.Html.Text(row.QuerySelector("td"));
+                DateTime createTime;
 
-                if (row.Contains(">Сегодня</td>"))
+                if (rawDate == "Сегодня")
                     createTime = DateTime.UtcNow;
-                else if (row.Contains(">Вчера</td>"))
+                else if (rawDate == "Вчера")
                     createTime = DateTime.UtcNow.AddDays(-1);
-                else
-                {
-                    string _createTime = Match(">([0-9]{4}-[0-9]{2}-[0-9]{2})</td>").Replace("-", " ");
-                    if (!DateTime.TryParseExact(_createTime, "yyyy MM dd", new CultureInfo("ru-RU"), DateTimeStyles.None, out createTime))
-                        continue;
-                }
+                else if (!DateTime.TryParseExact(rawDate.Replace("-", " "), "yyyy MM dd", new CultureInfo("ru-RU"), DateTimeStyles.None, out createTime))
+                    continue;
 
                 if (createTime == default)
                     continue;
 
-                string url = Match("<a name=\"search_select\" [^>]+ href=\"/([0-9]+/[^\"]+)\"");
-                string title = Match("<a name=\"search_select\" [^>]+>([^<]+)</a>");
-                string _sid = Match("<font color=\"green\">&uarr; ([0-9]+)</font>");
-                string _pir = Match("<font color=\"red\">&darr; ([0-9]+)</font>");
-                string sizeName = Match("</td><td style=\"white-space:nowrap;\">([^<]+)</td>");
-                string magnet = Match("href=\"(magnet:\\?xt=[^\"]+)\"");
+                var titleLink = row.QuerySelector("a[name='search_select']");
 
+                string url = Parsing.Html.Attr(titleLink, "href").TrimStart('/');
+                string title = Parsing.Html.Text(titleLink);
+                string _sid = Digits.Match(Parsing.Html.Text(row.QuerySelector("font[color=green]"))).Value;
+                string _pir = Digits.Match(Parsing.Html.Text(row.QuerySelector("font[color=red]"))).Value;
+                string magnet = Parsing.Html.Attr(magnetLink, "href");
+
+                // Ячеек с переносом строки в стиле несколько: в одной ссылки на
+                // скачивание, в другой размер. Берём ту, где содержимое похоже на размер.
+                string sizeName = string.Empty;
+                foreach (var cell in row.QuerySelectorAll("td"))
+                {
+                    string text = Parsing.Html.Text(cell);
+                    if (SizeCell.IsMatch(text))
+                    {
+                        sizeName = text;
+                        break;
+                    }
+                }
                 if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(_sid) || string.IsNullOrWhiteSpace(_pir) || string.IsNullOrWhiteSpace(sizeName) || string.IsNullOrWhiteSpace(magnet))
                     continue;
 
