@@ -34,6 +34,9 @@ namespace JacRed.Infrastructure.Parsing
         /// <summary>Обычные пробельные ряды. Неразрывный пробел сюда НЕ входит.</summary>
         static readonly Regex OrdinarySpaces = new Regex("[\n\r\t ]+", RegexOptions.Compiled);
 
+        /// <summary>Любой пробельный ряд, включая неразрывные пробелы.</summary>
+        static readonly Regex AnyWhitespace = new Regex(@"\s+", RegexOptions.Compiled);
+
         /// <summary>
         /// Как приводить пробелы. Двух режимов быть не должно — но они есть,
         /// потому что парсеры делали это по-разному, и разница уже вмёрзла в базу.
@@ -52,7 +55,10 @@ namespace JacRed.Infrastructure.Parsing
             DropBreaksCollapseNoBreak,
 
             /// <summary>Kinozal и подобные: схлопнуть обычные пробельные ряды, неразрывные оставить.</summary>
-            CollapseSpaces
+            CollapseSpaces,
+
+            /// <summary>Selezen и подобные: схлопнуть ЛЮБОЙ пробельный ряд, включая неразрывные.</summary>
+            CollapseAll
         }
 
         public static IHtmlDocument Parse(string html) => Parser.ParseDocument(html ?? string.Empty);
@@ -85,6 +91,9 @@ namespace JacRed.Infrastructure.Parsing
         {
             if (string.IsNullOrEmpty(value))
                 return string.Empty;
+
+            if (mode == Whitespace.CollapseAll)
+                return AnyWhitespace.Replace(value, " ").Trim();
 
             if (mode == Whitespace.CollapseSpaces)
                 return OrdinarySpaces.Replace(value, " ").Trim();
