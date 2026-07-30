@@ -5,13 +5,23 @@ namespace JacRed.Tests.Rutracker;
 
 public class RutrackerParserTitleTests
 {
+    /// <summary>
+    /// Разметка повторяет живую страницу форума: разбор идёт по дереву, поэтому
+    /// обрывок без строки таблицы больше не годится — раньше здесь стоял текстовый
+    /// маркер `class="torTopic"`, по которому старый код резал страницу.
+    /// </summary>
     static string ForumRow(string title, string date = "2024-07-16 12:00") =>
-        "class=\"torTopic\"\n" +
-        $"<a id=\"tt-12345\" href=\"viewtopic.php?t=12345\">{title}</a>\n" +
+        "<table><tbody><tr id=\"tr-12345\" class=\"hl-tr\">\n" +
+        "<td class=\"vf-col-t-title tt\"><div class=\"torTopic\">\n" +
+        $"<a id=\"tt-12345\" href=\"viewtopic.php?t=12345\" class=\"torTopic bold tt-text\">{title}</a>\n" +
+        "</div></td>\n" +
+        "<td class=\"vf-col-tor\">\n" +
         "<span class=\"seedmed\" title=\"Seeders\"><b>10</b></span>\n" +
         "<span class=\"leechmed\" title=\"Leechers\"><b>5</b></span>\n" +
         "<a class=\"dl-stub\">1.5&nbsp;GB</a>\n" +
-        $"<p>{date}</p>\n";
+        "</td>\n" +
+        $"<td><p>{date}</p></td>\n" +
+        "</tr></tbody></table>";
 
     [Theory]
     [InlineData(
