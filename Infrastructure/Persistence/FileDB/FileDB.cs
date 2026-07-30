@@ -250,7 +250,21 @@ namespace JacRed.Infrastructure.Persistence
                 }
 
                 if (!string.IsNullOrWhiteSpace(t.imdb))
+                {
                     ImdbIndex.Remember(t.imdb, t.name, t.originalname, t.relased);
+                }
+                else if (t.relased > 1900)
+                {
+                    // Код сообщают три источника из двадцати, но фильм один и тот
+                    // же: если его принесла хоть одна раздача, подтягиваем к
+                    // остальным по оригинальному названию и году.
+                    if (ImdbIndex.TryGetByTitle(t.originalname, t.relased, out string known)
+                        || ImdbIndex.TryGetByTitle(t.name, t.relased, out known))
+                    {
+                        t.imdb = known;
+                        upt(updatetime: false);
+                    }
+                }
 
                 if (torrent.ffprobe != null && t.ffprobe == null)
                 {

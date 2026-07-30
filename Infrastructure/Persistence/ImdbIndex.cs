@@ -46,6 +46,20 @@ namespace JacRed.Infrastructure.Persistence
         static readonly ConcurrentDictionary<string, ImdbTitle> _titles =
             new ConcurrentDictionary<string, ImdbTitle>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Обратный поиск: «оригинальное название + год» → код.
+        ///
+        /// Нужен, чтобы подтянуть код к раздачам, у которых его нет. Код
+        /// сообщают три источника из двадцати, но фильм-то один и тот же:
+        /// если yts принёс «Interstellar 2014 → tt0816692», то и русская
+        /// раздача с тем же оригинальным названием и годом — про него же.
+        ///
+        /// Год в ключе обязателен: без него «Дюна» 1984 года склеилась бы
+        /// с «Дюной» 2021-го.
+        /// </summary>
+        static readonly ConcurrentDictionary<string, string> _byTitle =
+            new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+
         static int _dirty;
         static int _loaded;
 
@@ -67,8 +81,12 @@ namespace JacRed.Infrastructure.Persistence
 
                 foreach (var kv in data)
                 {
-                    if (!string.IsNullOrWhiteSpace(kv.Key) && kv.Value != null)
-                        _titles[kv.Key] = kv.Value;
+                    if (string.IsNullOrWhiteSpace(kv.Key) || kv.Value == null)
+                        continue;
+
+                    _titles[kv.Key] = kv.Value;
+                    RememberTitleKey(kv.Key, kv.Value.OriginalName, kv.Value.Year);
+                    RememberTitleKey(kv.Key, kv.Value.Name, kv.Value.Year);
                 }
 
                 JacRedLog.Information(JacRedLogCategories.Fdb, $"словарь кодов IMDB загружен: {_titles.Count}");
@@ -93,6 +111,41 @@ namespace JacRed.Infrastructure.Persistence
 
             if (_titles.TryAdd(imdb, title))
                 Interlocked.Exchange(ref _dirty, 1);
+
+            RememberTitleKey(imdb, originalname, year);
+            RememberTitleKey(imdb, name, year);
+        }
+
+        static void RememberTitleKey(string imdb, string title, int year)
+        {
+            string key = TitleKey(title, year);
+            if (key != null)
+                _byTitle.TryAdd(key, imdb);
+        }
+
+        /// <summary>
+        /// Ключ обратного поиска. Название приводится тем же способом, что и
+        /// ключи базы, — без пробелов, знаков и регистра, — чтобы «Dune: Part
+        /// One» и «Dune Part One» считались одним и тем же.
+        /// </summary>
+        static string TitleKey(string title, int year)
+        {
+            if (string.IsNullOrWhiteSpace(title) || year <= 1900)
+                return null;
+
+            string normalized = Utils.StringConvert.SearchName(title);
+            return string.IsNullOrWhiteSpace(normalized) ? null : normalized + ":" + year;
+        }
+
+        /// <summary>
+        /// Найти код по названию и году. Так код подтягивается к раздачам
+        /// источников, которые его не сообщают.
+        /// </summary>
+        public static bool TryGetByTitle(string title, int year, out string imdb)
+        {
+            imdb = null;
+            string key = TitleKey(title, year);
+            return key != null && _byTitle.TryGetValue(key, out imdb);
         }
 
         public static bool TryGet(string imdb, out ImdbTitle title)

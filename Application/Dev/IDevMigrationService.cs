@@ -20,5 +20,7 @@ namespace JacRed.Application.Dev
         object NormalizeWhitespace(bool dryRun);
 
         object RemoveOrphanShards(bool dryRun);
+
+        object FillImdbFromDictionary(bool dryRun);
     }
 }
