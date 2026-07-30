@@ -22,9 +22,12 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
 
             var torrents = new List<TorrentBaseDetails>();
 
-            foreach (string row in tParse.ReplaceBadNames(container).Split("<table width=\"100%\" class=\"pline\">"))
+            var document = Parsing.Html.Parse(tParse.ReplaceBadNames(container));
+
+            foreach (var row in document.QuerySelectorAll("table.pline"))
             {
-                string magnet = new Regex("\"(magnet:[^\"]+)\"").Match(row).Groups[1].Value;
+                var magnetLink = row.QuerySelector("a[href^='magnet:']");
+                string magnet = Parsing.Html.Attr(magnetLink, "href", Parsing.Html.Whitespace.CollapseSpaces);
                 if (string.IsNullOrWhiteSpace(magnet))
                     continue;
 
@@ -37,7 +40,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
                 if (meta.SkipPdfInTitle && title.ToLower().Contains("pdf"))
                     continue;
 
-                if (meta.RequireMultInRow && !RowLooksLikeCartoon(row))
+                if (meta.RequireMultInRow && !RowLooksLikeCartoon(row.InnerHtml))
                     continue;
 
                 ParseTitleNames(meta.TitleKind, title, out string name, out string originalname, out int relased);
@@ -79,44 +82,56 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
                 || lower.Contains("продолжительность");
         }
 
-        private static string MatchRow(string row, string pattern, int index = 1)
+        static readonly Regex Digits = new Regex("[0-9]+", RegexOptions.Compiled);
+
+        /// <summary>Первое число в узле: сиды и пиры лежат вперемешку с неразрывными пробелами.</summary>
+        static string FirstNumber(AngleSharp.Dom.IElement element)
         {
-            string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-            res = Regex.Replace(res, "[\n\r\t ]+", " ");
-            return res.Trim();
+            var m = Digits.Match(Parsing.Html.Text(element, Parsing.Html.Whitespace.CollapseSpaces));
+            return m.Success ? m.Value : string.Empty;
         }
 
-        private static bool TryParseCreateTime(string row, out DateTime createTime)
+        static bool TryParseCreateTime(AngleSharp.Dom.IElement row, out DateTime createTime)
         {
-            createTime = tParse.ParseCreateTime(MatchRow(row, "\\| ([0-9]+ [^ ]+ [0-9]{4} [^<]+)</span> \\| <span class=\"tit\""), "dd.MM.yyyy HH:mm:ss");
-            return createTime != default;
+            // Дата стоит в подписи автора после последней вертикальной черты:
+            // «shamananime | 09 Июл 2026 19:00:09».
+            foreach (var caption in row.QuerySelectorAll("span.genmed"))
+            {
+                string text = Parsing.Html.Text(caption, Parsing.Html.Whitespace.CollapseSpaces);
+                int bar = text.LastIndexOf('|');
+                if (bar < 0)
+                    continue;
+
+                createTime = tParse.ParseCreateTime(text.Substring(bar + 1).Trim(), "dd.MM.yyyy HH:mm:ss");
+                if (createTime != default)
+                    return true;
+            }
+
+            createTime = default;
+            return false;
         }
 
-        private static bool TryParseRowFields(string row, out string url, out string title, out string sid, out string pir, out string sizeName, out DateTime createTime)
+        static bool TryParseRowFields(AngleSharp.Dom.IElement row, out string url, out string title, out string sid, out string pir, out string sizeName, out DateTime createTime)
         {
             if (!TryParseCreateTime(row, out createTime))
             {
-                url = null;
-                title = null;
-                sid = null;
-                pir = null;
-                sizeName = null;
+                url = title = sid = pir = sizeName = null;
                 return false;
             }
 
-            url = MatchRow(row, "<a class=\"pgenmed\" href=\"(viewtopic.php[^\"]+)\"");
-            title = MatchRow(row, ">([^<]+)</a></h2></td>");
-            sid = MatchRow(row, "title=\"Раздаю[щш]их\">&nbsp;([0-9]+)</span>", 1);
-            pir = MatchRow(row, "title=\"Качают\">&nbsp;([0-9]+)</span>", 1);
-            sizeName = MatchRow(row, "<span class=\"pcomm bold\">([^<]+)</span>");
+            var topicLink = row.QuerySelector("h2 a[href^='viewtopic.php']");
+
+            url = Parsing.Html.Attr(topicLink, "href", Parsing.Html.Whitespace.CollapseSpaces);
+            title = Parsing.Html.Text(topicLink, Parsing.Html.Whitespace.CollapseSpaces);
+
+            // Написание заголовка у клуба гуляет: и «Раздающих», и «Раздаюших».
+            sid = FirstNumber(row.QuerySelector("span[title='Раздающих'], span[title='Раздаюших']"));
+            pir = FirstNumber(row.QuerySelector("span[title='Качают']"));
+            sizeName = Parsing.Html.Text(row.QuerySelector("span.pcomm.bold"), Parsing.Html.Whitespace.CollapseSpaces);
 
             if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(sid) || string.IsNullOrWhiteSpace(pir) || string.IsNullOrWhiteSpace(sizeName))
             {
-                url = null;
-                title = null;
-                sid = null;
-                pir = null;
-                sizeName = null;
+                url = title = sid = pir = sizeName = null;
                 return false;
             }
 
