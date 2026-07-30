@@ -16,15 +16,23 @@ namespace JacRed.Infrastructure.Trackers.Toloka
         {
             var torrents = new List<TolokaDetails>();
 
-            foreach (string row in tParse.ReplaceBadNames(html).Split("</tr>").Skip(1))
+            var document = Parsing.Html.Parse(tParse.ReplaceBadNames(html));
+
+            // Строки ищем по ссылке на тему: у toloka сами <tr> без классов,
+            // а вложенных таблиц на странице хватает.
+            foreach (var topicLink in document.QuerySelectorAll("a.topictitle"))
             {
-                if (string.IsNullOrWhiteSpace(row) || Regex.IsMatch(row, "Збір коштів", RegexOptions.IgnoreCase))
+                var row = topicLink.Closest("tr");
+                if (row == null)
+                    continue;
+
+                if (Regex.IsMatch(row.InnerHtml, "Збір коштів", RegexOptions.IgnoreCase))
                     continue;
 
                 if (!TryParseCreateTime(row, out DateTime createTime))
                     continue;
 
-                if (!TryParseRowFields(row, out string url, out string title, out string sid, out string pir, out string sizeName))
+                if (!TryParseRowFields(row, topicLink, out string url, out string title, out string sid, out string pir, out string sizeName))
                     continue;
 
                 var (name, originalname, relased) = ParseTitleNames(cat, title);
@@ -42,7 +50,9 @@ namespace JacRed.Infrastructure.Trackers.Toloka
                 int.TryParse(sid, out int sidNum);
                 int.TryParse(pir, out int pirNum);
 
-                string downloadId = Regex.Match(row, "href=\"download.php\\?id=([0-9]+)\"").Groups[1].Value;
+                string downloadId = Regex.Match(
+                    Parsing.Html.Attr(row.QuerySelector("a[href^='download.php']"), "href", Parsing.Html.Whitespace.CollapseSpaces),
+                    "id=([0-9]+)").Groups[1].Value;
                 if (string.IsNullOrWhiteSpace(downloadId))
                     continue;
 
@@ -66,32 +76,35 @@ namespace JacRed.Infrastructure.Trackers.Toloka
             return torrents;
         }
 
-        static string MatchRow(string row, string pattern, int index = 1)
-        {
-            string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-            res = Regex.Replace(res, "[\n\r\t ]+", " ");
-            return res.Trim();
-        }
+        static readonly Regex RowDate = new Regex(
+            @"([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2})", RegexOptions.Compiled);
 
-        static bool TryParseCreateTime(string row, out DateTime createTime)
+        static bool TryParseCreateTime(AngleSharp.Dom.IElement row, out DateTime createTime)
         {
-            string raw = MatchRow(row, "class=\"postdetails\">([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2})").Replace("-", ".");
-            if (!DateTime.TryParse(raw, out createTime) || createTime == default)
+            foreach (var cell in row.QuerySelectorAll(".postdetails"))
             {
-                createTime = default;
-                return false;
+                var m = RowDate.Match(Parsing.Html.Text(cell, Parsing.Html.Whitespace.CollapseSpaces));
+                if (!m.Success)
+                    continue;
+
+                if (DateTime.TryParse(m.Groups[1].Value.Replace("-", "."), out createTime) && createTime != default)
+                    return true;
             }
 
-            return true;
+            createTime = default;
+            return false;
         }
 
-        static bool TryParseRowFields(string row, out string url, out string title, out string sid, out string pir, out string sizeName)
+        static bool TryParseRowFields(AngleSharp.Dom.IElement row, AngleSharp.Dom.IElement topicLink, out string url, out string title, out string sid, out string pir, out string sizeName)
         {
-            url = MatchRow(row, "<a href=\"(t[0-9]+)\" class=\"topictitle\"");
-            title = MatchRow(row, "class=\"topictitle\">([^<]+)</a>");
-            sid = MatchRow(row, "<span class=\"seedmed\" [^>]+><b>([0-9]+)</b></span>");
-            pir = MatchRow(row, "<span class=\"leechmed\" [^>]+><b>([0-9]+)</b></span>");
-            sizeName = MatchRow(row, "<a href=\"download.php[^\"]+\" [^>]+>([^<]+)</a>").Replace("&nbsp;", " ");
+            url = Parsing.Html.Attr(topicLink, "href", Parsing.Html.Whitespace.CollapseSpaces);
+            title = Parsing.Html.Text(topicLink, Parsing.Html.Whitespace.CollapseSpaces);
+            sid = Parsing.Html.Text(row.QuerySelector("span.seedmed b"), Parsing.Html.Whitespace.CollapseSpaces);
+            pir = Parsing.Html.Text(row.QuerySelector("span.leechmed b"), Parsing.Html.Whitespace.CollapseSpaces);
+
+            // Размер у toloka приходит с неразрывным пробелом внутри («5.62 GB»),
+            // и он таким и лежит в базе — не трогаем.
+            sizeName = Parsing.Html.Text(row.QuerySelector("a[href^='download.php']"), Parsing.Html.Whitespace.CollapseSpaces);
 
             if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(sid) || string.IsNullOrWhiteSpace(pir) || string.IsNullOrWhiteSpace(sizeName) || sizeName == "0 B")
             {
