@@ -19,15 +19,21 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
             if (!RutrackerCategories.Map.TryGetValue(cat, out var meta))
                 return torrents;
 
-            foreach (string row in tParse.ReplaceBadNames(html).Split("class=\"torTopic\"").Skip(1))
+            var document = Parsing.Html.Parse(tParse.ReplaceBadNames(html));
+
+            // Ищем строки по содержимому — по ссылке на тему, — а не по классу
+            // оформления `hl-tr`. Класс форум может переименовать при смене шкурки,
+            // и разбор молча вернёт пустоту; ссылка на тему есть всегда.
+            foreach (var topicLink in document.QuerySelectorAll("a[id^='tt-']"))
             {
-                if (string.IsNullOrWhiteSpace(row))
+                var row = topicLink.Closest("tr") ?? topicLink.ParentElement;
+                if (row == null)
                     continue;
 
                 if (!TryParseCreateTime(row, out DateTime createTime))
                     continue;
 
-                if (!TryParseRowFields(row, out string url, out string title, out string sid, out string pir, out string sizeName))
+                if (!TryParseRowFields(row, topicLink, out string url, out string title, out string sid, out string pir, out string sizeName))
                     continue;
 
                 var (name, originalname, relased, skipRow) = ParseTitleNames(meta.TitleKind, title);
@@ -82,32 +88,35 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
             return false;
         }
 
-        static string MatchRow(string row, string pattern, int index = 1)
-        {
-            string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-            res = Regex.Replace(res, "[\n\r\t ]+", " ");
-            return res.Trim();
-        }
+        /// <summary>Дата раздачи: «2026-07-06 00:17» отдельным абзацем в строке.</summary>
+        static readonly Regex RowDate = new Regex(
+            @"^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$", RegexOptions.Compiled);
 
-        static bool TryParseCreateTime(string row, out DateTime createTime)
+        static readonly Regex TopicId = new Regex(@"^tt-([0-9]+)$", RegexOptions.Compiled);
+
+        static bool TryParseCreateTime(AngleSharp.Dom.IElement row, out DateTime createTime)
         {
-            if (!DateTime.TryParse(MatchRow(row, "<p>([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2})</p>"), out createTime) || createTime == default)
+            foreach (var p in row.QuerySelectorAll("p"))
             {
-                createTime = default;
-                return false;
+                string text = Parsing.Html.Text(p);
+                if (RowDate.IsMatch(text) && DateTime.TryParse(text, out createTime) && createTime != default)
+                    return true;
             }
 
-            return true;
+            createTime = default;
+            return false;
         }
 
-        static bool TryParseRowFields(string row, out string url, out string title, out string sid, out string pir, out string sizeName)
+        static bool TryParseRowFields(AngleSharp.Dom.IElement row, AngleSharp.Dom.IElement topicLink, out string url, out string title, out string sid, out string pir, out string sizeName)
         {
-            url = MatchRow(row, "<a id=\"tt-([0-9]+)\"");
-            title = MatchRow(row, "<a id=\"tt-[0-9]+\"[^>]+>([^\n\r]+)</a>");
-            title = Regex.Replace(title, "<[^>]+>", "");
-            sid = MatchRow(row, "<span class=\"seedmed\"[^>]+><b>([0-9]+)</b>");
-            pir = MatchRow(row, "<span class=\"leechmed\"[^>]+><b>([0-9]+)</b>");
-            sizeName = MatchRow(row, "dl-stub\">([^<]+)</a>").Replace("&nbsp;", " ");
+            // В заголовках rutracker расставляет <wbr> — точки возможного переноса.
+            // Прежний разбор захватывал их вместе с разметкой и вычищал отдельной
+            // регуляркой; дерево отдаёт готовый текст сразу без них.
+            url = topicLink == null ? string.Empty : TopicId.Match(topicLink.Id ?? string.Empty).Groups[1].Value;
+            title = Parsing.Html.Text(topicLink);
+            sid = Parsing.Html.Text(row.QuerySelector("span.seedmed b"));
+            pir = Parsing.Html.Text(row.QuerySelector("span.leechmed b"));
+            sizeName = Parsing.Html.Text(row.QuerySelector("a.dl-stub"));
 
             if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(sid) || string.IsNullOrWhiteSpace(pir) || string.IsNullOrWhiteSpace(sizeName))
             {
