@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Networking;
 using JacRed.Infrastructure.Parsing;
@@ -98,12 +96,6 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
             return torrents.Count > 0;
         }
 
-        /// <summary>
-        /// Разбор страницы списка, отделённый от загрузки.
-        ///
-        /// Раньше разбор жил внутри ParsePageAsync вперемешку с запросом
-        /// и записью в базу — проверить его снимком страницы было нельзя,
-        /// и Megapeer оставался единственным трекером без тестов на разбор.
 
         /// <summary>Ячейка размера: «1.37 GB».</summary>
         static readonly Regex SizeCell = new Regex(
@@ -133,6 +125,13 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
             var text = img.NextSibling?.TextContent;
             return text == null ? string.Empty : Digits.Match(Parsing.Html.Normalize(text)).Value;
         }
+        /// <summary>
+        /// Разбор страницы списка, отделённый от загрузки.
+        ///
+        /// Раньше разбор жил внутри ParsePageAsync вперемешку с запросом и записью
+        /// в базу — проверить его снимком страницы было нельзя, и Megapeer
+        /// оставался единственным трекером без тестов на разбор.
+        ///
         /// Magnet здесь не добывается: он лежит в torrent-файле, за которым
         /// всё равно нужен отдельный запрос.
         /// </summary>

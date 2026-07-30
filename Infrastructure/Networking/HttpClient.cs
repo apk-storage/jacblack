@@ -213,10 +213,14 @@ namespace JacRed.Infrastructure.Networking
 
             foreach (var px in proxies)
             {
-                // Вторая попытка делается только если прилетел вызов Cloudflare
-                // и удалось получить cookie.
-                for (int attempt = 0; attempt < 2; attempt++)
-                {
+                // Здесь был цикл на две попытки: замысел был переспросить с
+                // cookie, полученной после вызова Cloudflare. Он давно не работал —
+                // все ветки внутри либо возвращают, либо выходят к следующему
+                // прокси, так что второй заход не случался ни разу, и компилятор
+                // честно сообщал о недостижимом коде.
+                //
+                // Переспрашивать больше и незачем: браузер отдаёт саму страницу,
+                // а не cookie для повторного захода.
                 try
                 {
                     {
@@ -256,7 +260,7 @@ namespace JacRed.Infrastructure.Networking
                                 // забираем страницу браузером. Свой таймаут у
                                 // браузера, поэтому token вызывающего сюда не идёт —
                                 // с ним первое обращение всегда обрывалось бы.
-                                if (attempt == 0 && CloudflareClearance.IsChallenge(response))
+                                if (CloudflareClearance.IsChallenge(response))
                                 {
                                     CloudflareClearance.MarkGuarded(requestHost);
 
@@ -292,10 +296,14 @@ namespace JacRed.Infrastructure.Networking
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    break;
-                }
+                    // Этот выход пробовать больше нечем — идём к следующему.
+                    // Раньше здесь стоял break из цикла попыток, что означало
+                    // ровно то же самое, только неочевидно.
+                    Logging.JacRedLog.Swallowed(Logging.JacRedLogCategories.Host,
+                        $"запрос не прошёл через {px?.Address?.Host ?? "прямое соединение"}: {url}",
+                        ex, Microsoft.Extensions.Logging.LogLevel.Debug);
                 }
             }
 
