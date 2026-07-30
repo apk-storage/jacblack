@@ -4,41 +4,70 @@ using System.Linq;
 using JacRed.Infrastructure.Persistence;
 using JacRed.Infrastructure.Utils;
 using JacRed.Models.Details;
-using JacRed.Models;
 
 namespace JacRed.Application.Dev
 {
     public class DevMaintenanceService : IDevMaintenanceService
     {
 
+        /// <summary>
+        /// Пересчитывает размер в байтах из строки размера у всех записей.
+        ///
+        /// Раньше это действие ставило `updateTime = сейчас` КАЖДОЙ записи и
+        /// переписывало все шарды подряд. Последствия были бы неприятные:
+        /// стёрлась бы вся картина свежести базы (по ней работает фоновая
+        /// проверка живости), а все, кто с нами синхронизируется, увидели бы
+        /// миллион «обновлённых» записей и выкачали бы их заново.
+        ///
+        /// Размер — величина ПРОИЗВОДНАЯ от строки размера, которая не менялась.
+        /// Это починка, а не обновление, поэтому updateTime не трогаем и пишем
+        /// только те шарды, где что-то действительно поменялось.
+        /// </summary>
         public object UpdateSize()
         {
+            long changed = 0, unchanged = 0, shardsWritten = 0;
 
             foreach (var item in FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToArray())
             {
                 using (var fdb = FileDB.OpenWrite(item.Key))
                 {
                     var keysToRemove = new List<string>();
+                    bool touched = false;
+
                     foreach (var torrent in fdb.Database)
                     {
                         if (torrent.Value == null)
                         {
                             keysToRemove.Add(torrent.Key);
+                            touched = true;
                             continue;
                         }
-                        torrent.Value.size = Infrastructure.Parsing.SizeParser.ToBytes(torrent.Value.sizeName);
-                        torrent.Value.updateTime = DateTime.UtcNow;
-                        FileDB.masterDb[item.Key] = new MasterDbShard() { updateTime = torrent.Value.updateTime, fileTime = torrent.Value.updateTime.ToFileTimeUtc() };
+
+                        long size = Infrastructure.Parsing.SizeParser.ToBytes(torrent.Value.sizeName);
+                        if (size == torrent.Value.size)
+                        {
+                            unchanged++;
+                            continue;
+                        }
+
+                        torrent.Value.size = size;
+                        changed++;
+                        touched = true;
                     }
+
                     foreach (var k in keysToRemove)
                         fdb.Database.Remove(k);
 
-                    fdb.savechanges = true;
+                    if (touched)
+                    {
+                        fdb.savechanges = true;
+                        shardsWritten++;
+                    }
                 }
             }
 
             FileDB.SaveChangesToFile();
-            return new { ok = true };
+            return new { ok = true, исправлено = changed, безИзменений = unchanged, шардовПереписано = shardsWritten };
         }
 
         public object ResetCheckTime()
@@ -69,8 +98,18 @@ namespace JacRed.Application.Dev
             return new { ok = true };
         }
 
+        /// <summary>
+        /// Пересчитывает производные поля (качество, озвучки, сезоны, размер)
+        /// из уже сохранённых заголовков.
+        ///
+        /// Как и у UpdateSize, здесь раньше проставлялся `updateTime = сейчас`
+        /// всем записям подряд. Это не обновление данных с трекера, а пересчёт
+        /// из того, что уже лежит, — отметку времени не трогаем, иначе рушится
+        /// картина свежести базы и синхронизирующиеся выкачивают всё заново.
+        /// </summary>
         public object UpdateDetails()
         {
+            long processed = 0;
 
             foreach (var item in FileDB.masterDb.ToArray())
             {
@@ -84,12 +123,12 @@ namespace JacRed.Application.Dev
                             keysToRemove.Add(torrent.Key);
                             continue;
                         }
+
                         FileDB.updateFullDetails(torrent.Value);
                         torrent.Value.languages = null;
-
-                        torrent.Value.updateTime = DateTime.UtcNow;
-                        FileDB.masterDb[item.Key] = new MasterDbShard() { updateTime = torrent.Value.updateTime, fileTime = torrent.Value.updateTime.ToFileTimeUtc() };
+                        processed++;
                     }
+
                     foreach (var k in keysToRemove)
                         fdb.Database.Remove(k);
 
@@ -98,7 +137,7 @@ namespace JacRed.Application.Dev
             }
 
             FileDB.SaveChangesToFile();
-            return new { ok = true };
+            return new { ok = true, пересчитано = processed };
         }
 
         public object UpdateSearchName()
