@@ -14,6 +14,7 @@ namespace JacRed.Application.Dev
         readonly FixAnimeToshoUrlsMigration _fixAnimeToshoUrls;
         readonly FixDomainDuplicatesMigration _fixDomainDuplicates;
         readonly RemoveNonTmdbContentMigration _removeNonTmdb;
+        readonly NormalizeWhitespaceMigration _normalizeWhitespace;
 
         public DevMigrationService(
             FixKnabenNamesMigration fixKnabenNames,
@@ -25,12 +26,14 @@ namespace JacRed.Application.Dev
             FixAnimeToshoNamesMigration fixAnimeToshoNames,
             FixAnimeToshoUrlsMigration fixAnimeToshoUrls,
             FixDomainDuplicatesMigration fixDomainDuplicates,
-            RemoveNonTmdbContentMigration removeNonTmdb)
+            RemoveNonTmdbContentMigration removeNonTmdb,
+            NormalizeWhitespaceMigration normalizeWhitespace)
         {
             _fixAnimeToshoNames = fixAnimeToshoNames;
             _fixAnimeToshoUrls = fixAnimeToshoUrls;
             _fixDomainDuplicates = fixDomainDuplicates;
             _removeNonTmdb = removeNonTmdb;
+            _normalizeWhitespace = normalizeWhitespace;
             _fixKnabenNames = fixKnabenNames;
             _fixBitruNames = fixBitruNames;
             _cleanup = cleanup;
@@ -64,6 +67,10 @@ namespace JacRed.Application.Dev
         /// <summary>Чистка того, чего нет в TMDB. dryRun считает, не трогая базу.</summary>
         public object RemoveNonTmdbContent(bool dryRun) =>
             dryRun ? _removeNonTmdb.DryRun() : _removeNonTmdb.Run();
+
+        /// <summary>Единая нормализация пробелов в именах с переносом ключей.</summary>
+        public object NormalizeWhitespace(bool dryRun) =>
+            dryRun ? _normalizeWhitespace.DryRun() : _normalizeWhitespace.Run();
 
         public object FixDomainDuplicates(bool dryRun) =>
             dryRun ? _fixDomainDuplicates.DryRun() : _fixDomainDuplicates.Run();

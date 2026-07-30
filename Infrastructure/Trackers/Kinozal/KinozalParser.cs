@@ -70,7 +70,7 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                 // Различаем их по месту и по содержимому, а не по порядку в разметке:
                 // дата стоит сразу за числом пиров.
                 var peersCell = row.QuerySelector("td.sl_p");
-                string listingTime = Parsing.Html.Text(peersCell?.NextElementSibling, Parsing.Html.Whitespace.CollapseSpaces);
+                string listingTime = Parsing.Html.Text(peersCell?.NextElementSibling);
                 DateTime createTime = ParseListingUpdateTime(listingTime);
 
                 if (createTime == default)
@@ -80,15 +80,15 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                 #region Данные раздачи
                 var detailsLink = row.QuerySelector("td.nam a[href*='details.php?id=']");
 
-                string url = Parsing.Html.Attr(detailsLink, "href", Parsing.Html.Whitespace.CollapseSpaces).TrimStart('/');
-                string title = Parsing.Html.Text(detailsLink, Parsing.Html.Whitespace.CollapseSpaces);
-                string _sid = Parsing.Html.Text(row.QuerySelector("td.sl_s"), Parsing.Html.Whitespace.CollapseSpaces);
-                string _pir = Parsing.Html.Text(peersCell, Parsing.Html.Whitespace.CollapseSpaces);
+                string url = Parsing.Html.Attr(detailsLink, "href").TrimStart('/');
+                string title = Parsing.Html.Text(detailsLink);
+                string _sid = Parsing.Html.Text(row.QuerySelector("td.sl_s"));
+                string _pir = Parsing.Html.Text(peersCell);
 
                 string sizeName = string.Empty;
                 foreach (var cell in row.QuerySelectorAll("td.s"))
                 {
-                    string text = Parsing.Html.Text(cell, Parsing.Html.Whitespace.CollapseSpaces);
+                    string text = Parsing.Html.Text(cell);
                     if (SizeCell.IsMatch(text))
                     {
                         sizeName = text;

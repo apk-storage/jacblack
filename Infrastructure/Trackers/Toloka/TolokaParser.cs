@@ -49,7 +49,7 @@ namespace JacRed.Infrastructure.Trackers.Toloka
                 int.TryParse(pir, out int pirNum);
 
                 string downloadId = Regex.Match(
-                    Parsing.Html.Attr(row.QuerySelector("a[href^='download.php']"), "href", Parsing.Html.Whitespace.CollapseSpaces),
+                    Parsing.Html.Attr(row.QuerySelector("a[href^='download.php']"), "href"),
                     "id=([0-9]+)").Groups[1].Value;
                 if (string.IsNullOrWhiteSpace(downloadId))
                     continue;
@@ -81,7 +81,7 @@ namespace JacRed.Infrastructure.Trackers.Toloka
         {
             foreach (var cell in row.QuerySelectorAll(".postdetails"))
             {
-                var m = RowDate.Match(Parsing.Html.Text(cell, Parsing.Html.Whitespace.CollapseSpaces));
+                var m = RowDate.Match(Parsing.Html.Text(cell));
                 if (!m.Success)
                     continue;
 
@@ -95,14 +95,14 @@ namespace JacRed.Infrastructure.Trackers.Toloka
 
         static bool TryParseRowFields(AngleSharp.Dom.IElement row, AngleSharp.Dom.IElement topicLink, out string url, out string title, out string sid, out string pir, out string sizeName)
         {
-            url = Parsing.Html.Attr(topicLink, "href", Parsing.Html.Whitespace.CollapseSpaces);
-            title = Parsing.Html.Text(topicLink, Parsing.Html.Whitespace.CollapseSpaces);
-            sid = Parsing.Html.Text(row.QuerySelector("span.seedmed b"), Parsing.Html.Whitespace.CollapseSpaces);
-            pir = Parsing.Html.Text(row.QuerySelector("span.leechmed b"), Parsing.Html.Whitespace.CollapseSpaces);
+            url = Parsing.Html.Attr(topicLink, "href");
+            title = Parsing.Html.Text(topicLink);
+            sid = Parsing.Html.Text(row.QuerySelector("span.seedmed b"));
+            pir = Parsing.Html.Text(row.QuerySelector("span.leechmed b"));
 
             // Размер у toloka приходит с неразрывным пробелом внутри («5.62 GB»),
             // и он таким и лежит в базе — не трогаем.
-            sizeName = Parsing.Html.Text(row.QuerySelector("a[href^='download.php']"), Parsing.Html.Whitespace.CollapseSpaces);
+            sizeName = Parsing.Html.Text(row.QuerySelector("a[href^='download.php']"));
 
             if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(sid) || string.IsNullOrWhiteSpace(pir) || string.IsNullOrWhiteSpace(sizeName) || sizeName == "0 B")
             {

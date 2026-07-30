@@ -26,7 +26,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             foreach (var row in document.QuerySelectorAll("table.pline"))
             {
                 var magnetLink = row.QuerySelector("a[href^='magnet:']");
-                string magnet = Parsing.Html.Attr(magnetLink, "href", Parsing.Html.Whitespace.CollapseSpaces);
+                string magnet = Parsing.Html.Attr(magnetLink, "href");
                 if (string.IsNullOrWhiteSpace(magnet))
                     continue;
 
@@ -86,7 +86,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
         /// <summary>Первое число в узле: сиды и пиры лежат вперемешку с неразрывными пробелами.</summary>
         static string FirstNumber(AngleSharp.Dom.IElement element)
         {
-            var m = Digits.Match(Parsing.Html.Text(element, Parsing.Html.Whitespace.CollapseSpaces));
+            var m = Digits.Match(Parsing.Html.Text(element));
             return m.Success ? m.Value : string.Empty;
         }
 
@@ -96,7 +96,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             // «shamananime | 09 Июл 2026 19:00:09».
             foreach (var caption in row.QuerySelectorAll("span.genmed"))
             {
-                string text = Parsing.Html.Text(caption, Parsing.Html.Whitespace.CollapseSpaces);
+                string text = Parsing.Html.Text(caption);
                 int bar = text.LastIndexOf('|');
                 if (bar < 0)
                     continue;
@@ -120,13 +120,13 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
 
             var topicLink = row.QuerySelector("h2 a[href^='viewtopic.php']");
 
-            url = Parsing.Html.Attr(topicLink, "href", Parsing.Html.Whitespace.CollapseSpaces);
-            title = Parsing.Html.Text(topicLink, Parsing.Html.Whitespace.CollapseSpaces);
+            url = Parsing.Html.Attr(topicLink, "href");
+            title = Parsing.Html.Text(topicLink);
 
             // Написание заголовка у клуба гуляет: и «Раздающих», и «Раздаюших».
             sid = FirstNumber(row.QuerySelector("span[title='Раздающих'], span[title='Раздаюших']"));
             pir = FirstNumber(row.QuerySelector("span[title='Качают']"));
-            sizeName = Parsing.Html.Text(row.QuerySelector("span.pcomm.bold"), Parsing.Html.Whitespace.CollapseSpaces);
+            sizeName = Parsing.Html.Text(row.QuerySelector("span.pcomm.bold"));
 
             if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(sid) || string.IsNullOrWhiteSpace(pir) || string.IsNullOrWhiteSpace(sizeName))
             {

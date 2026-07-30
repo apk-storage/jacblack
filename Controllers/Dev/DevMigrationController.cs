@@ -42,5 +42,8 @@ namespace JacRed.Controllers.Dev
 
         /// <summary>Чистка того, чего нет в TMDB (спорт и прочее). Сначала ?dryRun=true.</summary>
         public JsonResult RemoveNonTmdbContent(bool dryRun = true) => Json(_migrationService.RemoveNonTmdbContent(dryRun));
+
+        /// <summary>Единая нормализация пробелов в именах. Сначала ?dryRun=true.</summary>
+        public JsonResult NormalizeWhitespace(bool dryRun = true) => Json(_migrationService.NormalizeWhitespace(dryRun));
     }
 }
