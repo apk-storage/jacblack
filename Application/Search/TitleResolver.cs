@@ -37,6 +37,19 @@ namespace JacRed.Application.Search
             if (!LooksLikeId(search))
                 return (search, altname);
 
+            // Сначала спрашиваем СВОЮ базу. Код IMDB приходит вместе с названием
+            // от eztv, yts и piratebay, и этого достаточно: как только код принесла
+            // хоть одна раздача, название известно — а дальше обычный поиск найдёт
+            // и русские раздачи того же фильма, у которых кода нет.
+            //
+            // Раньше единственным путём был чужой сервис, а токена к нему нет —
+            // то есть поиск по коду не работал вовсе.
+            if (Infrastructure.Persistence.ImdbIndex.TryGet(search.Trim(), out var known))
+            {
+                string original = string.IsNullOrWhiteSpace(known.OriginalName) ? known.Name : known.OriginalName;
+                return (original, known.Name);
+            }
+
             var conf = AppInit.conf?.titleapi;
             if (conf == null || !conf.enable)
                 return (search, altname);

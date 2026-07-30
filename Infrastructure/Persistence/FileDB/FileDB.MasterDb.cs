@@ -323,6 +323,10 @@ namespace JacRed.Infrastructure.Persistence
             {
                 JsonStream.Write("Data/masterDb.bz", masterDb);
 
+                // Словарь кодов IMDB сохраняем здесь же: он пополняется теми же
+                // записями и должен переживать перезапуск вместе с базой.
+                ImdbIndex.SaveIfDirty();
+
                 if (!File.Exists($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz"))
                     File.Copy("Data/masterDb.bz", $"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz");
 
