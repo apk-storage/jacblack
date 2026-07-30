@@ -29,7 +29,10 @@ public class NNMClubParserTitleTests
                "<span title=\"Раздающих\">&nbsp;10</span>" +
                "<span title=\"Качают\">&nbsp;5</span>" +
                "<span class=\"pcomm bold\">1.5 GB</span>" +
-               $"| {date}</span> | <span class=\"tit\">x</span>" +
+               // Подпись автора с датой — как на живой странице. Раньше здесь был
+               // обрывок без span.genmed: старый разбор искал дату регуляркой по
+               // всей строке, поэтому обёртка была не нужна.
+               $"<span class=\"genmed\"> <b>автор</b> | {date}</span> | <span class=\"tit\">x</span>" +
                "</td></tr></table>";
     }
 
