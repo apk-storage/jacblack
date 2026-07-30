@@ -15,6 +15,7 @@ namespace JacRed.Application.Dev
         readonly FixDomainDuplicatesMigration _fixDomainDuplicates;
         readonly RemoveNonTmdbContentMigration _removeNonTmdb;
         readonly NormalizeWhitespaceMigration _normalizeWhitespace;
+        readonly RemoveOrphanShardsMigration _removeOrphanShards;
 
         public DevMigrationService(
             FixKnabenNamesMigration fixKnabenNames,
@@ -27,13 +28,15 @@ namespace JacRed.Application.Dev
             FixAnimeToshoUrlsMigration fixAnimeToshoUrls,
             FixDomainDuplicatesMigration fixDomainDuplicates,
             RemoveNonTmdbContentMigration removeNonTmdb,
-            NormalizeWhitespaceMigration normalizeWhitespace)
+            NormalizeWhitespaceMigration normalizeWhitespace,
+            RemoveOrphanShardsMigration removeOrphanShards)
         {
             _fixAnimeToshoNames = fixAnimeToshoNames;
             _fixAnimeToshoUrls = fixAnimeToshoUrls;
             _fixDomainDuplicates = fixDomainDuplicates;
             _removeNonTmdb = removeNonTmdb;
             _normalizeWhitespace = normalizeWhitespace;
+            _removeOrphanShards = removeOrphanShards;
             _fixKnabenNames = fixKnabenNames;
             _fixBitruNames = fixBitruNames;
             _cleanup = cleanup;
@@ -71,6 +74,10 @@ namespace JacRed.Application.Dev
         /// <summary>Единая нормализация пробелов в именах с переносом ключей.</summary>
         public object NormalizeWhitespace(bool dryRun) =>
             dryRun ? _normalizeWhitespace.DryRun() : _normalizeWhitespace.Run();
+
+        /// <summary>Уборка файлов шардов, которых нет в индексе.</summary>
+        public object RemoveOrphanShards(bool dryRun) =>
+            dryRun ? _removeOrphanShards.DryRun() : _removeOrphanShards.Run();
 
         public object FixDomainDuplicates(bool dryRun) =>
             dryRun ? _fixDomainDuplicates.DryRun() : _fixDomainDuplicates.Run();
