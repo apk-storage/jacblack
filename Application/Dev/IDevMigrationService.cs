@@ -18,5 +18,7 @@ namespace JacRed.Application.Dev
         object RemoveNonTmdbContent(bool dryRun);
 
         object NormalizeWhitespace(bool dryRun);
+
+        object RemoveOrphanShards(bool dryRun);
     }
 }
