@@ -12,6 +12,10 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
     {
         const string TrackerName = "kinozal";
 
+        /// <summary>Ячейка размера: «5.09 ГБ». Отличает её от комментариев и даты.</summary>
+        static readonly Regex SizeCell = new Regex(
+            @"^[0-9]+([.,][0-9]+)?\s*(МБ|ГБ|ТБ|MB|GB|TB)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         /// <summary>
         /// Parse browse-list date column (header «Залит»).
         /// Kinozal shows Обновлен when torrent was re-uploaded; otherwise shows Залит (upload only).
@@ -59,22 +63,16 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
             if (!KinozalCategories.Map.TryGetValue(cat, out var meta))
                 return torrents;
 
-            foreach (string row in Regex.Split(tParse.ReplaceBadNames(html), "<tr class=(?:'first bg'|bg)>").Skip(1))
+            var document = Parsing.Html.Parse(tParse.ReplaceBadNames(html));
+
+            foreach (var row in document.QuerySelectorAll("tr.bg"))
             {
-                #region Локальный метод - Match
-                string Match(string pattern, int index = 1)
-                {
-                    string res = HttpUtility.HtmlDecode(JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim());
-                    res = Regex.Replace(res, "[\n\r\t ]+", " ");
-                    return res.Trim();
-                }
-                #endregion
-
-                if (string.IsNullOrWhiteSpace(row))
-                    continue;
-
                 #region Дата создания
-                string listingTime = Match("<td class='sl_p'>[0-9]+</td>\\s*<td class='s'>([^<]+)</td>");
+                // Ячейки с классом `s` в строке три: комментарии, размер и дата.
+                // Различаем их по месту и по содержимому, а не по порядку в разметке:
+                // дата стоит сразу за числом пиров.
+                var peersCell = row.QuerySelector("td.sl_p");
+                string listingTime = Parsing.Html.Text(peersCell?.NextElementSibling, Parsing.Html.Whitespace.CollapseSpaces);
                 DateTime createTime = ParseListingUpdateTime(listingTime);
 
                 if (createTime == default)
@@ -82,11 +80,23 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                 #endregion
 
                 #region Данные раздачи
-                string url = Match("href=\"/(details.php\\?id=[0-9]+)\"");
-                string title = Match("class=\"r[0-9]+\">([^<]+)</a>");
-                string _sid = Match("<td class='sl_s'>([0-9]+)</td>");
-                string _pir = Match("<td class='sl_p'>([0-9]+)</td>");
-                string sizeName = Match("<td class='s'>([0-9\\.,]+ (МБ|ГБ))</td>");
+                var detailsLink = row.QuerySelector("td.nam a[href*='details.php?id=']");
+
+                string url = Parsing.Html.Attr(detailsLink, "href", Parsing.Html.Whitespace.CollapseSpaces).TrimStart('/');
+                string title = Parsing.Html.Text(detailsLink, Parsing.Html.Whitespace.CollapseSpaces);
+                string _sid = Parsing.Html.Text(row.QuerySelector("td.sl_s"), Parsing.Html.Whitespace.CollapseSpaces);
+                string _pir = Parsing.Html.Text(peersCell, Parsing.Html.Whitespace.CollapseSpaces);
+
+                string sizeName = string.Empty;
+                foreach (var cell in row.QuerySelectorAll("td.s"))
+                {
+                    string text = Parsing.Html.Text(cell, Parsing.Html.Whitespace.CollapseSpaces);
+                    if (SizeCell.IsMatch(text))
+                    {
+                        sizeName = text;
+                        break;
+                    }
+                }
 
                 if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(_sid) || string.IsNullOrWhiteSpace(_pir) || string.IsNullOrWhiteSpace(sizeName))
                     continue;
@@ -103,11 +113,14 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                     case KinozalTitleKind.Movie:
                         ParseMovieTitle(title, out name, out originalname, out relased);
                         break;
+                    // Этим двум нужна разметка строки целиком: они смотрят, есть ли
+                    // в ней слово «сезон». Отдаём как было, чтобы разбор заголовков
+                    // остался нетронутым.
                     case KinozalTitleKind.SerialRu:
-                        ParseSerialRuTitle(title, row, out name, out relased);
+                        ParseSerialRuTitle(title, row.InnerHtml, out name, out relased);
                         break;
                     case KinozalTitleKind.SerialEn:
-                        ParseSerialEnTitle(title, row, out name, out originalname, out relased);
+                        ParseSerialEnTitle(title, row.InnerHtml, out name, out originalname, out relased);
                         break;
                     case KinozalTitleKind.TvShow:
                         ParseTvShowTitle(title, out name, out originalname, out relased);
