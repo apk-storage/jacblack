@@ -28,6 +28,8 @@ namespace JacRed.Infrastructure.Trackers
             services.AddSingleton<AnimeToshoSyncService>();
             services.AddSingleton<NyaaSyncService>();
             services.AddSingleton<PirateBaySyncService>();
+            services.AddSingleton<Eztv.EztvSyncService>();
+            services.AddSingleton<Yts.YtsSyncService>();
             services.AddSingleton<AnilibertySyncService>();
             services.AddSingleton<LostfilmSyncService>();
             services.AddSingleton<RutrackerSyncService>();

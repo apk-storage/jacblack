@@ -173,6 +173,15 @@ namespace JacRed.Configuration
         // почти нет, но в Лампе есть фильтр по трекерам.
         public TrackerSettings PirateBay = new TrackerSettings("https://apibay.org", reqMinute: 30);
 
+        // Англоязычные сериалы, около миллиона раздач. Русской озвучки нет,
+        // но вместе с раздачей приходит код IMDB — из него собирается словарь
+        // для поиска по идентификатору без чужого сервиса.
+        public TrackerSettings Eztv = new TrackerSettings("https://eztvx.to", reqMinute: 30);
+
+        // Фильмы в сильном сжатии. Основной yts.mx с нашей машины недоступен,
+        // работает зеркало yts.lt. Тоже приносит код IMDB.
+        public TrackerSettings Yts = new TrackerSettings("https://yts.lt", reqMinute: 30);
+
         public ProxySettings proxy = new ProxySettings();
 
         public SearchSettings search = new SearchSettings();

@@ -240,6 +240,15 @@ namespace JacRed.Infrastructure.Persistence
                     upt();
                 }
 
+                // Код IMDB приходит не от всех источников. Если хоть один его
+                // сообщил — сохраняем и больше не затираем пустым: у русских
+                // трекеров кода нет, и обновление оттуда не должно его стирать.
+                if (!string.IsNullOrWhiteSpace(torrent.imdb) && torrent.imdb != t.imdb)
+                {
+                    t.imdb = torrent.imdb;
+                    upt();
+                }
+
                 if (torrent.ffprobe != null && t.ffprobe == null)
                 {
                     t.ffprobe = torrent.ffprobe;
@@ -326,7 +335,8 @@ namespace JacRed.Infrastructure.Persistence
                     relased = torrent.relased,
                     sizeName = torrent.sizeName,
                     magnet = torrent.magnet,
-                    ffprobe = torrent.ffprobe
+                    ffprobe = torrent.ffprobe,
+                    imdb = torrent.imdb
                 };
 
                 // Всегда заполняем _sn и _so, даже если name или originalname пустые
