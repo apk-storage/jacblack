@@ -24,5 +24,23 @@ namespace JacRed.Controllers.Cron
 
         async public Task<string> ParseFromDate(string lastnewtor, int limit = 100) =>
             await _syncService.ParseFromDateAsync(lastnewtor, limit);
+
+        /// <summary>
+        /// Полный обход архива: идёт по времени назад, пока раздачи не кончатся.
+        /// Раньше его не было вовсе, и bitru подбирал только новинки — отсюда
+        /// 48 844 записи против 147 543 у старой базы. Место остановки
+        /// запоминается, поэтому прерванный обход продолжается, а не начинается
+        /// заново.
+        /// </summary>
+        async public Task<string> ParseAllTask(int maxPages = 5000) =>
+            await _syncService.ParseAllTaskAsync(maxPages);
+
+        /// <summary>
+        /// Обход архива по списку сайта, под входом. Через API архив не взять:
+        /// он отдаёт только две страницы свежего, и это его устройство, а не
+        /// ограничение для гостя. Место остановки запоминается.
+        /// </summary>
+        async public Task<string> ParseArchive(int maxPages = 3000) =>
+            await _syncService.ParseArchiveAsync(maxPages);
     }
 }

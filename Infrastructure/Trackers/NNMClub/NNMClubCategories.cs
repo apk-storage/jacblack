@@ -78,5 +78,51 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
         };
 
         public static IEnumerable<string> Ids => Map.Keys;
+
+        /// <summary>
+        /// Раздел по названию форума — для обхода архива через tracker.php.
+        ///
+        /// Там в строке выдачи стоит имя форума, а не номер портальной
+        /// категории: пространства номеров у них разные (у портала c=1..28,
+        /// у форумов f=218 и далее, всего 698). Сопоставлять номера напрямую
+        /// нельзя, поэтому разбираем по названию — оно у nnmclub говорящее
+        /// («Зарубежные Новинки (SD, DVD)», «Аниме», «Документальные фильмы»).
+        ///
+        /// Неопознанное считаем кино: для видео это безопасная догадка, а всё
+        /// невидео (музыка, игры, книги) отсеется дальше по общему правилу
+        /// FileDB.IsWantedContent.
+        /// </summary>
+        public static (string[] Types, NNMClubTitleKind Kind) ForForumName(string forumName)
+        {
+            string n = (forumName ?? string.Empty).ToLowerInvariant();
+
+            if (n.Contains("аниме") || n.Contains("манга"))
+                return (new[] { "anime" }, NNMClubTitleKind.Anime);
+
+            if (n.Contains("мультсериал"))
+                return (new[] { "multserial" }, NNMClubTitleKind.KidsMult);
+
+            if (n.Contains("мульт"))
+                return (new[] { "multfilm" }, NNMClubTitleKind.KidsMult);
+
+            if (n.Contains("докум"))
+                return (new[] { "documovie", "docuserial" }, NNMClubTitleKind.ShowLike);
+
+            if (n.Contains("спорт"))
+                return (new[] { "sport" }, NNMClubTitleKind.Sport);
+
+            if (n.Contains("юмор") || n.Contains("театр") || n.Contains("тв-шоу") || n.Contains("телешоу") || n.Contains("музвидео"))
+                return (new[] { "tvshow" }, NNMClubTitleKind.ShowLike);
+
+            if (n.Contains("сериал"))
+                return n.Contains("наши") || n.Contains("отечествен") || n.Contains("российс")
+                    ? (new[] { "serial" }, NNMClubTitleKind.RuSerial)
+                    : (new[] { "serial" }, NNMClubTitleKind.ForeignSerial);
+
+            if (n.Contains("наше кино") || n.Contains("отечествен") || n.Contains("российс"))
+                return (new[] { "movie" }, NNMClubTitleKind.RuMovie);
+
+            return (new[] { "movie" }, NNMClubTitleKind.ForeignCinema);
+        }
     }
 }

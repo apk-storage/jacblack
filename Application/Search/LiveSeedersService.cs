@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using JacRed.Infrastructure.Logging;
 using JacRed.Infrastructure.Networking;
 using JacRed.Models.Api;
 using JacRed.Models.Details;
@@ -48,7 +49,16 @@ namespace JacRed.Application.Search
             => ApplyCoreAsync(
                 results,
                 r => r.MagnetUri,
-                (r, counts) => { r.Seeders = counts.Seeders; r.Peers = counts.Leechers; },
+                (r, counts) =>
+                {
+                    r.Seeders = counts.Seeders;
+                    r.Peers = counts.Leechers;
+
+                    // Отмечаем, что число получено опросом, а не взято из базы.
+                    // Всё, что осталось без отметки, показывается как непроверенное.
+                    if (r.info != null)
+                        r.info.seedersLive = true;
+                },
                 r => r.Seeders,
                 cancellationToken);
 
@@ -120,7 +130,10 @@ namespace JacRed.Application.Search
             }
 
             if (pending.Count > 0)
+            {
                 await ScrapePendingAsync(conf, pending, announcesByHash, known, sw, cancellationToken);
+                FillCacheInBackground(conf, pending, known, announcesByHash);
+            }
 
             foreach (var pair in known)
             {
@@ -139,6 +152,108 @@ namespace JacRed.Application.Search
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Выбирает трекеры так, чтобы спросить про КАЖДУЮ раздачу, а не про
+        /// большинство.
+        ///
+        /// Раньше брались просто самые «populярные» трекеры выдачи — четыре
+        /// штуки с наибольшим числом раздач. Беда в том, что раздача, чей
+        /// трекер в эту четвёрку не попал, не опрашивалась вовсе, и ей
+        /// доставалось старое число из базы. Отсюда жалобы в обе стороны:
+        /// «показывает 5, а раздача мертва» и «показывает 5, а там 200+».
+        ///
+        /// Теперь набор собирается жадно: каждый следующий трекер — тот, что
+        /// закрывает больше всего ещё не покрытых раздач. При том же числе
+        /// запросов покрытие получается заметно полнее.
+        /// </summary>
+        static List<KeyValuePair<string, List<string>>> SelectCoveringTrackers(
+            Dictionary<string, List<string>> byTracker, int limit)
+        {
+            var uncovered = new HashSet<string>(byTracker.SelectMany(x => x.Value), StringComparer.OrdinalIgnoreCase);
+            var chosen = new List<KeyValuePair<string, List<string>>>();
+            var left = new Dictionary<string, List<string>>(byTracker, StringComparer.OrdinalIgnoreCase);
+
+            while (chosen.Count < limit && uncovered.Count > 0 && left.Count > 0)
+            {
+                string best = null;
+                int bestGain = 0;
+
+                foreach (var pair in left)
+                {
+                    int gain = pair.Value.Count(h => uncovered.Contains(h));
+                    if (gain > bestGain)
+                    {
+                        bestGain = gain;
+                        best = pair.Key;
+                    }
+                }
+
+                // Оставшиеся трекеры не добавляют ничего нового.
+                if (best == null)
+                    break;
+
+                chosen.Add(new KeyValuePair<string, List<string>>(best, left[best]));
+                foreach (string h in left[best])
+                    uncovered.Remove(h);
+
+                left.Remove(best);
+            }
+
+            return chosen;
+        }
+
+        /// <summary>
+        /// Дозапрашивает то, что не влезло в бюджет ответа, уже после того как
+        /// ответ ушёл. Посетителю это ничего не стоит, а кеш к следующему
+        /// запросу оказывается заполнен — и числа становятся честными.
+        ///
+        /// Токен запроса сюда не передаётся намеренно: он отменяется, как только
+        /// клиент получил ответ, и фоновая работа умерла бы, не начавшись.
+        /// </summary>
+        void FillCacheInBackground(
+            Models.AppConf.ScrapeSettings conf,
+            List<string> pending,
+            Dictionary<string, TrackerScrapeClient.Counts> known,
+            Dictionary<string, List<string>> announcesByHash)
+        {
+            if (conf.backgroundFillMs <= 0 || _cache == null)
+                return;
+
+            var leftovers = pending.Where(h => !known.ContainsKey(h)).ToList();
+            if (leftovers.Count == 0)
+                return;
+
+            // Своя копия настроек: бюджет здесь другой, и менять общий нельзя —
+            // он же обслуживает синхронный путь.
+            var slow = new Models.AppConf.ScrapeSettings
+            {
+                enable = conf.enable,
+                budgetMs = conf.backgroundFillMs,
+                trackerTimeoutMs = conf.trackerTimeoutMs,
+                cacheMinutes = conf.cacheMinutes,
+                noAnswerMinutes = conf.noAnswerMinutes,
+                maxTrackers = conf.maxTrackers,
+                maxHashesPerRequest = conf.maxHashesPerRequest,
+                demoteDead = conf.demoteDead,
+                backgroundFillMs = 0
+            };
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await ScrapePendingAsync(
+                        slow, leftovers, announcesByHash,
+                        new Dictionary<string, TrackerScrapeClient.Counts>(StringComparer.OrdinalIgnoreCase),
+                        Stopwatch.StartNew(), CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, "догрев кеша сидов не удался", ex);
+                }
+            });
         }
 
         async Task ScrapePendingAsync(
@@ -170,9 +285,7 @@ namespace JacRed.Application.Search
             if (byTracker.Count == 0)
                 return;
 
-            var order = byTracker.OrderByDescending(x => x.Value.Count)
-                                 .Take(Math.Max(1, conf.maxTrackers))
-                                 .ToList();
+            var order = SelectCoveringTrackers(byTracker, Math.Max(1, conf.maxTrackers));
 
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(Math.Max(100, conf.budgetMs));
@@ -217,8 +330,9 @@ namespace JacRed.Application.Search
 
                 foreach (var pair in task.Result)
                 {
-                    // Первый ответивший трекер выигрывает: если раздачу знают двое,
-                    // большее из значений всё равно неизвестно какое честнее.
+                    // Выигрывает большее. Трекер знает только тех, кто анонсировался
+                    // именно ему, поэтому меньшее число — это всегда неполная
+                    // картина, а не более честная.
                     if (known.ContainsKey(pair.Key))
                     {
                         if (pair.Value.Seeders <= known[pair.Key].Seeders)

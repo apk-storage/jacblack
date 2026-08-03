@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using JacRed.Infrastructure.Utils;
 using JacRed.Infrastructure.Networking;
@@ -24,55 +23,37 @@ namespace JacRed.Infrastructure.Persistence
 
         static ConcurrentDictionary<string, WriteTaskModel> openWriteTask = new ConcurrentDictionary<string, WriteTaskModel>();
 
+        /// <summary>
+        /// Поднимает индекс базы: сам файл, а если его нет или он не читается —
+        /// суточную копию за сегодня, затем за вчера.
+        ///
+        /// Отсюда убран переход со схемы от 29.08.2023, где значением была
+        /// голая дата вместо <see cref="MasterDbShard"/>. Живых баз в той схеме
+        /// не осталось — проверено 30.07.2026 на рабочей, все 349 921 ключа
+        /// новые, — а код был не бесплатным: на каждом запуске он пробовал
+        /// разобрать индекс заведомо негодной схемой и глушил исключение.
+        /// </summary>
         static FileDB()
         {
             if (File.Exists("Data/masterDb.bz"))
                 masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>("Data/masterDb.bz");
 
+            if (masterDb != null)
+                return;
+
+            if (File.Exists($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz"))
+                masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz");
+
+            if (masterDb == null && File.Exists($"Data/masterDb_{DateTime.Today.AddDays(-1):dd-MM-yyyy}.bz"))
+                masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>($"Data/masterDb_{DateTime.Today.AddDays(-1):dd-MM-yyyy}.bz");
+
             if (masterDb == null)
-            {
-                if (File.Exists($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz"))
-                    masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz");
+                masterDb = new ConcurrentDictionary<string, MasterDbShard>();
 
-                if (masterDb == null && File.Exists($"Data/masterDb_{DateTime.Today.AddDays(-1):dd-MM-yyyy}.bz"))
-                    masterDb = JsonStream.Read<ConcurrentDictionary<string, MasterDbShard>>($"Data/masterDb_{DateTime.Today.AddDays(-1):dd-MM-yyyy}.bz");
-
-                if (masterDb == null)
-                    masterDb = new ConcurrentDictionary<string, MasterDbShard>();
-
-                #region переход с 29.08.2023
-                if (File.Exists("Data/masterDb.bz"))
-                {
-                    try
-                    {
-                        foreach (var item in JsonStream.Read<Dictionary<string, DateTime>>("Data/masterDb.bz"))
-                        {
-                            masterDb.TryAdd(item.Key, new MasterDbShard
-                            {
-                                updateTime = item.Value,
-                                fileTime = item.Value.ToFileTimeUtc()
-                            });
-                        }
-
-                        if (masterDb.Count > 0)
-                        {
-                            JsonStream.Write("Data/masterDb.bz", masterDb);
-                            return;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Ожидаемо и не страшно: у базы нового формата разбор
-                        // старой схемы падает всегда. Поэтому Debug, а не тревога
-                        // при каждом запуске.
-                        JacRedLog.Swallowed(JacRedLogCategories.Fdb, "разбор masterDb в старой схеме", ex, LogLevel.Debug);
-                    }
-                }
-                #endregion
-
-                if (File.Exists(Path.Combine("Data", "temp", "lastsync.txt")))
-                    File.Delete(Path.Combine("Data", "temp", "lastsync.txt"));
-            }
+            // Индекса не было или он не прочитался — отметка о последней
+            // синхронизации больше ничему не соответствует.
+            if (File.Exists(Path.Combine("Data", "temp", "lastsync.txt")))
+                File.Delete(Path.Combine("Data", "temp", "lastsync.txt"));
         }
         #endregion
 
@@ -178,65 +159,74 @@ namespace JacRed.Infrastructure.Persistence
         #endregion
 
         #region OpenRead / OpenWrite
+        /// <summary>
+        /// Берёт из кеша запись о шарде — или заводит её, если шард ещё не
+        /// открыт, — и отдаёт под собственным замком этой записи.
+        ///
+        /// Зачем такая осторожность. Раньше открытие шло через TryGetValue +
+        /// TryAdd, и два потока, разошедшиеся на этой паре, получали ДВА разных
+        /// экземпляра одного шарда: победитель попадал в кеш, а проигравшему
+        /// возвращали его собственный. Дальше оба читали один файл, писали в
+        /// свои копии и по очереди сохраняли — чьи записи легли вторыми, те и
+        /// оставались, остальные пропадали без следа. Случай не выдуманный:
+        /// один и тот же фильм приходит с разных трекеров, а ключ шарда
+        /// строится по названию, поэтому параллельные обходы регулярно метят
+        /// в один шард.
+        ///
+        /// Второе, что закрывает замок, — вытеснение из кеша между «нашли» и
+        /// «взяли»: вытесненный экземпляр уже сохранён и никем не разделяется,
+        /// писать в него нельзя. Проверка тождества под замком это ловит.
+        /// </summary>
+        static WriteTaskModel AcquireShard(string key, bool forWrite, bool update_lastread)
+        {
+            while (true)
+            {
+                var wtm = openWriteTask.GetOrAdd(key, k => new WriteTaskModel { db = new FileDB(k), openconnection = 0 });
+
+                lock (wtm)
+                {
+                    if (!openWriteTask.TryGetValue(key, out var current) || !ReferenceEquals(current, wtm))
+                        continue;
+
+                    if (forWrite)
+                        wtm.openconnection += 1;
+
+                    if (update_lastread)
+                    {
+                        wtm.countread++;
+                        wtm.lastread = DateTime.UtcNow;
+                    }
+
+                    return wtm;
+                }
+            }
+        }
+
         /// <summary>Always returns a snapshot — never expose live Database to concurrent readers.</summary>
         public static IReadOnlyDictionary<string, TorrentDetails> OpenRead(string key, bool update_lastread = false, bool cache = true)
         {
+            if (AppInit.conf.evercache.enable && (cache || AppInit.conf.evercache.validHour == 0))
+                return AcquireShard(key, forWrite: false, update_lastread).db.GetSnapshot();
+
             if (openWriteTask.TryGetValue(key, out WriteTaskModel val))
             {
-                if (update_lastread)
-                {
-                    val.countread++;
-                    val.lastread = DateTime.UtcNow;
-                }
-
-                return val.db.GetSnapshot();
-            }
-
-            var fdb = new FileDB(key);
-
-            if (AppInit.conf.evercache.enable && (cache || AppInit.conf.evercache.validHour == 0))
-            {
-                var wtm = new WriteTaskModel() { db = fdb, openconnection = 0 };
-                if (update_lastread)
-                {
-                    wtm.countread++;
-                    wtm.lastread = DateTime.UtcNow;
-                }
-
-                if (openWriteTask.TryAdd(key, wtm))
-                    return fdb.GetSnapshot();
-
-                fdb.Dispose();
-                if (openWriteTask.TryGetValue(key, out val))
+                lock (val)
                 {
                     if (update_lastread)
                     {
                         val.countread++;
                         val.lastread = DateTime.UtcNow;
                     }
-                    return val.db.GetSnapshot();
                 }
+
+                return val.db.GetSnapshot();
             }
 
-            var snapshot = fdb.GetSnapshot();
-            fdb.Dispose();
-            return snapshot;
+            // Кеш выключен: читаем разово, в общий список не заводим.
+            return new FileDB(key).GetSnapshot();
         }
 
-        public static FileDB OpenWrite(string key)
-        {
-            if (openWriteTask.TryGetValue(key, out WriteTaskModel val))
-            {
-                val.openconnection += 1;
-                return val.db;
-            }
-            else
-            {
-                var fdb = new FileDB(key);
-                openWriteTask.TryAdd(key, new WriteTaskModel() { db = fdb, openconnection = 1 });
-                return fdb;
-            }
-        }
+        public static FileDB OpenWrite(string key) => AcquireShard(key, forWrite: true, update_lastread: false).db;
         #endregion
 
         /// <summary>
@@ -327,6 +317,9 @@ namespace JacRed.Infrastructure.Persistence
                 // записями и должен переживать перезапуск вместе с базой.
                 ImdbIndex.SaveIfDirty();
 
+                // Отметки свежести источников — оттуда же и по той же причине.
+                Indexers.TrackerFreshness.SaveIfDirty();
+
                 if (!File.Exists($"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz"))
                     File.Copy("Data/masterDb.bz", $"Data/masterDb_{DateTime.Today:dd-MM-yyyy}.bz");
 
@@ -359,43 +352,7 @@ namespace JacRed.Infrastructure.Persistence
             try
             {
                 using (var fdb = OpenWrite(torrentKey))
-                {
-                    // Ищем торрент по magnet ссылке
-                    var torrent = fdb.Database.Values.FirstOrDefault(t =>
-                        !string.IsNullOrEmpty(t.magnet) &&
-                        t.magnet.Equals(magnet, StringComparison.OrdinalIgnoreCase));
-
-                    if (torrent != null)
-                    {
-                        bool updated = false;
-
-                        // Обновляем счетчик попыток
-                        if (torrent.ffprobe_tryingdata != ffprobeTryingData)
-                        {
-                            torrent.ffprobe_tryingdata = ffprobeTryingData;
-                            updated = true;
-                        }
-
-                        // Обновляем результаты анализа (если есть)
-                        if (ffprobeResult != null && ffprobeResult.streams != null && ffprobeResult.streams.Count > 0)
-                        {
-                            torrent.ffprobe = ffprobeResult.streams;  // Преобразуем FfprobeModel в List<ffStream>
-                            updated = true;
-                        }
-
-                        if (updated)
-                        {
-                            // Обновляем время изменения
-                            torrent.updateTime = DateTime.UtcNow;
-
-                            // Помечаем для сохранения при Dispose
-                            fdb.savechanges = true;
-
-                            // Обновляем masterDb
-                            AddOrUpdateMasterDb(torrent);
-                        }
-                    }
-                }
+                    fdb.ApplyFfprobe(magnet, ffprobeTryingData, ffprobeResult);
             }
             catch (Exception ex)
             {

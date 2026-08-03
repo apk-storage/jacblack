@@ -76,6 +76,8 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
             if (createTime != default)
                 t.createTime = createTime;
 
+            ApplyImdb(t, fullNews);
+
             string magnet = Regex.Match(fullNews, "href=\"(magnet:[^\"]+)\" class=\"(med )?magnet-link\"").Groups[1].Value;
             if (!string.IsNullOrWhiteSpace(magnet))
             {
@@ -84,6 +86,39 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
             }
 
             return false;
+        }
+
+        static readonly Regex ImdbLink = new Regex(@"imdb\.com/title/(tt\d{6,})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Код IMDB со страницы раздачи.
+        ///
+        /// Зачем он нужен именно отсюда. Код — единственное, чем можно
+        /// развести тёзок в поиске по карточке: «Наследники» (Succession)
+        /// и «Наследники» (Descendants: Wicked Wonderland) по названиям
+        /// неотличимы, русское у обоих совпадает с карточкой дословно.
+        /// А в базе код был лишь у той части записей, что пришла от
+        /// англоязычных источников: у 34 раздач «Succession» его не было
+        /// ни у одной, тогда как у чужих — у всех.
+        ///
+        /// Здесь же он лежит готовым: оформители рутрекера почти всегда
+        /// ставят в шапку прямую ссылку на imdb.com. Страницу мы и так
+        /// читаем ради magnet — забрать заодно код ничего не стоит.
+        /// </summary>
+        static void ApplyImdb(TorrentDetails t, string fullNews)
+        {
+            if (!string.IsNullOrEmpty(t.imdb))
+                return;
+
+            var m = ImdbLink.Match(fullNews);
+            if (!m.Success)
+                return;
+
+            t.imdb = m.Groups[1].Value.ToLowerInvariant();
+
+            // Кладём в словарь: он потом отвечает на вопрос «какой код
+            // у этой карточки», в том числе для раздач, где кода нет.
+            Persistence.ImdbIndex.Remember(t.imdb, t.name, t.originalname, t.relased);
         }
 
         /// <summary>Дата раздачи: «2026-07-06 00:17» отдельным абзацем в строке.</summary>

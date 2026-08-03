@@ -53,6 +53,21 @@ namespace JacRed.Infrastructure.Indexers
 
                     if (existing.info == null && item.info != null)
                         existing.info = item.info;
+
+                    // Адрес склеиваемой копии сохраняем: без него живой опрос
+                    // не найдёт раздачу на втором трекере — в записи останется
+                    // только адрес первого.
+                    if (!string.IsNullOrWhiteSpace(item.Details))
+                    {
+                        existing.info ??= new TorrentInfo();
+                        existing.info.sources ??= new List<string>();
+
+                        if (!string.IsNullOrWhiteSpace(existing.Details) && !existing.info.sources.Contains(existing.Details))
+                            existing.info.sources.Add(existing.Details);
+
+                        if (!existing.info.sources.Contains(item.Details))
+                            existing.info.sources.Add(item.Details);
+                    }
                 }
             }
 

@@ -13,17 +13,30 @@ namespace JacRed.Infrastructure.Persistence
         #region Cron
         static bool TryEvictCacheEntry(string key)
         {
-            if (!openWriteTask.TryGetValue(key, out WriteTaskModel wtm) || wtm.openconnection > 0)
+            if (!openWriteTask.TryGetValue(key, out WriteTaskModel wtm))
                 return false;
 
-            if (!openWriteTask.TryRemove(key, out wtm))
-                return false;
+            // Счётчик открытых записей проверяем ПОД замком той же записи, под
+            // которым его меняют открытие и закрытие. Без этого шард можно было
+            // выбросить из кеша ровно в тот миг, когда его кто-то брал в работу:
+            // дальше поток писал в вытесненный экземпляр, а следующий открывал
+            // файл заново — и накопленное затиралось.
+            lock (wtm)
+            {
+                if (wtm.openconnection > 0)
+                    return false;
 
-            // Запись вытесняется из кеша, и это последний шанс сохранить накопленное.
-            // Раньше сбой здесь проглатывался — накопленные торренты пропадали
-            // бесследно, а обход рапортовал, что всё сохранено.
-            try { wtm.db.SaveChangesIfNeeded(); }
-            catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, $"вытеснение {key}: сохранить не удалось", ex, LogLevel.Error); }
+                if (!openWriteTask.TryGetValue(key, out var current) || !ReferenceEquals(current, wtm))
+                    return false;
+
+                openWriteTask.TryRemove(key, out _);
+
+                // Последний шанс сохранить накопленное. Раньше сбой здесь
+                // проглатывался — торренты пропадали бесследно, а обход
+                // рапортовал, что всё сохранено.
+                try { wtm.db.SaveChangesIfNeeded(); }
+                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, $"вытеснение {key}: сохранить не удалось", ex, LogLevel.Error); }
+            }
 
             return true;
         }
@@ -62,7 +75,7 @@ namespace JacRed.Infrastructure.Persistence
                 {
                     if (openWriteTask.Count > AppInit.conf.evercache.maxOpenWriteTask)
                     {
-                        var query = openWriteTask.Where(i => DateTime.Now > i.Value.create.AddMinutes(10));
+                        var query = openWriteTask.Where(i => DateTime.UtcNow > i.Value.create.AddMinutes(10));
                         query = query.OrderBy(i => i.Value.countread).ThenBy(i => i.Value.lastread);
 
                         int dropped = query.Take(AppInit.conf.evercache.dropCacheTake).Count(i => TryEvictCacheEntry(i.Key));

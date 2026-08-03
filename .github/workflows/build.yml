@@ -1,4 +1,4 @@
-name: Build
+﻿name: Build
 
 on:
   push:
@@ -41,39 +41,30 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: webui/package-lock.json
+      # Интерфейс живёт в webui/. Прежний web/ удалён 02.08.2026 вместе с PWA,
+      # двумя языками и редактором настроек — с ним ушли проверки на eslint,
+      # Playwright и наличие sw.js, которых у нового интерфейса нет.
       - name: Install dependencies
         run: npm ci
-        working-directory: web
+        working-directory: webui
       - name: Verify generated OpenAPI types
         run: |
           npm run gen:api
           git diff --exit-code -- src/lib/api/types.ts
-        working-directory: web
+        working-directory: webui
       - name: Typecheck
         run: npm run typecheck
-        working-directory: web
-      - name: Lint
-        run: npm run lint
-        working-directory: web
+        working-directory: webui
       - name: Test
         run: npm test
-        working-directory: web
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-        working-directory: web
-      - name: Playwright smoke
-        run: npm run test:e2e -- --project=chromium
-        working-directory: web
+        working-directory: webui
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
-        working-directory: web
-      - name: Build PWA
+        working-directory: webui
+      - name: Build
         run: npm run build
-        working-directory: web
-      - name: Verify service worker
-        run: test -f dist/sw.js
-        working-directory: web
+        working-directory: webui
 
   extract-version:
     name: Extract version

@@ -16,6 +16,13 @@ namespace JacRed.Infrastructure.Trackers.Eztv
     /// старым, поэтому обычный обход берёт несколько первых страниц, а глубокий
     /// уходит дальше в историю.
     ///
+    /// У глубины есть жёсткий потолок: примерно с сотой страницы API перестаёт
+    /// листать и возвращает один и тот же кусок ленты. Замерено 30.07.2026 —
+    /// страницы 100, 105 и 150 отдали идентичный набор. Поэтому доступно около
+    /// десяти тысяч раздач, а не заявленный в ответе миллион. Обход, не знавший
+    /// об этом, прошёл 884 страницы и не добавил ни одной новой записи, так что
+    /// ниже стоит сторож: повторилась страница — дальше идти незачем.
+    ///
     /// Ограничение по частоте задаётся в настройках трекера; между страницами
     /// выдерживается пауза — источник открытый и бесплатный, добивать его
     /// незачем.
@@ -37,6 +44,16 @@ namespace JacRed.Infrastructure.Trackers.Eztv
         public Task<string> ParseAllAsync(int pages = 100, CancellationToken cancellationToken = default) =>
             RunAsync(fromPage: 1, pages: pages, cancellationToken);
 
+        /// <summary>
+        /// Отпечаток страницы: первый и последний идентификаторы плюс их число.
+        /// Сравнивать целиком незачем — если границы окна совпали, это то же
+        /// самое окно ленты.
+        /// </summary>
+        internal static string PageMark(EztvItem[] items) =>
+            items == null || items.Length == 0
+                ? null
+                : $"{items[0].Id}:{items[items.Length - 1].Id}:{items.Length}";
+
         async Task<string> RunAsync(int fromPage, int pages, CancellationToken cancellationToken)
         {
             if (pages < 1)
@@ -48,6 +65,7 @@ namespace JacRed.Infrastructure.Trackers.Eztv
                 ParserLog.Write(TrackerName, $"Parse start, страниц {pages}, host={Host}");
 
                 int fetched = 0, accepted = 0, emptyInARow = 0;
+                string previousPageMark = null;
 
                 try
                 {
@@ -85,6 +103,17 @@ namespace JacRed.Infrastructure.Trackers.Eztv
                         }
 
                         emptyInARow = 0;
+
+                        // Потолок листания. За ним API отдаёт один и тот же
+                        // кусок ленты, и обход крутится вхолостую часами.
+                        string mark = PageMark(items);
+                        if (mark != null && mark == previousPageMark)
+                        {
+                            ParserLog.Write(TrackerName, $"Страница {page} повторяет предыдущую — глубже лента не листается, обход завершён");
+                            break;
+                        }
+
+                        previousPageMark = mark;
                         fetched += items.Length;
 
                         var torrents = EztvParser.ParseItems(items);

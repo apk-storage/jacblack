@@ -29,6 +29,9 @@ namespace JacRed.Infrastructure.Background
             try { Infrastructure.Persistence.ImdbIndex.Load(); }
             catch (Exception ex) { _logger.LogWarning(ex, "imdb index load"); }
 
+            try { Infrastructure.Indexers.TrackerFreshness.Load(); }
+            catch (Exception ex) { _logger.LogWarning(ex, "tracker freshness load"); }
+
             try { TracksDB.StartupInit(); }
             catch (IOException ex) { _logger.LogWarning(ex, "tracks startup"); }
             catch (UnauthorizedAccessException ex) { _logger.LogWarning(ex, "tracks startup"); }

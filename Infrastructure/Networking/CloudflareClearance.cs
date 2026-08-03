@@ -82,7 +82,24 @@ namespace JacRed.Infrastructure.Networking
         }
 
         #region признак «хост за проверкой»
-        /// <summary>Ответ похож на вызов Cloudflare, а не на обычный отказ.</summary>
+        /// <summary>
+        /// Ответ похож на вызов Cloudflare, а не на обычный отказ.
+        ///
+        /// Раньше признаком считалось «403 или 503 ПЛЮС заголовок cf-ray», и это
+        /// было слишком широко: `cf-ray` Cloudflare ставит на КАЖДЫЙ ответ любого
+        /// сайта за ним, включая обычный 200. Проверено 31.07.2026 на nnmclub.to —
+        /// заголовок пришёл вместе с успешной страницей. Значит любой отказ
+        /// самого трекера, отданный через Cloudflare (перегрузка, бан по частоте,
+        /// профилактика), мы принимали за проверку и уводили хост в браузер.
+        /// Именно так nnmclub застрял: глубокий обход упёрся в его же ограничение
+        /// частоты, хост пометился закрытым, и дальше 99.6% страниц не открылись
+        /// вовсе, хотя прямой запрос отдавал их целиком.
+        ///
+        /// Признаком остаётся `cf-mitigated` — его Cloudflare ставит именно
+        /// тогда, когда сама вмешалась в запрос. Тело здесь недоступно, поэтому
+        /// разбор разметки задачи делает <see cref="IsChallengeBody"/> у
+        /// вызывающего, когда тело уже прочитано.
+        /// </summary>
         public static bool IsChallenge(HttpResponseMessage response)
         {
             if (response == null)
@@ -92,8 +109,24 @@ namespace JacRed.Infrastructure.Networking
                 response.StatusCode != System.Net.HttpStatusCode.ServiceUnavailable)
                 return false;
 
-            return response.Headers.TryGetValues("cf-mitigated", out _) ||
-                   response.Headers.TryGetValues("cf-ray", out _);
+            return response.Headers.TryGetValues("cf-mitigated", out _);
+        }
+
+        /// <summary>
+        /// Второй признак — по телу ответа. Нужен для старых видов проверки,
+        /// где Cloudflare отдаёт страницу «Just a moment…» без `cf-mitigated`.
+        /// Разметку задачи ни один трекер в обычной выдаче не отдаёт, поэтому
+        /// ложное срабатывание маловероятно.
+        /// </summary>
+        public static bool IsChallengeBody(string body)
+        {
+            if (string.IsNullOrEmpty(body) || body.Length > 200_000)
+                return false;
+
+            return body.Contains("cf-browser-verification", StringComparison.OrdinalIgnoreCase)
+                || body.Contains("cf_chl_opt", StringComparison.OrdinalIgnoreCase)
+                || body.Contains("challenge-platform", StringComparison.OrdinalIgnoreCase)
+                || body.Contains("Just a moment", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>Про этот хост уже известно, что обычный клиент туда не пройдёт.</summary>
@@ -128,6 +161,27 @@ namespace JacRed.Infrastructure.Networking
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Хост ответил обычному клиенту — проверки на нём больше нет.
+        ///
+        /// Без этого отметка держалась все guardedHours, даже когда проба
+        /// проходила успешно: IsGuarded пропускал один запрос обычным путём,
+        /// но снять отметку было некому. Замерено 31.07.2026 на nnmclub —
+        /// он давно отдавал 200 напрямую, а мы шесть часов гоняли его через
+        /// браузер, где он делил одну сессию с rutracker и половина обращений
+        /// отваливалась по таймауту: 221 из 450 за двадцать минут. Внешне это
+        /// выглядело как «обход не работает» — в журнале ноль разобранных
+        /// страниц и ни одной ошибки.
+        /// </summary>
+        public static void Unguard(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+                return;
+
+            if (_guarded.TryRemove(host, out _))
+                JacRedLog.Information(JacRedLogCategories.Host, $"{host} отвечает обычному клиенту, браузер больше не нужен");
         }
 
         public static void MarkGuarded(string host)
@@ -173,35 +227,37 @@ namespace JacRed.Infrastructure.Networking
                 if (!_sessionAlive && !await CreateSessionAsync(conf))
                     return null;
 
-                var solution = await RequestAsync(conf, url, cookie);
+                var (outcome, html) = await RequestAsync(conf, url, cookie);
 
-                // Отказ бывает не только от «сессии больше нет»: браузер может
-                // упасть посреди решения задачи, и тогда служба отвечает
-                // «Read timed out». Проверено 28.07.2026 — Chromium убивало
-                // по памяти. На свежей сессии тот же адрес открывается.
+                // Пересоздаём сессию ТОЛЬКО когда сломался браузер: он может
+                // упасть посреди решения задачи, и служба отвечает «Read timed
+                // out» — проверено 28.07.2026, Chromium убивало по памяти.
                 //
-                // Поэтому вторая попытка делается при ЛЮБОМ отказе, но ровно
-                // одна: если и она не прошла, значит дело не в браузере.
-                if (solution == null)
+                // А вот когда браузер отработал, но сайт ответил 403 или 404,
+                // сессия ни при чём. Раньше её сносило и здесь, и каждая такая
+                // страница стоила лишних 15 секунд на новое решение задачи.
+                // Замер 31.07.2026: первая страница в новой сессии 15.5 с,
+                // вторая и третья в той же — 2.7 и 2.3 с.
+                if (outcome == FetchOutcome.BrowserFailed)
                 {
                     await DestroySessionAsync(conf);
 
                     if (!await CreateSessionAsync(conf))
                         return null;
 
-                    solution = await RequestAsync(conf, url, cookie);
+                    (outcome, html) = await RequestAsync(conf, url, cookie);
 
-                    if (solution != null)
+                    if (outcome == FetchOutcome.Ok)
                         JacRedLog.Warning(JacRedLogCategories.Host, $"{host}: получилось со второй попытки, сессия пересоздана");
                 }
 
-                if (solution == null)
-                    return null;
-
+                // Сессия жива в любом случае, кроме уже обработанного выше:
+                // отметку об использовании ставим и после неудачной страницы,
+                // иначе полоса закрытых разделов усыпит браузер по простою.
                 _lastUse = DateTime.UtcNow;
                 ArmIdleTimer(conf);
 
-                return solution;
+                return outcome == FetchOutcome.Ok ? html : null;
             }
             catch (Exception ex)
             {
@@ -214,7 +270,74 @@ namespace JacRed.Infrastructure.Networking
             }
         }
 
-        static async Task<string> RequestAsync(FlareSolverrSettingsView conf, string url, string cookie)
+        /// <summary>
+        /// Чем кончилось обращение к браузеру. Разделение важное: раньше все
+        /// три исхода выглядели как «пусто», и сессия сносилась даже тогда,
+        /// когда сам браузер работал исправно, а сайт всего лишь ответил 403.
+        /// Пересоздание стоит 15 секунд — замер 31.07.2026: первая страница
+        /// в новой сессии 15.5 с, вторая и третья в той же 2.7 и 2.3 с.
+        /// Отсюда и брались средние 50 секунд на страницу.
+        /// </summary>
+        enum FetchOutcome
+        {
+            /// <summary>Страница получена.</summary>
+            Ok,
+
+            /// <summary>Браузер отработал, но сайт не отдал страницу. Сессия цела.</summary>
+            PageFailed,
+
+            /// <summary>Сломался сам браузер или пропала сессия — нужна новая.</summary>
+            BrowserFailed
+        }
+
+        /// <summary>
+        /// Отправляет форму через браузер и возвращает страницу.
+        ///
+        /// Понадобилось для живых сидов rutracker: его поиск гостю не доступен,
+        /// а под входом отдаёт список с колонкой сидов — 50 строк за один
+        /// запрос. Обычным клиентом туда не пройти, там проверка Cloudflare,
+        /// поэтому и вход, и поиск идут одной браузерной сессией.
+        /// </summary>
+        public static async Task<string> PostFormAsync(string url, string formData)
+        {
+            var conf = Conf;
+            if (conf.Url == null || string.IsNullOrWhiteSpace(url))
+                return null;
+
+            await _gate.WaitAsync();
+            try
+            {
+                if (!_sessionAlive && !await CreateSessionAsync(conf))
+                    return null;
+
+                var payload = new Dictionary<string, object>
+                {
+                    ["cmd"] = "request.post",
+                    ["session"] = SessionName,
+                    ["url"] = url,
+                    ["postData"] = formData ?? string.Empty,
+                    ["maxTimeout"] = conf.MaxTimeoutMs
+                };
+
+                var root = await CallAsync(conf, payload, conf.MaxTimeoutMs + 30000);
+                if (root == null || !string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                _lastUse = DateTime.UtcNow;
+                return root["solution"]?.Value<string>("response");
+            }
+            catch (Exception ex)
+            {
+                JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr: отправка формы не удалась: {ex.GetType().Name}");
+                return null;
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, string url, string cookie)
         {
             var payload = new Dictionary<string, object>
             {
@@ -229,8 +352,10 @@ namespace JacRed.Infrastructure.Networking
                 payload["cookies"] = jar;
 
             var root = await CallAsync(conf, payload, conf.MaxTimeoutMs + 30000);
+
+            // До службы не достучались — это про браузер, не про страницу.
             if (root == null)
-                return null;
+                return (FetchOutcome.BrowserFailed, null);
 
             if (!string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
             {
@@ -241,17 +366,20 @@ namespace JacRed.Infrastructure.Networking
                 if (message.IndexOf("session", StringComparison.OrdinalIgnoreCase) >= 0)
                     _sessionAlive = false;
 
-                return null;
+                return (FetchOutcome.BrowserFailed, null);
             }
 
             var solution = root.Value<JObject>("solution");
             int status = solution?.Value<int?>("status") ?? 0;
             string html = solution?.Value<string>("response");
 
+            // Браузер отработал и принёс ответ сайта. Если сайт отдал 403 или
+            // 404 — это свойство страницы, а не поломка сессии. Сносить её
+            // здесь было главной причиной медленного обхода.
             if (status != 200 || string.IsNullOrWhiteSpace(html))
-                return null;
+                return (FetchOutcome.PageFailed, null);
 
-            return html;
+            return (FetchOutcome.Ok, html);
         }
 
         static List<Dictionary<string, string>> ParseCookies(string cookie)

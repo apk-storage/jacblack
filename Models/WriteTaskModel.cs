@@ -9,7 +9,15 @@ namespace JacRed.Models
 
         public DateTime lastread { get; set; }
 
-        public DateTime create { get; set; } = DateTime.Now;
+        /// <summary>
+        /// Время создания записи, в UTC — как и <see cref="lastread"/>. Раньше
+        /// здесь стояло местное время: в контейнере оно на два часа впереди, и
+        /// две даты одной записи жили в разных часах. Уборка кеша сравнивала то
+        /// одну, то другую, и достаточно было перепутать их местами, чтобы
+        /// шарды либо вытеснялись на два часа раньше срока, либо не
+        /// вытеснялись вовсе.
+        /// </summary>
+        public DateTime create { get; set; } = DateTime.UtcNow;
 
         public int countread { get; set; }
 

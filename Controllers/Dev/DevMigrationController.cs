@@ -51,5 +51,12 @@ namespace JacRed.Controllers.Dev
 
         /// <summary>Проставить код IMDB по названию и году. Сначала ?dryRun=true.</summary>
         public JsonResult FillImdbFromDictionary(bool dryRun = true) => Json(_migrationService.FillImdbFromDictionary(dryRun));
+
+        /// <summary>
+        /// Наполнить словарь всеми написаниями названия, чтобы поиск переводил
+        /// запрос: «Веном» дотягивался до английских раздач yts и наоборот.
+        /// Записи не меняются, только словарь. Сначала ?dryRun=true.
+        /// </summary>
+        public JsonResult RebuildImdbAka(bool dryRun = true) => Json(_migrationService.RebuildImdbAka(dryRun));
     }
 }

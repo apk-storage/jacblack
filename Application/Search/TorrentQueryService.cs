@@ -15,11 +15,18 @@ namespace JacRed.Application.Search
     {
         readonly ILiveSeeders _liveSeeders;
         readonly JacRed.Application.Index.IFastDbIndex _fastDbIndex;
+        readonly ClosedTrackerSeeders _closedTrackers;
 
-        public TorrentQueryService(ILiveSeeders liveSeeders, JacRed.Application.Index.IFastDbIndex fastDbIndex)
+        public TorrentQueryService(
+            ILiveSeeders liveSeeders,
+            JacRed.Application.Index.IFastDbIndex fastDbIndex,
+            Infrastructure.Trackers.Kinozal.KinozalSyncService kinozal = null,
+            Infrastructure.Trackers.Toloka.TolokaSyncService toloka = null,
+            Infrastructure.Trackers.Bitru.BitruApiSyncService bitru = null)
         {
             _liveSeeders = liveSeeders;
             _fastDbIndex = fastDbIndex;
+            _closedTrackers = new ClosedTrackerSeeders(kinozal, toloka, bitru);
         }
 
         /// <summary>
@@ -73,6 +80,19 @@ namespace JacRed.Application.Search
             #region search kp/imdb
             (search, altname) = await TitleResolver.ResolveAsync(search, altname, memoryCache);
             #endregion
+
+            // Если второе название не прислали, подставляем его из словаря.
+            // Индекс ищет подстроку по склейке «имя : оригинальное имя»: у
+            // русских трекеров там оба языка, а у yts, eztv и piratebay оба
+            // поля английские — запрос «Веном» с ними не совпадёт физически.
+            // Замер 31.07.2026: «Веном» — 196 раздач и ни одной от yts,
+            // «Venom» — 213, из них 35 от yts.
+            if (string.IsNullOrWhiteSpace(altname))
+            {
+                var counterparts = ImdbIndex.Counterparts(search);
+                if (counterparts.Count > 0)
+                    altname = counterparts[0];
+            }
 
             #region Выборка
             var torrents = new Dictionary<string, TorrentDetails>();
@@ -156,8 +176,17 @@ namespace JacRed.Application.Search
                         if (t.types == null)
                             continue;
 
-                        if (string.IsNullOrWhiteSpace(type) || t.types.Contains(type))
-                            AddTorrents(t);
+                        if (!string.IsNullOrWhiteSpace(type) && !t.types.Contains(type))
+                            continue;
+
+                        // Ключ шарда отобрал кандидатов подстрокой, но пробелов
+                        // в нём нет — потому «Веном» и попадал внутрь
+                        // «Стиве|ном|Хокингом». Здесь исходные названия под
+                        // рукой, и совпадение проверяется по границе слова.
+                        if (!TitleMatch.Matches(t.name, t.originalname, _s, _altsearch))
+                            continue;
+
+                        AddTorrents(t);
                     }
 
                 }
@@ -178,13 +207,54 @@ namespace JacRed.Application.Search
             if (_liveSeeders != null)
                 deduped = await _liveSeeders.ApplyAsync(deduped);
 
-            IEnumerable<TorrentDetails> query = deduped;
+            // Закрытые трекеры анонсом не опрашиваются, у них свои пути —
+            // общий слой знает какие. До 02.08.2026 он висел только на выдаче
+            // индексаторов, и сайт из-за этого показывал числа из базы:
+            // удалённая раздача «Кода 8» стояла у него первой строкой с 96
+            // раздающими, когда в Лампе она уже была исправлена.
+            var targets = deduped
+                .Select(t => new SeedTarget
+                {
+                    Key = t.url,
+                    Tracker = t.trackerName,
+                    Urls = t.url,
+                    Apply = (sid, pir) => { t.sid = sid; t.pir = pir; }
+                })
+                .ToList();
+
+            // Оригинальное название берём из самих найденных записей, а не
+            // только из словаря. Сайт шлёт одну строку запроса, и словарь на
+            // неё отвечает не всегда — из-за этого на сайте проверенными были
+            // 39% раздач против 89–97% в Лампе, которая присылает оба названия.
+            // А в выдаче оригинал лежит прямо в записях: берём самый частый.
+            string dominantOriginal = altname;
+            if (string.IsNullOrWhiteSpace(dominantOriginal))
+            {
+                dominantOriginal = deduped
+                    .Where(t => !string.IsNullOrWhiteSpace(t.originalname))
+                    .GroupBy(t => t.originalname, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(g => g.Count())
+                    .Select(g => g.Key)
+                    .FirstOrDefault();
+            }
+
+            var verified = await _closedTrackers.ApplyAsync(targets, dominantOriginal, search);
+
+            // Раздачи, которых на трекере уже нет, не показываем: скачать их
+            // нельзя, а число сидов у них — прошлогодний снимок.
+            IEnumerable<TorrentDetails> query = deduped
+                .Where(t => !ClosedTrackerSeeders.IsDead(t.trackerName, t.url));
 
             #region sort
             switch (sort ?? string.Empty)
             {
                 case "sid":
-                    query = query.OrderByDescending(i => i.sid);
+                    // Проверенные числа выше непроверенных: непроверенное —
+                    // снимок неизвестной давности, и прошлогодние 96 раздающих
+                    // не должны стоять над сегодняшними 44.
+                    query = query
+                        .OrderByDescending(i => verified.Contains(i.url))
+                        .ThenByDescending(i => i.sid);
                     break;
                 case "pir":
                     query = query.OrderByDescending(i => i.pir);
@@ -239,9 +309,31 @@ namespace JacRed.Application.Search
                 i.quality,
                 i.voices,
                 i.seasons,
-                i.types
+                i.types,
+                // Сводку дорожек считаем здесь, а не на стороне интерфейса:
+                // разбор кодека из заголовка — та же логика, что в выдаче
+                // Jackett, и вторая её копия на TypeScript неминуемо разошлась
+                // бы с этой. Расхождения между копиями одной логики у нас уже
+                // оборачивались потерянными записями.
+                media = MediaSummary(i.ffprobe, i.title),
+                i.imdb,
+                // Проверено ли число раздающих прямо сейчас — живым опросом
+                // либо свежим обходом. Ложь означает снимок из базы, который
+                // может быть сделан хоть полгода назад.
+                seedersLive = verified.Contains(i.url)
+                    || Infrastructure.Indexers.SeedersFreshness.IsFresh(i.updateTime),
+                // Трекер не сообщает числа вовсе: у lostfilm счётчиков нет,
+                // и единица в записи проставлена разбором, а не данными.
+                seedersUnknown = Infrastructure.Indexers.SeedersFreshness.TrackerHidesSeeders(i.trackerName)
             }));
         }
+        /// <summary>Пустую сводку не отдаём: пустые плашки на карточке лишние.</summary>
+        static Infrastructure.Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacRed.Models.Tracks.ffStream> ffprobe, string title)
+        {
+            var summary = Infrastructure.Parsing.MediaTracks.Build(ffprobe, title);
+            return summary.IsEmpty ? null : summary;
+        }
+
         public object QueryQualitys(string name, string originalname, string type, int page = 1, int take = 1000)
         {
             string _s = StringConvert.SearchName(name);

@@ -30,6 +30,14 @@ namespace JacRed.Controllers.Cron
             return await _syncService.ParseAllTaskAsync();
         }
 
+        /// <summary>
+        /// Обход архива по форумам через tracker.php. Портал для этого не
+        /// годится: у трекера потолок в 200 результатов на любой запрос, и
+        /// вглубь он просто не пускает. Место остановки запоминается.
+        /// </summary>
+        async public Task<string> ParseArchive(int maxForums = 1000) =>
+            await _syncService.ParseArchiveAsync(maxForums);
+
         async public Task<string> ParseLatest(int pages = 5)
         {
             return await _syncService.ParseLatestAsync(pages);

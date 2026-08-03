@@ -321,9 +321,25 @@ namespace JacRed.Infrastructure.Indexers
                     sizeName = i.sizeName,
                     voices = i.voices,
                     seasons = i.seasons,
-                    types = i.types
+                    types = i.types,
+                    media = MediaSummary(i.ffprobe, i.title),
+                    imdb = i.imdb,
+                    seedersLive = SeedersFreshness.IsFresh(i.updateTime),
+                    seedersUnknown = SeedersFreshness.TrackerHidesSeeders(i.trackerName)
                 }
             };
+        }
+
+        /// <summary>
+        /// Сводку дорожек собираем и здесь: выдача Torznab и выдача Jackett
+        /// строятся разными путями, и оставить её в одном значило бы завести
+        /// расхождение — ровно то, на чём мы уже обжигались с размером.
+        /// Пустую сводку не отдаём.
+        /// </summary>
+        static Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacRed.Models.Tracks.ffStream> ffprobe, string title)
+        {
+            var summary = Parsing.MediaTracks.Build(ffprobe, title);
+            return summary.IsEmpty ? null : summary;
         }
     }
 }
