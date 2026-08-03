@@ -1,26 +1,30 @@
 #!/usr/bin/env bash
-# Build Vue SPA (web/) into a fresh wwwroot/ for .NET publish.
-# wwwroot is fully generated — not tracked in git (see .gitignore).
-# Runtime may later write wwwroot/trackers.txt (TrackersCron).
+# Собирает интерфейс (webui/) в свежий wwwroot/ перед публикацией .NET.
+# wwwroot целиком порождаемый — в git его нет (см. .gitignore).
+# Во время работы туда же пишется trackers.txt (TrackersCron), его сохраняем.
+#
+# Прежний интерфейс лежал в web/: Vue с PWA, двумя языками, редактором
+# настроек и веткой развёртывания на Cloudflare. Заменён на webui/ — тот же
+# Vue, но без всего перечисленного. Проверка на sw.js убрана вместе с PWA.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WEB="$ROOT/web"
+WEB="$ROOT/webui"
 WWW="$ROOT/wwwroot"
 DIST="$WEB/dist"
 OPENAPI_SRC="$WEB/public/openapi.yaml"
 
 if [[ ! -d "$WEB" ]]; then
-  echo "error: web/ not found at $WEB" >&2
+  echo "error: webui/ не найден по пути $WEB" >&2
   exit 1
 fi
 
 if [[ ! -f "$OPENAPI_SRC" ]]; then
-  echo "error: $OPENAPI_SRC missing — API contract must live in web/public" >&2
+  echo "error: нет $OPENAPI_SRC — описание API должно лежать в webui/public" >&2
   exit 1
 fi
 
-echo "==> Building web UI..."
+echo "==> Сборка интерфейса..."
 cd "$WEB"
 if [[ -f package-lock.json ]]; then
   npm ci
@@ -30,26 +34,31 @@ fi
 npm run build
 
 if [[ ! -f "$DIST/index.html" ]]; then
-  echo "error: web/dist/index.html missing after build" >&2
+  echo "error: после сборки нет $DIST/index.html" >&2
   exit 1
 fi
 if [[ ! -f "$DIST/openapi.yaml" ]]; then
-  echo "error: web/dist/openapi.yaml missing — expected copy from public/" >&2
-  exit 1
-fi
-if [[ ! -f "$DIST/sw.js" ]]; then
-  echo "error: web/dist/sw.js missing — PWA service worker was not generated" >&2
+  echo "error: после сборки нет $DIST/openapi.yaml — ожидалась копия из public/" >&2
   exit 1
 fi
 
-# Preserve runtime trackers.txt across rebuilds when present
+# Пути к файлам сборки должны быть корневыми: приложение живёт в корне сайта.
+# Если сюда попадёт сборка с базовым путём (её делают для временной выкладки),
+# страница откроется белой — браузер пойдёт за файлами не туда. Один раз уже
+# наступали, поэтому проверка стоит здесь, а не в голове.
+if ! grep -q 'src="/assets/' "$DIST/index.html"; then
+  echo "error: в index.html нет корневых путей — похоже, сборка сделана с базовым путём" >&2
+  exit 1
+fi
+
+# trackers.txt пишется во время работы, пересборка не должна его терять
 TRACKERS_BAK=""
 if [[ -f "$WWW/trackers.txt" ]]; then
   TRACKERS_BAK="$(mktemp)"
   cp "$WWW/trackers.txt" "$TRACKERS_BAK"
 fi
 
-echo "==> Recreating wwwroot from web/dist..."
+echo "==> Пересоздаём wwwroot из webui/dist..."
 rm -rf "$WWW"
 mkdir -p "$WWW"
 cp -a "$DIST"/. "$WWW"/
@@ -59,10 +68,10 @@ if [[ -n "$TRACKERS_BAK" ]]; then
   rm -f "$TRACKERS_BAK"
 fi
 
-if [[ ! -f "$WWW/index.html" || ! -f "$WWW/openapi.yaml" || ! -f "$WWW/sw.js" ]]; then
-  echo "error: wwwroot incomplete after merge" >&2
+if [[ ! -f "$WWW/index.html" || ! -f "$WWW/openapi.yaml" ]]; then
+  echo "error: wwwroot собран не полностью" >&2
   exit 1
 fi
 
 ASSET_COUNT="$(find "$WWW/assets" -type f | wc -l | tr -d ' ')"
-echo "==> wwwroot ready ($ASSET_COUNT files under assets/)"
+echo "==> wwwroot готов (файлов в assets: $ASSET_COUNT)"

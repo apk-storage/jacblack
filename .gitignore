@@ -407,3 +407,7 @@ temp/*
 
 # Version info file
 VersionInfo.g.cs
+
+# webui (Vue) build artifacts
+webui/node_modules/
+webui/dist/

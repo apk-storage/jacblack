@@ -1,3 +1,0 @@
-# Absolute origin of the JacRed backend (no trailing path).
-# Used by web/worker when previewing or deploying on Cloudflare.
-JACRED_ORIGIN=http://localhost:9117
