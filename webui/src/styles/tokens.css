@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+/*
+  JacBlack — монохром, только тёмная тема.
+
+  Светлой нет намеренно: у интерфейса одно лицо, и оно чёрное — по названию
+  и по делу. Это снимает целый пласт работы (вторая палитра, переключатель,
+  память выбора, мигание при загрузке) и снимает целый класс ошибок, где
+  что-то выглядит правильно в одной теме и разваливается в другой.
+
+  Серые с холодным уклоном: чистый средний серый читается как «не выбирали».
+  Цветной сигнал ровно один — состояние раздачи; всё остальное различается
+  весом, размером и положением.
+*/
+
+:root {
+  --jb-page: #08090a;
+  --jb-paper: #0c0d0f;
+  --jb-raised: #131519;
+  --jb-ink: #f2f3f5;
+  --jb-g700: #b3b8c0;
+  --jb-g500: #868c95;
+  --jb-g300: #3a3f47;
+  --jb-g150: #23262b;
+  --jb-g75: #16181c;
+
+  /* единственный цвет: раздача жива и это проверено сейчас */
+  --jb-live: #2fd48f;
+
+  --jb-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 28px rgb(0 0 0 / 0.45);
+  --jb-shadow-up: 0 -8px 24px rgb(0 0 0 / 0.5);
+
+  --jb-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --jb-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* высота шапки — на неё опираются закреплённые блоки */
+  --jb-header: 52px;
+
+  /* чтобы системные элементы — полосы прокрутки, поля ввода — были в тон */
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-page: var(--jb-page);
+  --color-paper: var(--jb-paper);
+  --color-raised: var(--jb-raised);
+  --color-ink: var(--jb-ink);
+  --color-g700: var(--jb-g700);
+  --color-g500: var(--jb-g500);
+  --color-g300: var(--jb-g300);
+  --color-g150: var(--jb-g150);
+  --color-g75: var(--jb-g75);
+  --color-live: var(--jb-live);
+  --font-sans: var(--jb-sans);
+  --font-mono: var(--jb-mono);
+}
+
+@layer base {
+  html {
+    background: var(--jb-page);
+    color: var(--jb-ink);
+    font-family: var(--jb-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  /* Числа сравнивают взглядом по вертикали — значит цифры одной ширины. */
+  .jb-num {
+    font-family: var(--jb-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--jb-ink);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /*
+    Состояние раздачи — три вида, а не два. Сиды опрашиваются в момент
+    выдачи с бюджетом 800 мс; кто не успел ответить, отдаёт число из базы.
+    Показывать такое наравне с проверенным значит выдавать старое за
+    свежее, поэтому у него полый контур.
+  */
+  .jb-seed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--jb-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    color: var(--jb-ink);
+  }
+
+  .jb-seed::before {
+    content: "";
+    flex: 0 0 7px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--jb-live);
+  }
+
+  .jb-seed--zero {
+    color: var(--jb-g500);
+    font-weight: 500;
+  }
+
+  .jb-seed--zero::before {
+    background: var(--jb-g300);
+  }
+
+  .jb-seed--stale {
+    color: var(--jb-g700);
+    font-weight: 500;
+  }
+
+  .jb-seed--stale::before {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--jb-g500);
+  }
+
+  /* Трекер не публикует счётчиков (lostfilm): вместо числа прочерк, точки нет
+     вовсе — показывать состояние нечему. */
+  .jb-seed--unknown {
+    color: var(--jb-g500);
+    font-weight: 500;
+  }
+
+  .jb-seed--unknown::before {
+    display: none;
+  }
+
+  /* Служебная надпись: капитель, разрядка, моноширинный */
+  .jb-label {
+    font-family: var(--jb-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--jb-g500);
+  }
+
+  /* Код языка и кодека: короткий токен вместо иконки — не требует легенды */
+  .jb-token {
+    font-family: var(--jb-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--jb-ink);
+    border: 1px solid var(--jb-g300);
+    border-radius: 3px;
+    padding: 0 4px;
+    white-space: nowrap;
+  }
+}
