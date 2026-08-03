@@ -1,4 +1,4 @@
-﻿namespace JacRed.Models.AppConf
+﻿namespace JacBlack.Models.AppConf
 {
     public class LoginSettings
     {

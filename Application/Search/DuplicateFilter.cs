@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using JacRed.Models.Details;
+using JacBlack.Models.Details;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     /// <summary>
     /// Убирает из выдачи повторы одной и той же раздачи ВНУТРИ одного трекера.

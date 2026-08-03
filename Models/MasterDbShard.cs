@@ -1,6 +1,6 @@
 using System;
 
-namespace JacRed.Models
+namespace JacBlack.Models
 {
     /// <summary>Per-shard metadata in masterDb (update time + file ordering key).</summary>
     public class MasterDbShard

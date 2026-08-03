@@ -1,4 +1,4 @@
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
@@ -6,7 +6,7 @@ using System.IO;
 using System.IO.Compression;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     public static class JsonStream
     {
@@ -67,7 +67,7 @@ namespace JacRed.Infrastructure.Persistence
         {
             try
             {
-                JacRedLog.Error(JacRedLogCategories.Fdb,
+                JacBlackLog.Error(JacBlackLogCategories.Fdb,
                     $"шард повреждён, уводим в карантин: {path} — {ex.GetType().Name}: {ex.Message}");
 
                 string dir = Path.Combine("Data", "corrupt");
@@ -81,7 +81,7 @@ namespace JacRed.Infrastructure.Persistence
             {
                 // Битый шард не удалось увести в карантин — он останется на месте
                 // и будет падать при каждом чтении, каждый раз заново.
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb,
                     $"битый шард {Path.GetFileName(path)} не увёлся в карантин", moveEx);
             }
         }
@@ -115,7 +115,7 @@ namespace JacRed.Infrastructure.Persistence
                 {
                     // Раньше сбой записи проглатывался целиком — потеря данных
                     // выглядела как обычная работа.
-                    JacRedLog.Error(JacRedLogCategories.Fdb,
+                    JacBlackLog.Error(JacBlackLogCategories.Fdb,
                         $"не удалось записать шард {path} — {ex.GetType().Name}: {ex.Message}");
 
                     try
@@ -127,7 +127,7 @@ namespace JacRed.Infrastructure.Persistence
                     {
                         // Временный файл останется мусором рядом с шардом.
                         // Debug: о самом сбое записи уже сказано строкой выше.
-                        JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Fdb,
                             $"не удалился временный файл {Path.GetFileName(tempPath)}", cleanupEx, LogLevel.Debug);
                     }
                 }

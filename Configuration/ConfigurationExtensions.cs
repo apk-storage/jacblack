@@ -1,11 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     public static class ConfigurationExtensions
     {
-        public static IServiceCollection AddJacRedConfiguration(this IServiceCollection services)
+        public static IServiceCollection AddJacBlackConfiguration(this IServiceCollection services)
         {
             AppConfigurationProvider.EnsureInitialized();
             var provider = AppConfigurationProvider.Instance;

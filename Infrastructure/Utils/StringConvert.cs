@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Utils
+namespace JacBlack.Infrastructure.Utils
 {
     public static class StringConvert
     {

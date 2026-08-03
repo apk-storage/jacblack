@@ -2,11 +2,11 @@ using System;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Infrastructure.Trackers.Rutracker
+namespace JacBlack.Infrastructure.Trackers.Rutracker
 {
     /// <summary>
     /// Достаёт код IMDB со страницы раздачи и запоминает его для карточки.
@@ -66,12 +66,12 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                     ImdbIndex.Remember(imdb, name, originalname, year);
                     ImdbIndex.SaveIfDirty();
 
-                    JacRedLog.Information(JacRedLogCategories.Trackers,
+                    JacBlackLog.Information(JacBlackLogCategories.Trackers,
                         $"rutracker: код {imdb} запомнен для «{originalname}» ({year})");
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"rutracker: код для «{originalname}» не добыт", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"rutracker: код для «{originalname}» не добыт", ex);
                 }
             });
         }

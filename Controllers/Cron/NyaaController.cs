@@ -1,10 +1,10 @@
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Nyaa;
+using JacBlack.Infrastructure.Trackers.Nyaa;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     /// <summary>
     /// nyaa.si — источник аниме взамен AnimeTosho, чья лента встала 8 мая 2026.

@@ -1,7 +1,7 @@
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Tracks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Tracks;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Models.Details;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -12,7 +12,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 
-namespace JacRed.Infrastructure.Stats
+namespace JacBlack.Infrastructure.Stats
 {
     /// <summary>
     /// Single-pass FDB scan: tracker stats (stats.json) + tracks export stats (tracks-stats.json) with one updatedAt.
@@ -48,7 +48,7 @@ namespace JacRed.Infrastructure.Stats
             {
                 // Отметка времени не прочиталась — статистика будет считаться
                 // устаревшей и пересобираться каждый раз, а это полторы минуты.
-                JacRedLog.Swallowed(JacRedLogCategories.Stats, "не прочиталась отметка времени статистики", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Stats, "не прочиталась отметка времени статистики", ex);
             }
 
             return null;
@@ -64,7 +64,7 @@ namespace JacRed.Infrastructure.Stats
             {
                 if (!force && !TracksDB.IsTrackIndexReadyForStats())
                 {
-                    JacRedLog.Information(JacRedLogCategories.Stats,
+                    JacBlackLog.Information(JacBlackLogCategories.Stats,
                         $"deferred — tracks index empty (index={TracksDB.TrackIndexCount}), waiting for index rebuild / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                     return _lastCollectedAtUtc;
                 }
@@ -78,7 +78,7 @@ namespace JacRed.Infrastructure.Stats
                 TracksDB.PublishExportStatsCache(updatedAt, scan);
 
                 _lastCollectedAtUtc = updatedAt;
-                JacRedLog.Information(JacRedLogCategories.Stats,
+                JacBlackLog.Information(JacBlackLogCategories.Stats,
                     $"collected {scan.Trackers.Count} trackers, torrents={scan.TorrentsScanned}, tracks total index={TracksDB.TrackIndexCount} / {sw.Elapsed.TotalSeconds:F1}s / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 
                 return updatedAt;
@@ -129,7 +129,7 @@ namespace JacRed.Infrastructure.Stats
                         // и расхождение с базой объяснить будет нечем. Счётчик уже
                         // есть и виден в статистике дорожек — пользуемся им.
                         result.TorrentDbErrors++;
-                        JacRedLog.Swallowed(JacRedLogCategories.Stats, $"торрент пропущен при подсчёте: {t?.url}", ex, LogLevel.Debug);
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Stats, $"торрент пропущен при подсчёте: {t?.url}", ex, LogLevel.Debug);
                     }
                 }
             }

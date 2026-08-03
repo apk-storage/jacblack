@@ -4,12 +4,12 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Indexers;
-using JacRed.Models.Api;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Indexers;
+using JacBlack.Models.Api;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     public class JackettSearchService : IJackettSearchService
     {
@@ -249,7 +249,7 @@ namespace JacRed.Application.Search
             if (string.IsNullOrWhiteSpace(source))
                 return title_original;
 
-            var counterparts = JacRed.Infrastructure.Persistence.ImdbIndex.Counterparts(source);
+            var counterparts = JacBlack.Infrastructure.Persistence.ImdbIndex.Counterparts(source);
             return counterparts.Count > 0 ? counterparts[0] : title_original;
         }
 

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public class IndexerSearchRequest
     {

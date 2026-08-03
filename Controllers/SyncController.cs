@@ -1,10 +1,10 @@
-﻿using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Tracks;
-using JacRed.Infrastructure.Networking;
-using JacRed.Models;
-using JacRed.Models.Details;
-using JacRed.Models.Sync.v2;
+﻿using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Tracks;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Models;
+using JacBlack.Models.Details;
+using JacBlack.Models.Sync.v2;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using System;
@@ -13,7 +13,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     public class SyncController : BaseController
     {
@@ -23,7 +23,7 @@ namespace JacRed.Controllers
 
         public static void Configuration()
         {
-            JacRedLog.Debug(JacRedLogCategories.Sync, "SyncController cache initialized");
+            JacBlackLog.Debug(JacBlackLogCategories.Sync, "SyncController cache initialized");
 
             masterDbCache = FileDB.masterDb.OrderBy(i => i.Value.fileTime).ToDictionary(k => k.Key, v => v.Value);
 
@@ -40,7 +40,7 @@ namespace JacRed.Controllers
                     {
                         // Кеш останется прежним — и те, кто синхронизируется с нами,
                         // будут получать всё более устаревшую картину базы.
-                        JacRedLog.Swallowed(JacRedLogCategories.Sync, "не обновился кеш masterDb", ex);
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Sync, "не обновился кеш masterDb", ex);
                     }
                 }
             });

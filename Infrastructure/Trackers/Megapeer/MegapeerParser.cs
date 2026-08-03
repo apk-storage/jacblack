@@ -4,12 +4,12 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Megapeer
+namespace JacBlack.Infrastructure.Trackers.Megapeer
 {
     public static class MegapeerParser
     {

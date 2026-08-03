@@ -1,8 +1,8 @@
 using System;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Logging;
 
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     public abstract class DevMigrationBase
     {
@@ -26,7 +26,7 @@ namespace JacRed.Application.Dev.Migrations
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "индекс после миграции не пересобрался", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "индекс после миграции не пересобрался", ex);
             }
         }
     }

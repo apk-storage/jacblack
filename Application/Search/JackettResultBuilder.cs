@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Web;
-using JacRed.Infrastructure.Tracks;
-using JacRed.Models.Api;
-using JacRed.Models.Details;
-using JacRed.Models.Tracks;
+using JacBlack.Infrastructure.Tracks;
+using JacBlack.Models.Api;
+using JacBlack.Models.Details;
+using JacBlack.Models.Tracks;
 using MonoTorrent;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     internal static class JackettResultBuilder
     {
@@ -296,7 +296,7 @@ namespace JacRed.Application.Search
         /// Сводку не отдаём, если в ней ничего нет: пустая плашка на карточке
         /// хуже отсутствующей.
         /// </summary>
-        static Infrastructure.Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacRed.Models.Tracks.ffStream> ffprobe, string title)
+        static Infrastructure.Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacBlack.Models.Tracks.ffStream> ffprobe, string title)
         {
             var summary = Infrastructure.Parsing.MediaTracks.Build(ffprobe, title);
             return summary.IsEmpty ? null : summary;

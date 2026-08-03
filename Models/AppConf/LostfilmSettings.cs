@@ -1,4 +1,4 @@
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// У LostFilm есть своя особенность, которой нет у остальных: страница

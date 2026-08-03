@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Anidub
+namespace JacBlack.Infrastructure.Trackers.Anidub
 {
     public static class AnidubParser
     {
@@ -45,7 +45,7 @@ namespace JacRed.Infrastructure.Trackers.Anidub
             {
                 string Match(string pattern, int index = 1)
                 {
-                    string res = JacRed.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim();
+                    string res = JacBlack.Infrastructure.Parsing.RegexCache.Get(pattern, RegexOptions.IgnoreCase).Match(row).Groups[index].Value.Trim();
                     res = Regex.Replace(res, "[\n\r\t ]+", " ");
                     return res.Trim();
                 }

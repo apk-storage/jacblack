@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
 
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     /// <summary>
     /// Удаляет файлы шардов, которых нет в индексе masterDb.
@@ -74,8 +74,8 @@ namespace JacRed.Application.Dev.Migrations
                     }
                     catch (Exception ex)
                     {
-                        Infrastructure.Logging.JacRedLog.Swallowed(
-                            Infrastructure.Logging.JacRedLogCategories.Fdb,
+                        Infrastructure.Logging.JacBlackLog.Swallowed(
+                            Infrastructure.Logging.JacBlackLogCategories.Fdb,
                             $"не прочитался размер осиротевшего шарда {relative}", ex,
                             Microsoft.Extensions.Logging.LogLevel.Debug);
                     }
@@ -91,8 +91,8 @@ namespace JacRed.Application.Dev.Migrations
                     catch (Exception ex)
                     {
                         failed++;
-                        Infrastructure.Logging.JacRedLog.Swallowed(
-                            Infrastructure.Logging.JacRedLogCategories.Fdb,
+                        Infrastructure.Logging.JacBlackLog.Swallowed(
+                            Infrastructure.Logging.JacBlackLogCategories.Fdb,
                             $"не удалился осиротевший шард {relative}", ex);
                     }
                 }

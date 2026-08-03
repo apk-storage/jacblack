@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Rutracker;
+using JacBlack.Infrastructure.Trackers.Rutracker;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     [Route("/cron/rutracker/[action]")]
     public class RutrackerController : BaseController

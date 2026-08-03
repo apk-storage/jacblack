@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     /// <summary>Polls init.yaml / init.conf every 10 seconds for hot-reload (replaces AppInit static ThreadPool loop).</summary>
     public sealed class AppConfigurationReloadWorker : BackgroundService

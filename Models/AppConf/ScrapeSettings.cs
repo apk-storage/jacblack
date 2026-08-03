@@ -1,4 +1,4 @@
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// Опрос трекеров о живых сидах в момент поиска.

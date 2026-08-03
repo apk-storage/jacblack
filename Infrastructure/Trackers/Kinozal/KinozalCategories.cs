@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Trackers.Kinozal
+namespace JacBlack.Infrastructure.Trackers.Kinozal
 {
     public enum KinozalTitleKind
     {
@@ -17,7 +17,7 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
     }
 
     /// <summary>
-    /// Single source of truth for Kinozal browse section ids, JacRed types, and title-parse strategy.
+    /// Single source of truth for Kinozal browse section ids, JacBlack types, and title-parse strategy.
     /// </summary>
     static class KinozalCategories
     {

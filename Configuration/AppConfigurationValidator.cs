@@ -1,9 +1,9 @@
-using JacRed.Configuration.Schema;
+using JacBlack.Configuration.Schema;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     public static class AppConfigurationValidator
     {

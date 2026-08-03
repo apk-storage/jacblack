@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.Eztv
+namespace JacBlack.Infrastructure.Trackers.Eztv
 {
     /// <summary>
     /// Запись из открытого API EZTV.

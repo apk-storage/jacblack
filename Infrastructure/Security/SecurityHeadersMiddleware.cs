@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
     public sealed class SecurityHeadersMiddleware
     {

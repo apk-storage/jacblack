@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     [Route("/jsondb/[action]")]
     public class DbController : BaseController

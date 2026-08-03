@@ -178,18 +178,18 @@ if [ "$config_file_readable" = false ]; then
     exit 1
 fi
 
-if [ ! -f /app/JacRed ]; then
-    echo "ERROR: Application binary does not exist at /app/JacRed" >&2
-    echo "Ensure /app/JacRed is present in the container image" >&2
+if [ ! -f /app/JacBlack ]; then
+    echo "ERROR: Application binary does not exist at /app/JacBlack" >&2
+    echo "Ensure /app/JacBlack is present in the container image" >&2
     exit 1
-elif [ ! -x /app/JacRed ]; then
+elif [ ! -x /app/JacBlack ]; then
     echo "ERROR: Application binary is not executable" >&2
-    echo "Ensure /app/JacRed has execute permissions" >&2
+    echo "Ensure /app/JacBlack has execute permissions" >&2
     exit 1
 fi
 
-# Start JacRed
-echo "Starting JacRed (version: ${JACRED_VERSION:-unknown}) on $(date)"
+# Start JacBlack
+echo "Starting JacBlack (version: ${JACBLACK_VERSION:-unknown}) on $(date)"
 echo "Architecture: $(uname -m)"
 echo "User: $(id)"
 

@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.Yts
+namespace JacBlack.Infrastructure.Trackers.Yts
 {
     /// <summary>
     /// Фильм из открытого API YTS.

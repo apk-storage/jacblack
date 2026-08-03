@@ -1,5 +1,5 @@
-using JacRed.Infrastructure.Persistence;
-using JacRed.Models.Tracks;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Models.Tracks;
 using MonoTorrent;
 using Newtonsoft.Json;
 using System;
@@ -8,10 +8,10 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static partial class TracksAnalyzer
     {
@@ -379,7 +379,7 @@ namespace JacRed.Infrastructure.Tracks
                     {
                         // Дорожки уже записаны по новому пути, старый файл просто
                         // останется лежать. Debug: на работу не влияет.
-                        JacRedLog.Swallowed(JacRedLogCategories.Tracks,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Tracks,
                             $"не удалился старый файл дорожек {infohash}", ex, LogLevel.Debug);
                     }
                 }
@@ -393,7 +393,7 @@ namespace JacRed.Infrastructure.Tracks
                     }
                     catch (Exception ex)
                     {
-                        JacRedLog.Swallowed(JacRedLogCategories.Tracks,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Tracks,
                             $"не удалился файл дорожек в верхнем регистре {infohash}", ex, LogLevel.Debug);
                     }
                 }

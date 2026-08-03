@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build JacRed for current platform (default), a specific RID, or all platforms.
+# Build JacBlack for current platform (default), a specific RID, or all platforms.
 # Output: dist/<platform>/
 #
 # Usage:
@@ -34,7 +34,7 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS] [TARGET...]
 
-Build JacRed into dist/<target>/.
+Build JacBlack into dist/<target>/.
 
 Options:
   --all       Build all supported targets
@@ -171,7 +171,7 @@ build_for() {
   local out_dir="$2"
   local name="$3"
   echo "==> Building for $name (RID: $rid) -> $out_dir"
-  dotnet publish JacRed.csproj \
+  dotnet publish JacBlack.csproj \
     --runtime "$rid" \
     --output "$out_dir" \
     "${PUBLISH_OPTS[@]}" \

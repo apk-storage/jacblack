@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace JacRed.Infrastructure.Trackers.Rutracker
+namespace JacBlack.Infrastructure.Trackers.Rutracker
 {
     public enum RutrackerTitleKind
     {

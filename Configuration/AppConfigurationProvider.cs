@@ -1,5 +1,5 @@
-using JacRed.Configuration.Schema;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Configuration.Schema;
+using JacBlack.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     public sealed class AppConfigurationProvider : IOptionsMonitor<AppOptions>
     {
@@ -136,7 +136,7 @@ namespace JacRed.Configuration
                     LogSafeConfig(logLabel, logPath);
 
                 var current = Current;
-                JacRedLogSettings.Apply(current);
+                JacBlackLogSettings.Apply(current);
                 if (!ReferenceEquals(previous, current) && previous != null && forceLogLabel == null)
                     NotifyChange(current);
             }
@@ -145,7 +145,7 @@ namespace JacRed.Configuration
                 // Испорченный init.yaml раньше давал молчание: приложение
                 // продолжало работать на прежних настройках, и понять, что правка
                 // не применилась, было нельзя.
-                JacRedLog.Swallowed(JacRedLogCategories.Config, "перечитывание настроек не удалось, работаем на прежних", ex, LogLevel.Error);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Config, "перечитывание настроек не удалось, работаем на прежних", ex, LogLevel.Error);
             }
         }
 
@@ -156,7 +156,7 @@ namespace JacRed.Configuration
                 _cache = (AppConfigurationLoader.LoadFromFile(path), path, File.GetLastWriteTimeUtc(path));
             }
             LogSafeConfig("config (saved)", path);
-            JacRedLogSettings.Apply(Current);
+            JacBlackLogSettings.Apply(Current);
             NotifyChange(Current);
         }
 
@@ -171,7 +171,7 @@ namespace JacRed.Configuration
                 // Один сломавшийся подписчик не должен мешать остальным узнать
                 // о новых настройках, но и пропадать бесследно ему незачем.
                 try { cb(current, Options.DefaultName); }
-                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Config, "подписчик на смену настроек упал", ex); }
+                catch (Exception ex) { JacBlackLog.Swallowed(JacBlackLogCategories.Config, "подписчик на смену настроек упал", ex); }
             }
         }
 
@@ -180,14 +180,14 @@ namespace JacRed.Configuration
             try
             {
                 var src = string.IsNullOrEmpty(source) ? "" : $" from {source}";
-                JacRedLog.Information(JacRedLogCategories.Config, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {label}{src} applied (sensitive data redacted):");
-                JacRedLog.Information(JacRedLogCategories.Config, GetSafeConfigJson());
+                JacBlackLog.Information(JacBlackLogCategories.Config, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {label}{src} applied (sensitive data redacted):");
+                JacBlackLog.Information(JacBlackLogCategories.Config, GetSafeConfigJson());
             }
             catch (Exception ex)
             {
                 // Конфигурация уже применена, её сводка — дело справочное. Но без этой
                 // строки молчание не отличить от «сводку вывели, просто она пустая».
-                JacRedLog.Swallowed(JacRedLogCategories.Config, $"не вывелась сводка конфигурации ({label})", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Config, $"не вывелась сводка конфигурации ({label})", ex);
             }
         }
 

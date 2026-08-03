@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models.Details;
-using JacRed.Infrastructure.Trackers.Bitru;
-namespace JacRed.Application.Dev.Migrations
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models.Details;
+using JacBlack.Infrastructure.Trackers.Bitru;
+namespace JacBlack.Application.Dev.Migrations
 {
     public sealed class FixBitruNamesMigration : DevMigrationBase, IDevMigration
     {

@@ -1,25 +1,25 @@
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using System;
 using System.IO;
 using System.Text;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static class TracksLogging
     {
         internal static void Log(string message, int? typetask = null, LogLevel? level = null)
         {
-            var logLevel = level ?? JacRedLog.ClassifyTracksMessage(message);
-            if (logLevel == LogLevel.Debug && !JacRedLogSettings.TracksConsoleDetail)
+            var logLevel = level ?? JacBlackLog.ClassifyTracksMessage(message);
+            if (logLevel == LogLevel.Debug && !JacBlackLogSettings.TracksConsoleDetail)
             {
                 if (AppInit.conf?.trackslog == true)
                     LogToFile(message, typetask);
                 return;
             }
 
-            if (!JacRedLogSettings.TracksConsoleDetail && logLevel == LogLevel.Warning
+            if (!JacBlackLogSettings.TracksConsoleDetail && logLevel == LogLevel.Warning
                 && !message.Contains("без результата", StringComparison.Ordinal))
             {
                 if (AppInit.conf?.trackslog == true)
@@ -31,7 +31,7 @@ namespace JacRed.Infrastructure.Tracks
             string typetaskInfo = typetask.HasValue ? $" [task:{typetask.Value}]" : "";
             string body = $"[{timeNow}]{typetaskInfo} {message}";
 
-            JacRedLog.Write(JacRedLogCategories.Tracks, logLevel, body);
+            JacBlackLog.Write(JacBlackLogCategories.Tracks, logLevel, body);
 
             if (AppInit.conf?.trackslog == true)
                 LogToFile(message, typetask);
@@ -76,7 +76,7 @@ namespace JacRed.Infrastructure.Tracks
                 try
                 {
                     string timeNow = DateTime.Now.ToString("HH:mm:ss");
-                    JacRedLog.Error(JacRedLogCategories.Tracks, $"[{timeNow}] Ошибка записи в лог файл: {ex.Message}");
+                    JacBlackLog.Error(JacBlackLogCategories.Tracks, $"[{timeNow}] Ошибка записи в лог файл: {ex.Message}");
                 }
                 catch
                 {

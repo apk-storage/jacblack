@@ -4,14 +4,14 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
-using JacRed.Models.Api;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Models.Api;
+using JacBlack.Models.Details;
 using Microsoft.Extensions.Caching.Memory;
 using MonoTorrent;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     public interface ILiveSeeders
     {
@@ -251,7 +251,7 @@ namespace JacRed.Application.Search
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, "догрев кеша сидов не удался", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "догрев кеша сидов не удался", ex);
                 }
             });
         }

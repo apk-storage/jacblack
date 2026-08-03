@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Utils
+namespace JacBlack.Infrastructure.Utils
 {
     /// <summary>
     /// Совпадает ли запрос с названием, начинаясь с границы слова.

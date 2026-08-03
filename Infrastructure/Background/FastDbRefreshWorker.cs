@@ -2,12 +2,12 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Tracks;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Tracks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Background
+namespace JacBlack.Infrastructure.Background
 {
     public class FastDbRefreshWorker : BackgroundService
     {

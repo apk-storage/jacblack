@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using JacRed.Infrastructure.Indexers;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Indexers;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models;
+using JacBlack.Models.Details;
 using Newtonsoft.Json;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     public partial class FileDB : IDisposable
     {
@@ -53,7 +53,7 @@ namespace JacRed.Infrastructure.Persistence
         /// же изъян уже убран у обновления размера и подробностей — свежесть
         /// должен менять обход, а не служебная работа.
         /// </summary>
-        internal void ApplyFfprobe(string magnet, int ffprobeTryingData, JacRed.Models.Tracks.FfprobeModel ffprobeResult)
+        internal void ApplyFfprobe(string magnet, int ffprobeTryingData, JacBlack.Models.Tracks.FfprobeModel ffprobeResult)
         {
             lock (_dbLock)
             {
@@ -492,7 +492,7 @@ namespace JacRed.Infrastructure.Persistence
                             {
                                 // Просроченный файл останется лежать. Разово не страшно,
                                 // но если повторяется — уборка не работает и диск растёт.
-                                JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb,
                                     $"не удалился просроченный лог {Path.GetFileName(path)}", ex, LogLevel.Debug);
                             }
                         }
@@ -510,7 +510,7 @@ namespace JacRed.Infrastructure.Persistence
                 // Диагностический лог базы вести не удалось. Сама запись в базу уже
                 // прошла, поэтому работу не рвём — но раньше это выглядело так,
                 // будто лог просто пуст.
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "не записался лог изменений базы", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "не записался лог изменений базы", ex);
             }
         }
 
@@ -538,7 +538,7 @@ namespace JacRed.Infrastructure.Persistence
                     {
                         // Файл посчитается нулевым, и общий размер выйдет заниженным —
                         // то есть уборка недоберёт. Молча такое не отследить.
-                        JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Fdb,
                             $"не прочитался размер {Path.GetFileName(path)}", ex, LogLevel.Debug);
                     }
                     list.Add((path, len, fileDate));
@@ -558,7 +558,7 @@ namespace JacRed.Infrastructure.Persistence
                     }
                     catch (Exception ex)
                     {
-                        JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Fdb,
                             $"не удалился лог {Path.GetFileName(item.path)} при уборке по размеру", ex, LogLevel.Debug);
                     }
                 }
@@ -567,7 +567,7 @@ namespace JacRed.Infrastructure.Persistence
             {
                 // Уборка логов целиком не отработала — значит ограничения по размеру
                 // и числу файлов не действуют. Именно так лог однажды вырос до 3.4 ГБ.
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "уборка логов базы не отработала", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "уборка логов базы не отработала", ex);
             }
         }
         #endregion

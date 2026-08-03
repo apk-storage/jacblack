@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Background
+namespace JacBlack.Infrastructure.Background
 {
     public class StatsWorker : BackgroundService
     {

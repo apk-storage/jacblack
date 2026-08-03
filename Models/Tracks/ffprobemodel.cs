@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Models.Tracks
+namespace JacBlack.Models.Tracks
 {
     public class FfprobeModel
     {

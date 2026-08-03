@@ -5,10 +5,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
 
-namespace JacRed.Infrastructure.Trackers.Rutracker
+namespace JacBlack.Infrastructure.Trackers.Rutracker
 {
     /// <summary>
     /// Живые сиды с rutracker — через его поиск, под входом и через браузер.
@@ -134,13 +134,13 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                         data[id] = (0, 0);
                         Persistence.DeadReleases.Remember("rutracker", id);
 
-                        JacRedLog.Information(JacRedLogCategories.Trackers,
+                        JacBlackLog.Information(JacBlackLogCategories.Trackers,
                             $"rutracker: раздача t={id} удалена с трекера («Тема не найдена»), убрана из выдачи");
                     }
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"rutracker: страница t={id} не прочитана", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"rutracker: страница t={id} не прочитана", ex);
                 }
             }
         }
@@ -180,7 +180,7 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"rutracker: фоновое обновление сидов по «{key}» не удалось", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"rutracker: фоновое обновление сидов по «{key}» не удалось", ex);
                 }
                 finally
                 {
@@ -276,7 +276,7 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"rutracker: живые сиды по «{title}» не получены", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"rutracker: живые сиды по «{title}» не получены", ex);
                 }
             }
 
@@ -300,7 +300,7 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
             string html = await CloudflareClearance.PostFormAsync($"{AppInit.conf.Rutracker.host}/forum/login.php", form);
 
             bool ok = !string.IsNullOrEmpty(html) && html.Length > 50_000;
-            JacRedLog.Information(JacRedLogCategories.Trackers, ok ? "rutracker: вход выполнен" : "rutracker: вход не выполнен");
+            JacBlackLog.Information(JacBlackLogCategories.Trackers, ok ? "rutracker: вход выполнен" : "rutracker: вход не выполнен");
             return ok;
         }
     }

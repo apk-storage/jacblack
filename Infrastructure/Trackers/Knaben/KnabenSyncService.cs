@@ -5,14 +5,14 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.Knaben
+namespace JacBlack.Infrastructure.Trackers.Knaben
 {
     public class KnabenSyncService
     {

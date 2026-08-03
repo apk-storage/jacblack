@@ -1,11 +1,11 @@
-using JacRed.Configuration;
+using JacBlack.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Logging
+namespace JacBlack.Infrastructure.Logging
 {
-    public static class JacRedLogSettings
+    public static class JacBlackLogSettings
     {
         public static bool ConsoleTimestamp { get; private set; }
         public static bool TracksConsoleDetail { get; private set; } = true;
@@ -64,9 +64,9 @@ namespace JacRed.Infrastructure.Logging
         static string NormalizeCategoryKey(string key)
         {
             if (string.Equals(key, "syncSpidr", StringComparison.OrdinalIgnoreCase))
-                return JacRedLogCategories.SyncSpidr;
+                return JacBlackLogCategories.SyncSpidr;
             if (string.Equals(key, "parsers", StringComparison.OrdinalIgnoreCase))
-                return JacRedLogCategories.Parser;
+                return JacBlackLogCategories.Parser;
             return key.Trim().ToLowerInvariant();
         }
 

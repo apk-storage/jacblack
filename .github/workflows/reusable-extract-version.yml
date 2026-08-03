@@ -20,7 +20,7 @@ on:
 
     outputs:
       version:
-        description: "Version without leading 'v' (for Docker JACRED_VERSION)"
+        description: "Version without leading 'v' (for Docker JACBLACK_VERSION)"
         value: ${{ jobs.extract.outputs.version }}
       release_tag:
         description: "Full tag name for GitHub Release (e.g. 1.0.0 or v1.0.0)"

@@ -1,16 +1,16 @@
-using JacRed.Application.Search;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models.Api;
-using JacRed.Models.AppConf;
-using JacRed.Models.Details;
+using JacBlack.Application.Search;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models.Api;
+using JacBlack.Models.AppConf;
+using JacBlack.Models.Details;
 using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public static class IndexerSearchEngine
     {
@@ -336,7 +336,7 @@ namespace JacRed.Infrastructure.Indexers
         /// расхождение — ровно то, на чём мы уже обжигались с размером.
         /// Пустую сводку не отдаём.
         /// </summary>
-        static Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacRed.Models.Tracks.ffStream> ffprobe, string title)
+        static Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacBlack.Models.Tracks.ffStream> ffprobe, string title)
         {
             var summary = Parsing.MediaTracks.Build(ffprobe, title);
             return summary.IsEmpty ? null : summary;

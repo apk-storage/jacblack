@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using JacRed.Application.Search;
-using JacRed.Models.Api;
+using JacBlack.Application.Search;
+using JacBlack.Models.Api;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     public class JackettController : BaseController
     {

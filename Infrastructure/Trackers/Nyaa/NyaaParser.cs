@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Web;
 using System.Xml.Linq;
-using JacRed.Infrastructure.Trackers.AnimeTosho;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Trackers.AnimeTosho;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Nyaa
+namespace JacBlack.Infrastructure.Trackers.Nyaa
 {
     /// <summary>
     /// Разбор ленты nyaa.si.

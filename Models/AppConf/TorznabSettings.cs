@@ -1,4 +1,4 @@
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// Torznab XML endpoints only (Sonarr/Radarr/Prowlarr). Search tuning — <see cref="SearchSettings"/>.

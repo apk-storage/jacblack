@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Concurrent;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 
-namespace JacRed.Infrastructure.Parsing
+namespace JacBlack.Infrastructure.Parsing
 {
     /// <summary>
     /// Узнаёт страницу-заглушку: капчу, требование входа, вызов Cloudflare.
@@ -66,7 +66,7 @@ namespace JacRed.Infrastructure.Parsing
 
             _lastReport[host] = now;
 
-            JacRedLog.Warning(JacRedLogCategories.Parser,
+            JacBlackLog.Warning(JacBlackLogCategories.Parser,
                 $"{host} отдал заглушку вместо содержимого — {reason}. Обход будет находить ноль раздач, пока это не снимут. Адрес: {url}");
         }
     }

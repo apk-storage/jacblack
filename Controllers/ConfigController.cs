@@ -1,13 +1,13 @@
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using JacRed.Configuration.Schema;
-using JacRed.Models;
+using JacBlack.Configuration.Schema;
+using JacBlack.Models;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     /// <summary>
     /// Configuration management API (init.yaml / init.conf).

@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Newtonsoft.Json.Linq;
 
-namespace JacRed.Infrastructure.Stats
+namespace JacBlack.Infrastructure.Stats
 {
     /// <summary>Read-only access to Data/temp/stats.json (per-tracker counters).</summary>
     public static class StatsSummary
@@ -19,7 +19,7 @@ namespace JacRed.Infrastructure.Stats
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Stats, "не прочитался stats.json", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Stats, "не прочитался stats.json", ex);
                 return "[]";
             }
         }
@@ -43,7 +43,7 @@ namespace JacRed.Infrastructure.Stats
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Stats, $"не разобрался stats.json для {trackerName}", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Stats, $"не разобрался stats.json для {trackerName}", ex);
                 return null;
             }
         }
@@ -60,7 +60,7 @@ namespace JacRed.Infrastructure.Stats
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Stats, "не прочитался stats-meta.json", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Stats, "не прочитался stats-meta.json", ex);
                 return null;
             }
         }

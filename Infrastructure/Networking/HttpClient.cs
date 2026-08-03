@@ -1,4 +1,4 @@
-﻿using JacRed.Models.AppConf;
+﻿using JacBlack.Models.AppConf;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
@@ -11,7 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Networking
+namespace JacBlack.Infrastructure.Networking
 {
     public static class HttpClient
     {
@@ -141,8 +141,8 @@ namespace JacRed.Infrastructure.Networking
                     if (tls.IsAllowedInvalid(host))
                         return true;
 
-                    JacRed.Infrastructure.Logging.JacRedLog.Warning(
-                        JacRed.Infrastructure.Logging.JacRedLogCategories.Host,
+                    JacBlack.Infrastructure.Logging.JacBlackLog.Warning(
+                        JacBlack.Infrastructure.Logging.JacBlackLogCategories.Host,
                         $"сертификат не прошёл проверку: {host ?? "неизвестный хост"} — {errors}");
 
                     return false;
@@ -351,7 +351,7 @@ namespace JacRed.Infrastructure.Networking
                     // Этот выход пробовать больше нечем — идём к следующему.
                     // Раньше здесь стоял break из цикла попыток, что означало
                     // ровно то же самое, только неочевидно.
-                    Logging.JacRedLog.Swallowed(Logging.JacRedLogCategories.Host,
+                    Logging.JacBlackLog.Swallowed(Logging.JacBlackLogCategories.Host,
                         $"запрос не прошёл через {px?.Address?.Host ?? "прямое соединение"}: {url}",
                         ex, Microsoft.Extensions.Logging.LogLevel.Debug);
                 }

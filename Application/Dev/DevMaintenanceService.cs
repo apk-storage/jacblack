@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models.Details;
 
-namespace JacRed.Application.Dev
+namespace JacBlack.Application.Dev
 {
     public class DevMaintenanceService : IDevMaintenanceService
     {

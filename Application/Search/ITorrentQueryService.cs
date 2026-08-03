@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     public interface ITorrentQueryService
     {

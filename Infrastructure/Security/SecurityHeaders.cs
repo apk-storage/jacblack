@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using System;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
     public static class SecurityHeaders
     {

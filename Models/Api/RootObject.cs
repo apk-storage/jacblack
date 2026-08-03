@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace JacRed.Models.Api
+namespace JacBlack.Models.Api
 {
     public class RootObject
     {

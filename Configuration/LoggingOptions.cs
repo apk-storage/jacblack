@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     /// <summary>Optional logging tuning (init.yaml logging: block). Absent = default console behavior.</summary>
     public class LoggingOptions

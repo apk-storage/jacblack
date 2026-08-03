@@ -5,22 +5,22 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
-    public interface IJacRedApiKeyValidator
+    public interface IJacBlackApiKeyValidator
     {
         bool IsConfigured { get; }
         string GetProvidedKey(HttpContext httpContext);
         bool Validate(HttpContext httpContext);
     }
 
-    public interface IJacRedDevKeyValidator
+    public interface IJacBlackDevKeyValidator
     {
         bool IsConfigured { get; }
         bool Validate(HttpContext httpContext);
     }
 
-    public static partial class JacRedKeyUtils
+    public static partial class JacBlackKeyUtils
     {
         [GeneratedRegex("(\\?|&)apikey=([^&]+)")]
         private static partial Regex ApiKeyQueryRegex();
@@ -69,26 +69,26 @@ namespace JacRed.Infrastructure.Security
         }
     }
 
-    public sealed class JacRedApiKeyValidator : IJacRedApiKeyValidator
+    public sealed class JacBlackApiKeyValidator : IJacBlackApiKeyValidator
     {
         public bool IsConfigured => !string.IsNullOrEmpty(AppInit.conf?.apikey);
 
         public string GetProvidedKey(HttpContext httpContext)
-            => JacRedKeyUtils.GetApiKeyFromRequest(httpContext);
+            => JacBlackKeyUtils.GetApiKeyFromRequest(httpContext);
 
         public bool Validate(HttpContext httpContext)
         {
             if (!IsConfigured) return true;
             var provided = GetProvidedKey(httpContext);
-            return !string.IsNullOrEmpty(provided) && JacRedKeyUtils.SecureEquals(provided, AppInit.conf?.apikey);
+            return !string.IsNullOrEmpty(provided) && JacBlackKeyUtils.SecureEquals(provided, AppInit.conf?.apikey);
         }
     }
 
-    public sealed class JacRedDevKeyValidator : IJacRedDevKeyValidator
+    public sealed class JacBlackDevKeyValidator : IJacBlackDevKeyValidator
     {
         public bool IsConfigured => !string.IsNullOrEmpty(AppInit.conf?.devkey);
 
         public bool Validate(HttpContext httpContext)
-            => JacRedKeyUtils.DevKeyMatches(httpContext, AppInit.conf?.devkey);
+            => JacBlackKeyUtils.DevKeyMatches(httpContext, AppInit.conf?.devkey);
     }
 }

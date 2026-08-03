@@ -1,10 +1,10 @@
-using JacRed.Infrastructure.Security;
+using JacBlack.Infrastructure.Security;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Linq;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     public class HealthController : Controller
     {
@@ -18,9 +18,9 @@ namespace JacRed.Controllers
         }
 
         /// <summary>
-        /// Версия протокола JacRed. Клиенты (Lampa, Lampac) проверяют этим адресом,
+        /// Версия протокола JacBlack. Клиенты (Lampa, Lampac) проверяют этим адресом,
         /// тот ли перед ними сервер, и ждут голое число в text/plain — ровно так,
-        /// как отдаёт оригинальный JacRed. Отдав вместо этого JSON со сведениями
+        /// как отдаёт оригинальный JacBlack. Отдав вместо этого JSON со сведениями
         /// о сборке, мы для них становимся чужим сервером, и поисковые запросы
         /// до нас просто не доходят. Сведения о сборке — на /version/build.
         /// </summary>
@@ -60,15 +60,15 @@ namespace JacRed.Controllers
         }
 
         [Route("api/v1.0/conf")]
-        public JsonResult JacRedConf([FromQuery] string apikey = null)
+        public JsonResult JacBlackConf([FromQuery] string apikey = null)
         {
             var provided = !string.IsNullOrWhiteSpace(apikey)
                 ? apikey.Trim()
-                : JacRedKeyUtils.GetApiKeyFromRequest(HttpContext);
+                : JacBlackKeyUtils.GetApiKeyFromRequest(HttpContext);
             var configured = AppInit.conf?.apikey;
             return Json(new
             {
-                apikey = string.IsNullOrWhiteSpace(configured) || JacRedKeyUtils.SecureEquals(provided, configured)
+                apikey = string.IsNullOrWhiteSpace(configured) || JacBlackKeyUtils.SecureEquals(provided, configured)
             });
         }
     }

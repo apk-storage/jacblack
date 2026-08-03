@@ -1,6 +1,6 @@
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Stats;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Stats;
+using JacBlack.Infrastructure.Persistence;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -9,7 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static class TracksIndexManager
     {
@@ -38,11 +38,11 @@ namespace JacRed.Infrastructure.Tracks
                 foreach (var hash in data.hashes.Where(TracksPathResolver.IsValidInfohash))
                     TrackIndex.TryAdd(TracksPathResolver.NormalizeInfohash(hash), 0);
 
-                JacRedLog.Information(JacRedLogCategories.TracksIndex, $"loaded {TrackIndex.Count} hashes (built {data.builtAt:yyyy-MM-dd HH:mm:ss} UTC)");
+                JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"loaded {TrackIndex.Count} hashes (built {data.builtAt:yyyy-MM-dd HH:mm:ss} UTC)");
             }
             catch (Exception ex)
             {
-                JacRedLog.Information(JacRedLogCategories.TracksIndex, $"load error / {ex.Message}");
+                JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"load error / {ex.Message}");
             }
         }
 
@@ -63,11 +63,11 @@ namespace JacRed.Infrastructure.Tracks
 
                     JsonStream.Write(TracksIndexPath, file);
                     Interlocked.Exchange(ref _indexDirty, 0);
-                    JacRedLog.Information(JacRedLogCategories.TracksIndex, $"saved {file.hashes.Count} hashes / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"saved {file.hashes.Count} hashes / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Information(JacRedLogCategories.TracksIndex, $"save error / {ex.Message}");
+                    JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"save error / {ex.Message}");
                 }
             }
         }
@@ -97,12 +97,12 @@ namespace JacRed.Infrastructure.Tracks
             }
             catch (IOException ex)
             {
-                JacRedLog.Information(JacRedLogCategories.TracksIndex, $"schedule rebuild skipped / {ex.Message}");
+                JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"schedule rebuild skipped / {ex.Message}");
                 return;
             }
             catch (UnauthorizedAccessException ex)
             {
-                JacRedLog.Information(JacRedLogCategories.TracksIndex, $"schedule rebuild skipped / {ex.Message}");
+                JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"schedule rebuild skipped / {ex.Message}");
                 return;
             }
 
@@ -132,7 +132,7 @@ namespace JacRed.Infrastructure.Tracks
             try
             {
                 var sw = Stopwatch.StartNew();
-                JacRedLog.Information(JacRedLogCategories.TracksIndex, $"rebuild start / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"rebuild start / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 
                 var built = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
                 await Task.Run(() => ScanTracksDirForIndex("Data/tracks", built));
@@ -143,17 +143,17 @@ namespace JacRed.Infrastructure.Tracks
                 Interlocked.Exchange(ref _indexDirty, 1);
                 PersistTracksIndex();
 
-                JacRedLog.Information(JacRedLogCategories.TracksIndex, $"rebuild done / count={TrackIndex.Count} / {sw.Elapsed.TotalMinutes:F1} min");
+                JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"rebuild done / count={TrackIndex.Count} / {sw.Elapsed.TotalMinutes:F1} min");
 
                 ThreadPool.QueueUserWorkItem(_ =>
                 {
                     try { StatsCollector.CollectAndWrite(); }
-                    catch (Exception ex) { JacRedLog.Error(JacRedLogCategories.Stats, $"post-index collect error / {ex.Message}"); }
+                    catch (Exception ex) { JacBlackLog.Error(JacBlackLogCategories.Stats, $"post-index collect error / {ex.Message}"); }
                 });
             }
             catch (Exception ex)
             {
-                JacRedLog.Information(JacRedLogCategories.TracksIndex, $"rebuild error / {ex.Message}");
+                JacBlackLog.Information(JacBlackLogCategories.TracksIndex, $"rebuild error / {ex.Message}");
             }
             finally
             {

@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.PirateBay
+namespace JacBlack.Infrastructure.Trackers.PirateBay
 {
     /// <summary>
     /// Запись из открытого API The Pirate Bay (apibay.org).

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Models.Details;
-namespace JacRed.Application.Dev.Migrations
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Models.Details;
+namespace JacBlack.Application.Dev.Migrations
 {
     public sealed class FixAnimelayerDuplicatesMigration : IDevMigration
     {

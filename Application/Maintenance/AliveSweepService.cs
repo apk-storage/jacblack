@@ -5,15 +5,15 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Application.Search;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Models.Details;
+using JacBlack.Application.Search;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Models.Details;
 using MonoTorrent;
 
-namespace JacRed.Application.Maintenance
+namespace JacBlack.Application.Maintenance
 {
     /// <summary>
     /// Идёт по базе и выясняет, живы ли раздачи. Ведёт счётчик подряд идущих нулей:
@@ -376,7 +376,7 @@ namespace JacRed.Application.Maintenance
             {
                 // Без закладки чистка каждый раз начинает базу заново и никогда
                 // не доходит до конца — молчать об этом нельзя.
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "не записалась закладка чистки", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "не записалась закладка чистки", ex);
             }
         }
 

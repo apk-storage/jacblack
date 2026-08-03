@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Application.Index
+namespace JacBlack.Application.Index
 {
     public interface IFastDbIndex
     {

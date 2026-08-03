@@ -1,11 +1,11 @@
-using JacRed.Infrastructure.Stats;
-using JacRed.Infrastructure.Tracks;
+using JacBlack.Infrastructure.Stats;
+using JacBlack.Infrastructure.Tracks;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     /// <summary>
     /// Stats API: /stats/torrents (stats.json), /stats/tracks (tracks-stats), /stats/meta (timestamps).

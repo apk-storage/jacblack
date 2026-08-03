@@ -20,7 +20,7 @@ on:
         description: "Path to .csproj file"
         type: string
         required: false
-        default: "JacRed.csproj"
+        default: "JacBlack.csproj"
 
       retention_days:
         description: "Artifact retention days (7 for CI, 30 for releases)"

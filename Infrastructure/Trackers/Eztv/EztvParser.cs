@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using JacRed.Infrastructure.Trackers.Knaben;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Trackers.Knaben;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Eztv
+namespace JacBlack.Infrastructure.Trackers.Eztv
 {
     /// <summary>
     /// Разбор ответа EZTV.

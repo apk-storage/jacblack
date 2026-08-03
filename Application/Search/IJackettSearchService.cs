@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Models.Api;
+using JacBlack.Models.Api;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     public interface IJackettSearchService
     {

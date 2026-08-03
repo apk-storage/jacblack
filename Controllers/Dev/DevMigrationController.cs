@@ -1,7 +1,7 @@
-using JacRed.Application.Dev;
+using JacBlack.Application.Dev;
 using Microsoft.AspNetCore.Mvc;
 
-namespace JacRed.Controllers.Dev
+namespace JacBlack.Controllers.Dev
 {
     [Route("/dev/[action]")]
     public class DevMigrationController : Controller

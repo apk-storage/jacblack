@@ -1,9 +1,9 @@
-using JacRed.Configuration.Schema;
+using JacBlack.Configuration.Schema;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     public static class AppConfigurationDiff
     {

@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Bitru;
+using JacBlack.Infrastructure.Trackers.Bitru;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     /// <summary>
     /// Парсинг Bitru через официальный API (api.php?get=torrents).

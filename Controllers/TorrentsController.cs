@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
-using JacRed.Application.Search;
+using JacBlack.Application.Search;
 using Microsoft.Extensions.Caching.Memory;
 using System.Threading.Tasks;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     public class TorrentsController : BaseController
     {

@@ -5,16 +5,16 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 using Newtonsoft.Json;
 using IO = System.IO;
 
-namespace JacRed.Infrastructure.Trackers.NNMClub
+namespace JacBlack.Infrastructure.Trackers.NNMClub
 {
     public class NNMClubSyncService
     {
@@ -93,7 +93,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
                     {
                         // Страница просто не попадёт в задание — обход её пропустит
                         // и ничем этого не покажет. Поэтому пишем.
-                        JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Trackers,
                             $"nnmclub: страница {page} категории {cat} не попала в задание", ex);
                     }
                 }
@@ -287,7 +287,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, "nnmclub: обход архива прерван", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "nnmclub: обход архива прерван", ex);
                 }
                 finally
                 {
@@ -320,7 +320,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, "nnmclub: список форумов из файла не прочитался", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "nnmclub: список форумов из файла не прочитался", ex);
             }
 
             string html = await HttpClient.Get($"{AppInit.conf.NNMClub.rqHost()}/forum/tracker.php", encoding: Encoding.GetEncoding(1251), timeoutSeconds: 25, useproxy: AppInit.conf.NNMClub.useproxy);
@@ -345,7 +345,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, "nnmclub: список форумов не сохранился", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "nnmclub: список форумов не сохранился", ex);
                 }
             }
 
@@ -375,7 +375,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"nnmclub: торрент-файл не разобран ({topicUrl})", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"nnmclub: торрент-файл не разобран ({topicUrl})", ex);
                 return null;
             }
         }
@@ -427,7 +427,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, "nnmclub: место остановки не прочиталось", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "nnmclub: место остановки не прочиталось", ex);
             }
 
             return 0;
@@ -442,7 +442,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, "nnmclub: место остановки не сохранилось", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "nnmclub: место остановки не сохранилось", ex);
             }
         }
         #endregion

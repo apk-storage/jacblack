@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// Подмена мёртвых доменов в ссылках на раздачи — на выдаче, а не в базе.

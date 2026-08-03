@@ -1,7 +1,7 @@
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Stats;
-using JacRed.Models.Details;
-using JacRed.Models.Tracks;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Stats;
+using JacBlack.Models.Details;
+using JacBlack.Models.Tracks;
 using MonoTorrent;
 using System;
 using System.Collections.Generic;
@@ -9,7 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     public static class TracksDB
     {
@@ -23,12 +23,12 @@ namespace JacRed.Infrastructure.Tracks
         public static void StartupInit()
         {
             var sw = Stopwatch.StartNew();
-            JacRedLog.Information(JacRedLogCategories.Tracks, $"startup init / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            JacBlackLog.Information(JacBlackLogCategories.Tracks, $"startup init / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 
             TracksStatsCache.TryLoadStatsCacheOnStartup();
             TracksIndexManager.LoadTracksIndex();
 
-            JacRedLog.Information(JacRedLogCategories.Tracks, $"startup init done / index={TrackIndexCount} / {sw.Elapsed.TotalSeconds:F1}s");
+            JacBlackLog.Information(JacBlackLogCategories.Tracks, $"startup init done / index={TrackIndexCount} / {sw.Elapsed.TotalSeconds:F1}s");
 
             TracksIndexManager.ScheduleIndexRebuildIfNeeded();
             TracksIndexManager.StartIndexPersistLoop();

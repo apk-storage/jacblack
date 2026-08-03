@@ -3,7 +3,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
     public interface IClientNetworkContext
     {
@@ -22,7 +22,7 @@ namespace JacRed.Infrastructure.Security
     /// </summary>
     public sealed class ClientNetworkContext : IClientNetworkContext
     {
-        public const string OriginalRemoteIpItemKey = "JacRed.OriginalRemoteIp";
+        public const string OriginalRemoteIpItemKey = "JacBlack.OriginalRemoteIp";
 
         public IPAddress ClientIp { get; }
         public IPAddress PeerIp { get; }

@@ -5,14 +5,14 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.tParse;
 using IO = System.IO;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.TorrentBy
+namespace JacBlack.Infrastructure.Trackers.TorrentBy
 {
     public class TorrentBySyncService
     {
@@ -84,7 +84,7 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
                     {
                         // Страница просто не попадёт в задание — обход её пропустит
                         // и ничем этого не покажет. Поэтому пишем.
-                        JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Trackers,
                             $"torrentby: страница {page} категории {cat} не попала в задание", ex);
                     }
                 }

@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Web;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.Bitru
+namespace JacBlack.Infrastructure.Trackers.Bitru
 {
     public static class BitruApiParser
     {

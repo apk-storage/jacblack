@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models.Details;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models.Details;
 
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     /// <summary>
     /// Приводит пробелы в именах к единому правилу: любой пробельный ряд — один

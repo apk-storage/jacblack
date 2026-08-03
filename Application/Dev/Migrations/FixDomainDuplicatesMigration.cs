@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     /// <summary>
     /// Схлопывает записи, задвоившиеся из-за смены домена трекера.

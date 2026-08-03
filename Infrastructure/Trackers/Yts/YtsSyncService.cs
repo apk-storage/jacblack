@@ -2,12 +2,12 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Persistence;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.Yts
+namespace JacBlack.Infrastructure.Trackers.Yts
 {
     /// <summary>
     /// Обход YTS через их открытое API.

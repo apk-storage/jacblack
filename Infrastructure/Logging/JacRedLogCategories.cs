@@ -1,6 +1,6 @@
-namespace JacRed.Infrastructure.Logging
+namespace JacBlack.Infrastructure.Logging
 {
-    public static class JacRedLogCategories
+    public static class JacBlackLogCategories
     {
         public const string Tracks = "tracks";
         public const string TracksIndex = "tracks index";

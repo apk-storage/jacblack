@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     /// <summary>
     /// Picks TorrServer file ids (1-based, path-sorted on TS) most likely to be probeable video.

@@ -5,7 +5,7 @@ using System.Text;
 using System.Web;
 using MonoTorrent;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     /// <summary>
     /// Приводит magnet-ссылки в порядок перед отдачей клиенту: выкидывает заведомо

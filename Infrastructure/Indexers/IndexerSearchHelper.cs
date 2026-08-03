@@ -1,9 +1,9 @@
 using System;
-using JacRed.Models.Api;
+using JacBlack.Models.Api;
 using Microsoft.AspNetCore.Http;
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public static class IndexerSearchHelper
     {
@@ -183,8 +183,8 @@ namespace JacRed.Infrastructure.Indexers
             // давал 114 раздач, а с включённым заслоном — 7.
             // Берём только то, что клиент прислал сам. Подставленное словарём
             // в счёт не идёт — иначе потребуем совпадения с догадкой.
-            string en = originalGiven ? JacRed.Infrastructure.Utils.StringConvert.SearchName(req.TitleOriginal) : null;
-            string ru = titleGiven ? JacRed.Infrastructure.Utils.StringConvert.SearchName(req.Title) : null;
+            string en = originalGiven ? JacBlack.Infrastructure.Utils.StringConvert.SearchName(req.TitleOriginal) : null;
+            string ru = titleGiven ? JacBlack.Infrastructure.Utils.StringConvert.SearchName(req.Title) : null;
 
             if (string.IsNullOrEmpty(en) && string.IsNullOrEmpty(ru))
                 return results;
@@ -198,7 +198,7 @@ namespace JacRed.Infrastructure.Indexers
             // Их проверяет прежнее правило по названиям.
             string cardImdb = null;
             if (req.Year > 0 && !string.IsNullOrWhiteSpace(req.TitleOriginal))
-                JacRed.Infrastructure.Persistence.ImdbIndex.TryGetByTitle(req.TitleOriginal, req.Year, out cardImdb);
+                JacBlack.Infrastructure.Persistence.ImdbIndex.TryGetByTitle(req.TitleOriginal, req.Year, out cardImdb);
 
             // Словарь знает не всё — «FROM» в нём нет. Но код можно вывести
             // из самой выдачи: раздачи, совпавшие по ОРИГИНАЛЬНОМУ названию,
@@ -425,7 +425,7 @@ namespace JacRed.Infrastructure.Indexers
 
         static bool Same(string title, string normalizedQuery)
         {
-            string t = JacRed.Infrastructure.Utils.StringConvert.SearchName(title);
+            string t = JacBlack.Infrastructure.Utils.StringConvert.SearchName(title);
             return !string.IsNullOrEmpty(t) && string.Equals(t, normalizedQuery, StringComparison.Ordinal);
         }
 

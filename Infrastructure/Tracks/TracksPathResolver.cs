@@ -2,15 +2,15 @@ using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Linq;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static class TracksPathResolver
     {
         /// <summary>
-        /// Canonical layout (JacRed + lampa-tracks): {aa}/{b}/{hash}.json — lowercase hex.
+        /// Canonical layout (JacBlack + lampa-tracks): {aa}/{b}/{hash}.json — lowercase hex.
         /// </summary>
         internal static string TrackLayoutPath(string tracksDir, string infohash, bool withExtension = true)
         {
@@ -149,7 +149,7 @@ namespace JacRed.Infrastructure.Tracks
                                 {
                                     // Старый файл дорожек останется рядом с новым:
                                     // место занято, работе не мешает. Debug.
-                                    JacRedLog.Swallowed(JacRedLogCategories.Tracks,
+                                    JacBlackLog.Swallowed(JacBlackLogCategories.Tracks,
                                         $"не удалился старый файл дорожек {Path.GetFileName(file)}", ex, LogLevel.Debug);
                                 }
                             }

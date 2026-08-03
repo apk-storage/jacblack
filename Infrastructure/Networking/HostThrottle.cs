@@ -3,9 +3,9 @@ using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 
-namespace JacRed.Infrastructure.Networking
+namespace JacBlack.Infrastructure.Networking
 {
     /// <summary>
     /// Слушает просьбу трекера сбавить обороты.
@@ -97,7 +97,7 @@ namespace JacRed.Infrastructure.Networking
                 if (until > state.Until)
                     state.Until = until;
 
-                JacRedLog.Warning(JacRedLogCategories.Host,
+                JacBlackLog.Warning(JacBlackLogCategories.Host,
                     $"{host} просит сбавить обороты (429), ждём {delay.TotalSeconds:F0} с, подряд {state.Strikes}");
             }
         }

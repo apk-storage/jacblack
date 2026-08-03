@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.AnimeTosho
+namespace JacBlack.Infrastructure.Trackers.AnimeTosho
 {
     /// <summary>
     /// Запись из ленты feed.animetosho.org/json. Отдаётся плоским массивом,

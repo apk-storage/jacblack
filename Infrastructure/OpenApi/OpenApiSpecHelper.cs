@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using YamlDotNet.Serialization;
 
-namespace JacRed.Infrastructure.OpenApi
+namespace JacBlack.Infrastructure.OpenApi
 {
     public static class OpenApiSpecHelper
     {

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public static class IndexerRequestParams
     {
@@ -99,9 +99,9 @@ namespace JacRed.Infrastructure.Indexers
 
         /// <summary>
         /// Prowlarr Search Feed indexerIds: omit = all; -2 = torrents; -1 = usenet; positive = indexer id.
-        /// JacRed exposes a single aggregate torrent indexer with id=1.
+        /// JacBlack exposes a single aggregate torrent indexer with id=1.
         /// </summary>
-        public static bool ProwlarrIndexerIdsIncludeJacRed(IQueryCollection query)
+        public static bool ProwlarrIndexerIdsIncludeJacBlack(IQueryCollection query)
         {
             if (!query.ContainsKey("indexerIds") && !query.ContainsKey("indexerids"))
                 return true;
@@ -122,7 +122,7 @@ namespace JacRed.Infrastructure.Indexers
             if (ids.Count == 0)
                 return true;
 
-            // Usenet-only selection → JacRed has nothing
+            // Usenet-only selection → JacBlack has nothing
             if (ids.All(id => id == -1))
                 return false;
 
@@ -188,7 +188,7 @@ namespace JacRed.Infrastructure.Indexers
         }
 
         /// <summary>
-        /// Maps Torznab/Prowlarr search type to JacRed <c>is_serial</c> (Jackett/Lampa convention):
+        /// Maps Torznab/Prowlarr search type to JacBlack <c>is_serial</c> (Jackett/Lampa convention):
         /// 1 = movie, 2 = serial. Returns -1 when type does not imply media kind.
         /// </summary>
         public static int IsSerialFromTorznabAction(string t)

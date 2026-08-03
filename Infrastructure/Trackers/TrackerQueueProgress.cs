@@ -1,8 +1,8 @@
 using System;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Parsing;
 
-namespace JacRed.Infrastructure.Trackers
+namespace JacBlack.Infrastructure.Trackers
 {
     /// <summary>
     /// Сохраняет ход глубокого обхода и пишет о нём в лог.
@@ -76,7 +76,7 @@ namespace JacRed.Infrastructure.Trackers
                 // Не прерываем обход: страницы разбираются, просто прогресс
                 // не лёг на диск. Но знать об этом надо — иначе следующий
                 // запуск молча начнёт всё заново.
-                JacRedLog.Swallowed(JacRedLogCategories.Parser,
+                JacBlackLog.Swallowed(JacBlackLogCategories.Parser,
                     $"{_trackerName}: ход глубокого обхода не сохранился", ex);
             }
         }

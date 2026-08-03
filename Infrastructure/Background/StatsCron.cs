@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Stats;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Stats;
+using JacBlack.Infrastructure.Logging;
 
-namespace JacRed.Infrastructure.Background
+namespace JacBlack.Infrastructure.Background
 {
     public static class StatsCron
     {
@@ -13,7 +13,7 @@ namespace JacRed.Infrastructure.Background
             await Task.Delay(20_000, cancellationToken);
 
             try { StatsCollector.CollectAndWrite(); }
-            catch (Exception ex) { JacRedLog.Error(JacRedLogCategories.Stats, $"startup collect error / {ex.Message}"); }
+            catch (Exception ex) { JacBlackLog.Error(JacBlackLogCategories.Stats, $"startup collect error / {ex.Message}"); }
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -29,9 +29,9 @@ namespace JacRed.Infrastructure.Background
                 try { StatsCollector.CollectAndWrite(); }
                 catch (Exception ex)
                 {
-                    JacRedLog.Error(JacRedLogCategories.Stats, $"error / {ex.Message}");
+                    JacBlackLog.Error(JacBlackLogCategories.Stats, $"error / {ex.Message}");
                     if (ex.StackTrace != null)
-                        JacRedLog.Debug(JacRedLogCategories.Stats, ex.StackTrace);
+                        JacBlackLog.Debug(JacBlackLogCategories.Stats, ex.StackTrace);
                 }
             }
         }

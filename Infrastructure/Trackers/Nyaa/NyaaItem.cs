@@ -1,6 +1,6 @@
 using System;
 
-namespace JacRed.Infrastructure.Trackers.Nyaa
+namespace JacBlack.Infrastructure.Trackers.Nyaa
 {
     /// <summary>
     /// Запись ленты nyaa.si.

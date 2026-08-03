@@ -5,11 +5,11 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace JacRed.Infrastructure.Networking
+namespace JacBlack.Infrastructure.Networking
 {
     /// <summary>
     /// Ходит на хосты, закрытые проверкой Cloudflare, через FlareSolverr —
@@ -181,7 +181,7 @@ namespace JacRed.Infrastructure.Networking
                 return;
 
             if (_guarded.TryRemove(host, out _))
-                JacRedLog.Information(JacRedLogCategories.Host, $"{host} отвечает обычному клиенту, браузер больше не нужен");
+                JacBlackLog.Information(JacBlackLogCategories.Host, $"{host} отвечает обычному клиенту, браузер больше не нужен");
         }
 
         public static void MarkGuarded(string host)
@@ -200,7 +200,7 @@ namespace JacRed.Infrastructure.Networking
             }
 
             _guarded[host] = new GuardState { Since = now, LastProbe = now };
-            JacRedLog.Warning(JacRedLogCategories.Host, $"{host} закрыт проверкой Cloudflare, переходим на браузер");
+            JacBlackLog.Warning(JacBlackLogCategories.Host, $"{host} закрыт проверкой Cloudflare, переходим на браузер");
         }
 
         #endregion
@@ -248,7 +248,7 @@ namespace JacRed.Infrastructure.Networking
                     (outcome, html) = await RequestAsync(conf, url, cookie);
 
                     if (outcome == FetchOutcome.Ok)
-                        JacRedLog.Warning(JacRedLogCategories.Host, $"{host}: получилось со второй попытки, сессия пересоздана");
+                        JacBlackLog.Warning(JacBlackLogCategories.Host, $"{host}: получилось со второй попытки, сессия пересоздана");
                 }
 
                 // Сессия жива в любом случае, кроме уже обработанного выше:
@@ -261,7 +261,7 @@ namespace JacRed.Infrastructure.Networking
             }
             catch (Exception ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr: {host}: {ex.GetType().Name}: {ex.Message}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr: {host}: {ex.GetType().Name}: {ex.Message}");
                 return null;
             }
             finally
@@ -328,7 +328,7 @@ namespace JacRed.Infrastructure.Networking
             }
             catch (Exception ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr: отправка формы не удалась: {ex.GetType().Name}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr: отправка формы не удалась: {ex.GetType().Name}");
                 return null;
             }
             finally
@@ -360,7 +360,7 @@ namespace JacRed.Infrastructure.Networking
             if (!string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
             {
                 string message = root.Value<string>("message") ?? "";
-                JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr отказал: {message}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr отказал: {message}");
 
                 // Такое сообщение означает, что сессии больше нет.
                 if (message.IndexOf("session", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -420,9 +420,9 @@ namespace JacRed.Infrastructure.Networking
             _sessionAlive = ok;
 
             if (ok)
-                JacRedLog.Warning(JacRedLogCategories.Host, "FlareSolverr: сессия браузера создана");
+                JacBlackLog.Warning(JacBlackLogCategories.Host, "FlareSolverr: сессия браузера создана");
             else
-                JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr: сессию создать не удалось: {root?.Value<string>("message")}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr: сессию создать не удалось: {root?.Value<string>("message")}");
 
             return ok;
         }
@@ -478,11 +478,11 @@ namespace JacRed.Infrastructure.Networking
                 _sessionAlive = false;
                 _idleTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
-                JacRedLog.Warning(JacRedLogCategories.Host, "FlareSolverr: сессия закрыта по простою, память освобождена");
+                JacBlackLog.Warning(JacBlackLogCategories.Host, "FlareSolverr: сессия закрыта по простою, память освобождена");
             }
             catch (Exception ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr: не удалось закрыть сессию: {ex.Message}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr: не удалось закрыть сессию: {ex.Message}");
             }
             finally
             {
@@ -503,7 +503,7 @@ namespace JacRed.Infrastructure.Networking
             }
             catch (Exception ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr недоступен: {ex.GetType().Name}: {ex.Message}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr недоступен: {ex.GetType().Name}: {ex.Message}");
                 _sessionAlive = false;
                 return null;
             }

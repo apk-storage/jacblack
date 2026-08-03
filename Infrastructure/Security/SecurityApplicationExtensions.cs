@@ -1,14 +1,14 @@
 using Microsoft.AspNetCore.Builder;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
     public static class SecurityApplicationExtensions
     {
-        public static IApplicationBuilder UseJacRedSecurity(this IApplicationBuilder builder)
+        public static IApplicationBuilder UseJacBlackSecurity(this IApplicationBuilder builder)
         {
             return builder
                 .UseMiddleware<SecurityHeadersMiddleware>()
-                .UseMiddleware<JacRedAuthorizationMiddleware>();
+                .UseMiddleware<JacBlackAuthorizationMiddleware>();
         }
     }
 }

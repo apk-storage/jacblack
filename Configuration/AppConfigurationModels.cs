@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     public sealed class ConfigSourceInfo
     {

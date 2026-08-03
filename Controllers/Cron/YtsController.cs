@@ -1,10 +1,10 @@
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Yts;
+using JacBlack.Infrastructure.Trackers.Yts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     /// <summary>
     /// YTS — фильмы в сильном сжатии, около 76 тысяч, открытое API.

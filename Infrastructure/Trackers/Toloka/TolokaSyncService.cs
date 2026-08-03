@@ -1,21 +1,21 @@
 using System;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
 using IO = System.IO;
 
-namespace JacRed.Infrastructure.Trackers.Toloka
+namespace JacBlack.Infrastructure.Trackers.Toloka
 {
     public class TolokaSyncService
     {
@@ -76,7 +76,7 @@ namespace JacRed.Infrastructure.Trackers.Toloka
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"toloka: раздача t{id} не проверена", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"toloka: раздача t{id} не проверена", ex);
                 return null;
             }
         }
@@ -133,13 +133,13 @@ namespace JacRed.Infrastructure.Trackers.Toloka
                 }
 
                 if (result.Count == 0)
-                    JacRedLog.Warning(JacRedLogCategories.Trackers,
+                    JacBlackLog.Warning(JacBlackLogCategories.Trackers,
                         $"toloka: поиск по «{title}» разобран в ноль ({html.Length} байт, строк {rows.Count}, " +
                         $"счётчиков {Regex.Matches(html, "seedmed", RegexOptions.IgnoreCase).Count}) — проверить разметку страницы поиска");
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"toloka: живые сиды по «{title}» не получены", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"toloka: живые сиды по «{title}» не получены", ex);
             }
 
             return result;
@@ -210,7 +210,7 @@ namespace JacRed.Infrastructure.Trackers.Toloka
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Parser, "toloka: вход не выполнен", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Parser, "toloka: вход не выполнен", ex);
             }
 
             return false;
@@ -306,7 +306,7 @@ namespace JacRed.Infrastructure.Trackers.Toloka
                     }
                     catch (Exception ex)
                     {
-                        JacRedLog.Swallowed(JacRedLogCategories.Parser, $"toloka: очередь для категории {cat} не построена", ex);
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Parser, $"toloka: очередь для категории {cat} не построена", ex);
                     }
                 }
             }

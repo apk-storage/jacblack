@@ -1,15 +1,15 @@
-using JacRed.Application.Dev;
-using JacRed.Application.Dev.Migrations;
-using JacRed.Application.Index;
-using JacRed.Application.Maintenance;
-using JacRed.Application.Search;
-using JacRed.Configuration;
-using JacRed.Controllers;
-using JacRed.Infrastructure.Background;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.OpenApi;
-using JacRed.Infrastructure.Security;
-using JacRed.Infrastructure.Trackers;
+using JacBlack.Application.Dev;
+using JacBlack.Application.Dev.Migrations;
+using JacBlack.Application.Index;
+using JacBlack.Application.Maintenance;
+using JacBlack.Application.Search;
+using JacBlack.Configuration;
+using JacBlack.Controllers;
+using JacBlack.Infrastructure.Background;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.OpenApi;
+using JacBlack.Infrastructure.Security;
+using JacBlack.Infrastructure.Trackers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -22,21 +22,21 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Globalization;
 using System.IO;
-using JacRed.Infrastructure.Web;
+using JacBlack.Infrastructure.Web;
 using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace JacRed
+namespace JacBlack
 {
     public class Program
     {
         public static void Main(string[] args)
         {
             Console.WriteLine("═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  JacRed - Torrent Aggregator & File Database");
+            Console.WriteLine("  JacBlack - Torrent Aggregator & File Database");
             Console.WriteLine("═══════════════════════════════════════════════════════════");
             Console.WriteLine($"  Version:     {VersionInfo.Version}");
             Console.WriteLine($"  Git SHA:     {VersionInfo.GitSha}");
@@ -65,11 +65,11 @@ namespace JacRed
 
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
-                JacRedLog.Error(JacRedLogCategories.Host, $"[fatal] UnhandledException: {e.ExceptionObject}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"[fatal] UnhandledException: {e.ExceptionObject}");
             };
             TaskScheduler.UnobservedTaskException += (_, e) =>
             {
-                JacRedLog.Error(JacRedLogCategories.Host, $"[fatal] UnobservedTaskException: {e.Exception}");
+                JacBlackLog.Error(JacBlackLogCategories.Host, $"[fatal] UnobservedTaskException: {e.Exception}");
                 e.SetObserved();
             };
 
@@ -80,9 +80,9 @@ namespace JacRed
             builder.WebHost.UseKestrel(op =>
                 op.Listen(AppInit.conf.listenip == "any" ? IPAddress.Any : IPAddress.Parse(AppInit.conf.listenip), AppInit.conf.listenport));
 
-            builder.Services.AddJacRedConfiguration();
-            builder.Services.AddJacRedSecurity();
-            builder.Services.AddJacRedLogging();
+            builder.Services.AddJacBlackConfiguration();
+            builder.Services.AddJacBlackSecurity();
+            builder.Services.AddJacBlackLogging();
 
             builder.Services.Configure<CookiePolicyOptions>(options =>
             {
@@ -144,20 +144,20 @@ namespace JacRed
             builder.Services.AddHostedService<FileDbWorker>();
             builder.Services.AddHostedService<TracksWorker>();
 
-            builder.Services.AddJacRedTrackers();
-            builder.Services.AddJacRedSwagger();
+            builder.Services.AddJacBlackTrackers();
+            builder.Services.AddJacBlackSwagger();
 
-            var registryErrors = JacRedAccessCatalog.VerifyRegistry();
+            var registryErrors = JacBlackAccessCatalog.VerifyRegistry();
             if (registryErrors.Count > 0)
             {
                 foreach (var err in registryErrors)
-                    JacRedLog.Warning("security", $"registry mismatch: {err}");
+                    JacBlackLog.Warning("security", $"registry mismatch: {err}");
             }
 
             var app = builder.Build();
 
-            JacRedLog.Configure(app.Services.GetRequiredService<ILoggerFactory>());
-            JacRedLogSettings.Apply(AppInit.conf);
+            JacBlackLog.Configure(app.Services.GetRequiredService<ILoggerFactory>());
+            JacBlackLogSettings.Apply(AppInit.conf);
 
             if (app.Environment.IsDevelopment())
                 app.UseDeveloperExceptionPage();
@@ -221,7 +221,7 @@ namespace JacRed
                         return;
                     }
 
-                    JacRedLog.Warning("swagger", $"openapi.yaml → json failed ({error})");
+                    JacBlackLog.Warning("swagger", $"openapi.yaml → json failed ({error})");
                     context.Response.StatusCode = 503;
                     context.Response.ContentType = "application/json; charset=utf-8";
                     await context.Response.WriteAsync($"{{\"error\":\"{error?.Replace("\"", "\\\"")}\"}}");
@@ -234,10 +234,10 @@ namespace JacRed
             app.UseSwagger();
             app.UseSwaggerUI(options =>
             {
-                options.SwaggerEndpoint("/openapi.yaml", "JacRed API (YAML)");
-                options.SwaggerEndpoint("/swagger/v1/swagger.json", "JacRed API (JSON)");
+                options.SwaggerEndpoint("/openapi.yaml", "JacBlack API (YAML)");
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "JacBlack API (JSON)");
                 options.RoutePrefix = "swagger";
-                options.DocumentTitle = "JacRed API";
+                options.DocumentTitle = "JacBlack API";
             });
 
             if (AppInit.conf.web)
@@ -266,7 +266,7 @@ namespace JacRed
                     ContentTypeProvider = contentTypes,
                     OnPrepareResponse = ctx =>
                     {
-                        JacRed.Infrastructure.Web.PrecompressedStaticFiles.FixContentType(ctx.Context, contentTypes);
+                        JacBlack.Infrastructure.Web.PrecompressedStaticFiles.FixContentType(ctx.Context, contentTypes);
 
                         var path = ctx.Context.Request.Path.Value ?? "";
                         if (path.Equals("/sw.js", StringComparison.OrdinalIgnoreCase))
@@ -280,7 +280,7 @@ namespace JacRed
                 });
             }
 
-            app.UseJacRedSecurity();
+            app.UseJacBlackSecurity();
             app.MapControllers();
 
             app.Run();

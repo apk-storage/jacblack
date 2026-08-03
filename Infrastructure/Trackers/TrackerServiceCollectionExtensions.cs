@@ -1,27 +1,27 @@
-using JacRed.Infrastructure.Trackers.Anidub;
-using JacRed.Infrastructure.Trackers.Aniliberty;
-using JacRed.Infrastructure.Trackers.AnimeLayer;
-using JacRed.Infrastructure.Trackers.AnimeTosho;
-using JacRed.Infrastructure.Trackers.Bitru;
-using JacRed.Infrastructure.Trackers.Kinozal;
-using JacRed.Infrastructure.Trackers.Knaben;
-using JacRed.Infrastructure.Trackers.Lostfilm;
-using JacRed.Infrastructure.Trackers.Megapeer;
-using JacRed.Infrastructure.Trackers.NNMClub;
-using JacRed.Infrastructure.Trackers.PirateBay;
-using JacRed.Infrastructure.Trackers.Nyaa;
-using JacRed.Infrastructure.Trackers.Rutor;
-using JacRed.Infrastructure.Trackers.Rutracker;
-using JacRed.Infrastructure.Trackers.Selezen;
-using JacRed.Infrastructure.Trackers.Toloka;
-using JacRed.Infrastructure.Trackers.TorrentBy;
+using JacBlack.Infrastructure.Trackers.Anidub;
+using JacBlack.Infrastructure.Trackers.Aniliberty;
+using JacBlack.Infrastructure.Trackers.AnimeLayer;
+using JacBlack.Infrastructure.Trackers.AnimeTosho;
+using JacBlack.Infrastructure.Trackers.Bitru;
+using JacBlack.Infrastructure.Trackers.Kinozal;
+using JacBlack.Infrastructure.Trackers.Knaben;
+using JacBlack.Infrastructure.Trackers.Lostfilm;
+using JacBlack.Infrastructure.Trackers.Megapeer;
+using JacBlack.Infrastructure.Trackers.NNMClub;
+using JacBlack.Infrastructure.Trackers.PirateBay;
+using JacBlack.Infrastructure.Trackers.Nyaa;
+using JacBlack.Infrastructure.Trackers.Rutor;
+using JacBlack.Infrastructure.Trackers.Rutracker;
+using JacBlack.Infrastructure.Trackers.Selezen;
+using JacBlack.Infrastructure.Trackers.Toloka;
+using JacBlack.Infrastructure.Trackers.TorrentBy;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace JacRed.Infrastructure.Trackers
+namespace JacBlack.Infrastructure.Trackers
 {
     public static class TrackerServiceCollectionExtensions
     {
-        public static IServiceCollection AddJacRedTrackers(this IServiceCollection services)
+        public static IServiceCollection AddJacBlackTrackers(this IServiceCollection services)
         {
             services.AddSingleton<KnabenSyncService>();
             services.AddSingleton<AnimeLayerSyncService>();

@@ -2,24 +2,24 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Tracks;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models.Details;
-using JacRed.Models;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Tracks;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models.Details;
+using JacBlack.Models;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     public class TorrentQueryService : ITorrentQueryService
     {
         readonly ILiveSeeders _liveSeeders;
-        readonly JacRed.Application.Index.IFastDbIndex _fastDbIndex;
+        readonly JacBlack.Application.Index.IFastDbIndex _fastDbIndex;
         readonly ClosedTrackerSeeders _closedTrackers;
 
         public TorrentQueryService(
             ILiveSeeders liveSeeders,
-            JacRed.Application.Index.IFastDbIndex fastDbIndex,
+            JacBlack.Application.Index.IFastDbIndex fastDbIndex,
             Infrastructure.Trackers.Kinozal.KinozalSyncService kinozal = null,
             Infrastructure.Trackers.Toloka.TolokaSyncService toloka = null,
             Infrastructure.Trackers.Bitru.BitruApiSyncService bitru = null)
@@ -328,7 +328,7 @@ namespace JacRed.Application.Search
             }));
         }
         /// <summary>Пустую сводку не отдаём: пустые плашки на карточке лишние.</summary>
-        static Infrastructure.Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacRed.Models.Tracks.ffStream> ffprobe, string title)
+        static Infrastructure.Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacBlack.Models.Tracks.ffStream> ffprobe, string title)
         {
             var summary = Infrastructure.Parsing.MediaTracks.Build(ffprobe, title);
             return summary.IsEmpty ? null : summary;

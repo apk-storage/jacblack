@@ -2,10 +2,10 @@ using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Web;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 
-namespace JacRed.Infrastructure.Trackers.Knaben
+namespace JacBlack.Infrastructure.Trackers.Knaben
 {
     public static class KnabenParser
     {

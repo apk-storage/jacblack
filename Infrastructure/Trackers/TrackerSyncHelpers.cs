@@ -4,14 +4,14 @@
 // ParseAllTask: TrackerWorkFlag + RunParseAllTaskAsync
 // ParseLatest: TrackerLatestParseLock + RunParseLatestAsync
 
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Parsing;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Trackers
+namespace JacBlack.Infrastructure.Trackers
 {
     /// <summary>Per-tracker exclusive parse lock (thread-safe TryStart / End).</summary>
     public sealed class TrackerParseLock
@@ -74,7 +74,7 @@ namespace JacRed.Infrastructure.Trackers
 
         public static void LogParseSkipped(string trackerName, string reason)
         {
-            JacRedLog.Debug(JacRedLogCategories.Trackers, $"{trackerName}: parse skipped ({reason})");
+            JacBlackLog.Debug(JacBlackLogCategories.Trackers, $"{trackerName}: parse skipped ({reason})");
         }
 
         public static async Task<string> RunParseAsync(
@@ -128,7 +128,7 @@ namespace JacRed.Infrastructure.Trackers
                     // сюда смотрят и отсюда это видно снаружи.
                     if (c.Added == 0 && c.Updated == 0)
                     {
-                        JacRedLog.Warning(JacRedLogCategories.Trackers,
+                        JacBlackLog.Warning(JacBlackLogCategories.Trackers,
                             $"{trackerName}: обход завершился впустую — ни одной записи. " +
                             "Похоже, разбор страниц сломался (сменилась вёрстка, слетел вход или закрылся доступ)");
                     }
@@ -179,7 +179,7 @@ namespace JacRed.Infrastructure.Trackers
                 // слова в логе.
                 outcome = $"прерван: {ex.GetType().Name}";
                 ParserLog.Write(trackerName, $"глубокий обход прерван: {ex.GetType().Name}: {ex.Message}");
-                JacRedLog.Swallowed(JacRedLogCategories.Parser, $"{trackerName}: глубокий обход прерван", ex, LogLevel.Error);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Parser, $"{trackerName}: глубокий обход прерван", ex, LogLevel.Error);
             }
             finally
             {

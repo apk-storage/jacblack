@@ -3,10 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Infrastructure.Trackers
+namespace JacBlack.Infrastructure.Trackers
 {
     /// <summary>
     /// Опознание раздач, которых на трекере больше нет.
@@ -93,12 +93,12 @@ namespace JacRed.Infrastructure.Trackers
 
                         DeadReleases.Remember(tracker, id);
 
-                        JacRedLog.Information(JacRedLogCategories.Trackers,
+                        JacBlackLog.Information(JacBlackLogCategories.Trackers,
                             $"{tracker}: раздача {id} удалена с трекера, убрана из выдачи");
                     }
                     catch (Exception ex)
                     {
-                        JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Trackers,
                             $"{tracker}: раздача {id} не проверена", ex);
                     }
                 }

@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using YamlDotNet.Serialization;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     public static class AppConfigurationLoader
     {

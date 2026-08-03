@@ -7,17 +7,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace JacRed.Infrastructure.OpenApi
+namespace JacBlack.Infrastructure.OpenApi
 {
     public static class SwaggerExtensions
     {
-        public static IServiceCollection AddJacRedSwagger(this IServiceCollection services)
+        public static IServiceCollection AddJacBlackSwagger(this IServiceCollection services)
         {
             services.AddSwaggerGen(options =>
             {
                 options.SwaggerDoc("v1", new OpenApiInfo
                 {
-                    Title = "JacRed API",
+                    Title = "JacBlack API",
                     Version = "v1",
                     Description =
                         "Torrent aggregator API: Jackett-compatible search, native torrent search, stats, sync, config. " +
@@ -101,7 +101,7 @@ namespace JacRed.Infrastructure.OpenApi
 
                 options.SchemaFilter<ReadOnlyPropertySchemaFilter>();
 
-                // JacRed.xml contains malformed XML in cron doc comments (&query etc.) — breaks Swashbuckle at runtime.
+                // JacBlack.xml contains malformed XML in cron doc comments (&query etc.) — breaks Swashbuckle at runtime.
                 // Static spec: published wwwroot/openapi.yaml from web/public/openapi.yaml.
 
                 options.AddSecurityDefinition("ApiKeyQuery", new OpenApiSecurityScheme

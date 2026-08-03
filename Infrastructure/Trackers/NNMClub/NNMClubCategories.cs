@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Trackers.NNMClub
+namespace JacBlack.Infrastructure.Trackers.NNMClub
 {
     public enum NNMClubTitleKind
     {
@@ -28,7 +28,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
     }
 
     /// <summary>
-    /// Single source of truth for NNMClub portal ids, JacRed types, and title-parse strategy.
+    /// Single source of truth for NNMClub portal ids, JacBlack types, and title-parse strategy.
     /// Portal: /forum/portal.php?c={id}
     /// </summary>
     static class NNMClubCategories

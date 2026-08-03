@@ -1,4 +1,4 @@
-using JacRed.Models.Api;
+using JacBlack.Models.Api;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -7,10 +7,10 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public static class TorznabXmlFormatter
     {
@@ -41,8 +41,8 @@ namespace JacRed.Infrastructure.Indexers
         public const string IndexersXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
 <indexers>
   <indexer id=""all"" configured=""true"">
-    <title>JacRed (all trackers)</title>
-    <description>Aggregated JacRed search across all configured trackers</description>
+    <title>JacBlack (all trackers)</title>
+    <description>Aggregated JacBlack search across all configured trackers</description>
     <link>https://jac.black</link>
     <language>ru-RU</language>
     <type>public</type>
@@ -57,7 +57,7 @@ namespace JacRed.Infrastructure.Indexers
 <rss version=""2.0"" xmlns:atom=""http://www.w3.org/2005/Atom"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
     <channel>
         <atom:link href=""{api}"" rel=""self"" type=""application/rss+xml"" />
-        <title>JacRed</title>
+        <title>JacBlack</title>
         <description>Torznab API</description>
         <link>{site}/</link>
         <language>en-us</language>
@@ -85,7 +85,7 @@ namespace JacRed.Infrastructure.Indexers
 
             string magnet = torrent.MagnetUri ?? torrent.Details ?? "";
             string detailsUrl = torrent.Details;
-            string indexer = torrent.Tracker ?? "JacRed";
+            string indexer = torrent.Tracker ?? "JacBlack";
             int seeders = torrent.Seeders;
             int leechers = torrent.Peers;
             int peers = leechers > 0 ? seeders + leechers : seeders;
@@ -185,7 +185,7 @@ namespace JacRed.Infrastructure.Indexers
             {
                 // Без infohash клиент Torznab не сможет сопоставить раздачу
                 // с уже скачанной. Debug: вызывается на каждый элемент выдачи.
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers,
                     "не извлёкся infohash из magnet", ex, LogLevel.Debug);
             }
 

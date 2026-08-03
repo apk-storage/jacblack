@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     public class ProxySettings
     {

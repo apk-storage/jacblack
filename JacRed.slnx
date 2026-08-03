@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="JacRed.csproj" />
-  <Project Path="tests/JacRed.Tests/JacRed.Tests.csproj" />
-</Solution>

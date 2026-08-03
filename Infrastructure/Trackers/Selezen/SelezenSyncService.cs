@@ -5,13 +5,13 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Infrastructure.Trackers.Selezen
+namespace JacBlack.Infrastructure.Trackers.Selezen
 {
     public class SelezenSyncService
     {

@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 
-namespace JacRed.Infrastructure.Networking
+namespace JacBlack.Infrastructure.Networking
 {
     public class HashTo
     {

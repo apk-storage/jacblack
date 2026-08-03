@@ -1,10 +1,10 @@
-using JacRed.Models.Api;
+using JacBlack.Models.Api;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public static class IndexerResultFilters
     {

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Trackers.TorrentBy
+namespace JacBlack.Infrastructure.Trackers.TorrentBy
 {
     public enum TorrentByTitleKind
     {
@@ -19,7 +19,7 @@ namespace JacRed.Infrastructure.Trackers.TorrentBy
     }
 
     /// <summary>
-    /// Single source of truth for torrent.by section slugs, JacRed types, and title-parse strategy.
+    /// Single source of truth for torrent.by section slugs, JacBlack types, and title-parse strategy.
     /// </summary>
     static class TorrentByCategories
     {

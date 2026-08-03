@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 
-namespace JacRed.Infrastructure.Web
+namespace JacBlack.Infrastructure.Web
 {
     /// <summary>
     /// Отдаёт файлы фронта, сжатые заранее при сборке, вместо того чтобы жать
