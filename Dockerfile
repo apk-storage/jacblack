@@ -57,7 +57,7 @@ ARG JACBLACK_VERSION=dev
 
 LABEL maintainer="Pavel Pikta <devops@pavelpikta.com>" \
     org.opencontainers.image.title="JacBlack" \
-    org.opencontainers.image.description="Jacred - Torrent tracker aggregator" \
+    org.opencontainers.image.description="JacBlack - Torrent tracker aggregator" \
     org.opencontainers.image.revision="${JACBLACK_VERSION}"
 
 # Install runtime dependencies and create user
@@ -77,23 +77,23 @@ RUN set -eux; \
     /usr/share/doc/* \
     /usr/share/info/* \
     /usr/share/locale/* \
-    && addgroup -g 1000 -S jacred \
-    && adduser -u 1000 -S jacred -G jacred -s /sbin/nologin -h /app \
+    && addgroup -g 1000 -S jacblack \
+    && adduser -u 1000 -S jacblack -G jacblack -s /sbin/nologin -h /app \
     && mkdir -p /app/Data /app/Data/fdb /app/Data/temp /app/Data/tracks /app/config /app/defaults \
     && touch /app/Data/temp/stats.json \
-    && chown -R jacred:jacred /app \
+    && chown -R jacblack:jacblack /app \
     && chmod -R 750 /app
 
 WORKDIR /app
 
 # Copy publish output: /dist contains JacBlack (binary), wwwroot/, Data/
-COPY --from=build --chown=jacred:jacred --chmod=550 /dist/JacBlack /app/JacBlack
-COPY --from=build --chown=jacred:jacred --chmod=750 /dist/wwwroot /app/wwwroot
-COPY --from=build --chown=jacred:jacred --chmod=750 /dist/Data /app/Data
+COPY --from=build --chown=jacblack:jacblack --chmod=550 /dist/JacBlack /app/JacBlack
+COPY --from=build --chown=jacblack:jacblack --chmod=750 /dist/wwwroot /app/wwwroot
+COPY --from=build --chown=jacblack:jacblack --chmod=750 /dist/Data /app/Data
 # Default config files for first run when Data is overridden by bind mount (./data:/app/Data)
-COPY --from=build --chown=jacred:jacred /dist/Data/init.conf /app/defaults/
-COPY --from=build --chown=jacred:jacred /dist/Data/init.yaml /app/defaults/
-COPY --chown=jacred:jacred --chmod=550 entrypoint.sh /entrypoint.sh
+COPY --from=build --chown=jacblack:jacblack /dist/Data/init.conf /app/defaults/
+COPY --from=build --chown=jacblack:jacblack /dist/Data/init.yaml /app/defaults/
+COPY --chown=jacblack:jacblack --chmod=550 entrypoint.sh /entrypoint.sh
 
 # Environment variables
 ENV JACBLACK_VERSION="${JACBLACK_VERSION}" \
@@ -107,7 +107,7 @@ ENV JACBLACK_VERSION="${JACBLACK_VERSION}" \
     TZ=UTC \
     UMASK=0027
 
-USER jacred:jacred
+USER jacblack:jacblack
 
 VOLUME ["/app/Data", "/app/config"]
 
