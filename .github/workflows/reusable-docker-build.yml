@@ -10,7 +10,7 @@ on:
         required: true
 
       version:
-        description: "Release version (semver) to tag and pass as JACRED_VERSION build-arg. Empty = branch/SHA tags and JACRED_VERSION=dev"
+        description: "Release version (semver) to tag and pass as JACBLACK_VERSION build-arg. Empty = branch/SHA tags and JACBLACK_VERSION=dev"
         type: string
         required: false
         default: ""
@@ -172,7 +172,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           build-args: |
-            JACRED_VERSION=${{ inputs.version != '' && inputs.version || 'dev' }}
+            JACBLACK_VERSION=${{ inputs.version != '' && inputs.version || 'dev' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           sbom: ${{ inputs.sbom }}

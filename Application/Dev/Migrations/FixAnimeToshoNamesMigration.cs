@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Trackers.AnimeTosho;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models.Details;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Trackers.AnimeTosho;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models.Details;
 
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     /// <summary>
     /// Пересчитывает имена раздач AnimeTosho по актуальному разбору заголовка.

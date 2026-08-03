@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     public partial class FileDB
     {
@@ -60,7 +60,7 @@ namespace JacRed.Infrastructure.Persistence
 
             // Lostfilm: host-independent path + #quality (qualities stay distinct).
             if (string.Equals(trackerName, "lostfilm", StringComparison.OrdinalIgnoreCase))
-                return JacRed.Infrastructure.Trackers.Lostfilm.LostfilmParser.StableUrlId(url);
+                return JacBlack.Infrastructure.Trackers.Lostfilm.LostfilmParser.StableUrlId(url);
 
             // Ниже — источники, у которых идентификатор в URL есть, но раньше
             // не разбирался: защита от дублей при смене адреса на них не работала.

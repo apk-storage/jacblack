@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     /// <summary>
     /// Parses Prowlarr Search Feed brace tokens from <c>query</c>

@@ -1,4 +1,4 @@
-using JacRed.Models.Api;
+using JacBlack.Models.Api;
 using MonoTorrent;
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public static class IndexerResultMerger
     {

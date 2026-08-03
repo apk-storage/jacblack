@@ -1,4 +1,4 @@
-﻿namespace JacRed.Models.Details
+﻿namespace JacBlack.Models.Details
 {
     public class TolokaDetails : TorrentDetails
     {

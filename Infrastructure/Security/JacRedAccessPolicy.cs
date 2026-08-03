@@ -1,6 +1,6 @@
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
-    public enum JacRedAccessPolicy
+    public enum JacBlackAccessPolicy
     {
         /// <summary>Whitelisted paths — no apikey/devkey (health, sync, static shell, swagger).</summary>
         Public,

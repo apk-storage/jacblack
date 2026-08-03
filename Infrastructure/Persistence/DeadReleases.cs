@@ -2,10 +2,10 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     /// <summary>
     /// Раздачи, которых на трекере больше нет.
@@ -52,11 +52,11 @@ namespace JacRed.Infrastructure.Persistence
                 foreach (var kv in loaded)
                     _dead[kv.Key] = kv.Value;
 
-                JacRedLog.Information(JacRedLogCategories.Trackers, $"список удалённых раздач загружен: {_dead.Count}");
+                JacBlackLog.Information(JacBlackLogCategories.Trackers, $"список удалённых раздач загружен: {_dead.Count}");
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, "список удалённых раздач не прочитан", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "список удалённых раздач не прочитан", ex);
             }
         }
 
@@ -94,7 +94,7 @@ namespace JacRed.Infrastructure.Persistence
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, "список удалённых раздач не сохранён", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, "список удалённых раздач не сохранён", ex);
                 }
             }
         }

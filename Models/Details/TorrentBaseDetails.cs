@@ -1,9 +1,9 @@
-﻿using JacRed.Models.Tracks;
+﻿using JacBlack.Models.Tracks;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 
-namespace JacRed.Models.Details
+namespace JacBlack.Models.Details
 {
     public class TorrentBaseDetails
     {

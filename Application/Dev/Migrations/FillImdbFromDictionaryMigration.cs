@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     /// <summary>
     /// Проставляет код IMDB раздачам, у которых его нет, по совпадению

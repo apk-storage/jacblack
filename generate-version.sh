@@ -40,7 +40,7 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 cat > "$OUTPUT_FILE" <<EOF
-namespace JacRed;
+namespace JacBlack;
 
 /// <summary>
 /// Auto-generated version information from Git.

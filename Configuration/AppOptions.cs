@@ -1,8 +1,8 @@
-using JacRed.Models;
-using JacRed.Models.AppConf;
+using JacBlack.Models;
+using JacBlack.Models.AppConf;
 using Newtonsoft.Json;
 
-namespace JacRed.Configuration
+namespace JacBlack.Configuration
 {
     /// <summary>Strongly-typed mirror of init.yaml / init.conf root object.</summary>
     public class AppOptions

@@ -1,20 +1,20 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
-    /// <summary>Maps request paths to access policies enforced by JacRedAuthorizationMiddleware.</summary>
-    public static partial class JacRedEndpointRegistry
+    /// <summary>Maps request paths to access policies enforced by JacBlackAuthorizationMiddleware.</summary>
+    public static partial class JacBlackEndpointRegistry
     {
         [GeneratedRegex("^/(api/v1\\.0/conf|sync/)")]
         private static partial Regex PathWhitelistRegex();
 
-        public static JacRedAccessPolicy ResolvePolicy(string path)
+        public static JacBlackAccessPolicy ResolvePolicy(string path)
         {
-            if (IsDevOnlyPath(path)) return JacRedAccessPolicy.DevAdmin;
-            if (IsConfigApiPath(path)) return JacRedAccessPolicy.ConfigApi;
-            if (IsPathWhitelisted(path)) return JacRedAccessPolicy.Public;
-            return JacRedAccessPolicy.ApiKeyWhenConfigured;
+            if (IsDevOnlyPath(path)) return JacBlackAccessPolicy.DevAdmin;
+            if (IsConfigApiPath(path)) return JacBlackAccessPolicy.ConfigApi;
+            if (IsPathWhitelisted(path)) return JacBlackAccessPolicy.Public;
+            return JacBlackAccessPolicy.ApiKeyWhenConfigured;
         }
 
         public static bool IsConfigApiPath(string path)

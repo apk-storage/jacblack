@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Utils;
-using JacRed.Models.Details;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Models.Details;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     internal static class JackettCardMatcher
     {

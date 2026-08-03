@@ -1,5 +1,5 @@
 ﻿using System;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -8,11 +8,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
 using HttpClientHandler = System.Net.Http.HttpClientHandler;
@@ -21,7 +21,7 @@ using FormUrlEncodedContent = System.Net.Http.FormUrlEncodedContent;
 using NetHttpClient = System.Net.Http.HttpClient;
 using IO = System.IO;
 
-namespace JacRed.Infrastructure.Trackers.Kinozal
+namespace JacBlack.Infrastructure.Trackers.Kinozal
 {
     public class KinozalSyncService
     {
@@ -309,7 +309,7 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
                         }
                         catch (Exception ex)
                         {
-                            JacRedLog.Swallowed(JacRedLogCategories.Parser, $"kinozal: очередь для категории {cat}, год {year}, страница {page} не построена", ex);
+                            JacBlackLog.Swallowed(JacBlackLogCategories.Parser, $"kinozal: очередь для категории {cat}, год {year}, страница {page} не построена", ex);
                         }
                     }
                 }
@@ -466,7 +466,7 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"kinozal: живые сиды по «{string.Join("», «", queries)}» не получены", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"kinozal: живые сиды по «{string.Join("», «", queries)}» не получены", ex);
             }
 
             return result;

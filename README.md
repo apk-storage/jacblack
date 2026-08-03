@@ -1,11 +1,11 @@
-# JacRed
+# JacBlack
 
-![Jacred — A Torrent aggregator & file database](web/public/img/jacred-social-preview.png)
+![Jacred — A Torrent aggregator & file database](webui/public/img/jacred-social-preview.png)
 
-[![Build](https://github.com/jacred-fdb/jacred/actions/workflows/build.yml/badge.svg)](https://github.com/jacred-fdb/jacred/actions/workflows/build.yml)
-[![Release](https://github.com/jacred-fdb/jacred/actions/workflows/release.yml/badge.svg)](https://github.com/jacred-fdb/jacred/actions/workflows/release.yml)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/jacred-fdb/jacred?label=version)](https://github.com/jacred-fdb/jacred/releases)
-[![GitHub tag (latest SemVer pre-release)](https://img.shields.io/github/v/tag/jacred-fdb/jacred?include_prereleases&label=pre-release)](https://github.com/jacred-fdb/jacred/tags)
+[![Build](https://github.com/apk-storage/jacblack/actions/workflows/build.yml/badge.svg)](https://github.com/apk-storage/jacblack/actions/workflows/build.yml)
+[![Release](https://github.com/apk-storage/jacblack/actions/workflows/release.yml/badge.svg)](https://github.com/apk-storage/jacblack/actions/workflows/release.yml)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/apk-storage/jacblack?label=version)](https://github.com/apk-storage/jacblack/releases)
+[![GitHub tag (latest SemVer pre-release)](https://img.shields.io/github/v/tag/apk-storage/jacblack?include_prereleases&label=pre-release)](https://github.com/apk-storage/jacblack/tags)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Агрегатор торрент-трекеров с API в формате Jackett. Хранит данные в файловой БД (fdb), поддерживает синхронизацию с удалённой базой и самостоятельный парсинг трекеров по cron.
@@ -71,7 +71,7 @@ curl -s https://raw.githubusercontent.com/jacred-fdb/jacred/main/jacred.sh | bas
 | `--no-download-db` | Не скачивать и не распаковывать базу (только при установке) |
 | `--pre-release` | Установить или обновить из последнего pre-release (например, 2.0.0-dev1) |
 | `--update` | Обновить приложение с последнего релиза (сохранить БД, заменить файлы, перезапустить) |
-| `--remove` | Полностью удалить JacRed (сервис, cron, каталог приложения) |
+| `--remove` | Полностью удалить JacBlack (сервис, cron, каталог приложения) |
 | `-h`, `--help` | Показать справку |
 
 **Примеры:**
@@ -292,7 +292,7 @@ journalctl -u jacred -g 'fdb:' -p warning
 
 **`tracksconcurrency`** — глобальный лимит **одновременных** анализов через TorrServer (add → wait `file_stats` → проверка сидов → ожидание буфера ≥ `tracksminbufferkb` → выбор media file → `GET /ffp/{hash}/{id}` → rem). Все typetask делят один пул слотов: если слотов не хватает, лишние очереди **ждут** освобождения. **`tracksdelay`** задаёт паузу **между стартами** следующего торрента **внутри** каждой очереди (~20 с ±10% по умолчанию), но до `tracksconcurrency` анализов могут идти параллельно из разных typetask. После недоступности TS / ошибок API применяется backoff не короче `tracksdelay` (минимум 5–10 с).
 
-**File id в TorrServer:** номера файлов **1-based**, сортировка по пути. Id `1` — не обязательно основное видео. JacRed выбирает кандидатов по video-расширению и размеру, исключая sample/trailer/proof/preview; если видео не найдено — fallback на крупнейший файл или id `1`. При HTTP 400 пробует до `tracksffpretry` доп. id за одну попытку. HTTP 400 **не** выставляет `ffprobe_tryingdata` в `tracksatempt` — каждая неудача даёт `+1` (включая typetask 1), пока не достигнут лимит.
+**File id в TorrServer:** номера файлов **1-based**, сортировка по пути. Id `1` — не обязательно основное видео. JacBlack выбирает кандидатов по video-расширению и размеру, исключая sample/trailer/proof/preview; если видео не найдено — fallback на крупнейший файл или id `1`. При HTTP 400 пробует до `tracksffpretry` доп. id за одну попытку. HTTP 400 **не** выставляет `ffprobe_tryingdata` в `tracksatempt` — каждая неудача даёт `+1` (включая typetask 1), пока не достигнут лимит.
 
 **Таймауты:** мёртвые торренты (нет сидов и `bytes_read`) не держат слот долго — `/ffp` пропускается после `trackspeerwaittimeout`. Затем ещё один бюджет `trackspeerwaittimeout` на набор буфера ≥ `tracksminbufferkb`. Для `sid == 0` или «есть байты, но нет сидов» — короткий `tracksffptimeoutnosid`; при живых сидах и `sid > 0` — до `tracksffptimeout` на `/ffp`. Общий лимит одной попытки analyze (408): `tracksreadtimeout` + 2×`trackspeerwaittimeout` + `/ffp`×(1+`tracksffpretry`) + 30 с.
 
@@ -480,7 +480,7 @@ Jackett JSON (`/api/v2.0/indexers/.../results`) **всегда** использ�
 | **Prowlarr** (ручная настройка Generic Torznab) | `/torznab/api` | Torznab XML |
 | **qui / autobrr** (discover, backend=**jackett**) | `/api/v2.0/indexers/all/results/torznab/api` | Torznab XML + `t=indexers` discover |
 | **qui / autobrr** (discover, backend=**prowlarr**) | `/api/v1/indexer` + `/api/v1/indexer/1/newznab` (+ `/api/v1/search`) | Prowlarr REST + Torznab XML / Search JSON |
-| **JacRed native API** | `/api/v1.0/torrents` | Собственный JSON API (не Torznab, не Jackett) |
+| **JacBlack native API** | `/api/v1.0/torrents` | Собственный JSON API (не Torznab, не Jackett) |
 
 В ответе `t=caps` поле `<server url="...">` и `<atom:link rel="self">` в RSS указывают на **фактический путь запроса** (например Jackett- или Prowlarr-алиас), а не всегда на `/torznab/api`.
 
@@ -537,7 +537,7 @@ Anifilm, AniLibria, HDRezka.
 
 ## Безопасность и доступ к API
 
-JacRed использует единый слой доступа: **`UseJacRedSecurity()`** (`SecurityHeadersMiddleware` + `JacRedAuthorizationMiddleware`). Политика определяется **только** по префиксу пути в `JacRedEndpointRegistry` — без атрибутов на контроллерах.
+JacBlack использует единый слой доступа: **`UseJacBlackSecurity()`** (`SecurityHeadersMiddleware` + `JacBlackAuthorizationMiddleware`). Политика определяется **только** по префиксу пути в `JacBlackEndpointRegistry` — без атрибутов на контроллерах.
 
 **Сеть:** **Client IP** — после `X-Forwarded-For`; **Peer IP** — прямое TCP-подключение к Kestrel (cloudflared/nginx на том же хосте). См. `ClientNetworkContext`.
 
@@ -612,7 +612,7 @@ curl -s -H "X-Api-Key: YOUR_API_KEY" -H "X-Dev-Key: YOUR_DEV_KEY" \
 
 ### Матрица доступа
 
-Полная трассировка маршрутов, политик и вторичных проверок — [`AccessTraceabilityMatrix.md`](AccessTraceabilityMatrix.md). Источник истины в коде: `Infrastructure/Security/JacRedEndpointRegistry.cs`.
+Полная трассировка маршрутов, политик и вторичных проверок — [`AccessTraceabilityMatrix.md`](AccessTraceabilityMatrix.md). Источник истины в коде: `Infrastructure/Security/JacBlackEndpointRegistry.cs`.
 
 ---
 
@@ -623,8 +623,8 @@ curl -s -H "X-Api-Key: YOUR_API_KEY" -H "X-Dev-Key: YOUR_DEV_KEY" \
 | URL | Назначение |
 |-----|------------|
 | `GET /swagger` | Swagger UI (интерактивная документация) |
-| `GET /swagger/v1/swagger.json` | OpenAPI 3.0 JSON (конвертируется из `web/public/openapi.yaml` → publish `wwwroot/openapi.yaml`) |
-| `GET /openapi.yaml` | Статическая OpenAPI 3.0 YAML (source: `web/public/openapi.yaml`) |
+| `GET /swagger/v1/swagger.json` | OpenAPI 3.0 JSON (конвертируется из `webui/public/openapi.yaml` → publish `wwwroot/openapi.yaml`) |
+| `GET /openapi.yaml` | Статическая OpenAPI 3.0 YAML (source: `webui/public/openapi.yaml`) |
 
 Swagger UI по умолчанию загружает **`/openapi.yaml`**; в выпадающем списке также доступен JSON (`/swagger/v1/swagger.json`).
 
@@ -639,7 +639,7 @@ Swagger UI по умолчанию загружает **`/openapi.yaml`**; в в
 - **`GET /`** — веб-интерфейс поиска (если `web: true`).
 - **`GET /stats`** — страница статистики SPA (если `web: true`; данные — `/stats/torrents`, `/stats/meta`).
 - **`GET /settings`** — настройки SPA (Config API: LAN или `X-Dev-Key`).
-- **Веб-UI:** Vue 3 SPA в [`web/`](web/) (Vite + Tailwind + shadcn-vue); `./scripts/build-web-ui.sh` собирает publish-папку `wwwroot/` (в git не хранится).
+- **Веб-UI:** Vue 3 SPA в [`webui/`](webui/) (Vite + Tailwind); `./scripts/build-web-ui.sh` собирает publish-папку `wwwroot/` (в git не хранится). Прежний интерфейс из `web/` с PWA, двумя языками и редактором настроек удалён 02.08.2026 — он не собирался с 31.07 и вводил в заблуждение.
 - **`GET /health`** — проверка работы. Ответ JSON: `{"status":"OK"}`.
 - **`GET /version`** — версия приложения. Ответ JSON: `{"version":"1.0.0"}`.
 - **`GET /lastupdatedb`** — дата/время последнего обновления БД (UTC). Ответ JSON: `{"lastupdatedb":"dd.MM.yyyy HH:mm"}`.
@@ -661,7 +661,7 @@ Swagger UI по умолчанию загружает **`/openapi.yaml`**; в в
   - Brace-токены в `query` (как в UI Prowlarr): `{ImdbId:tt…}`, `{Season:1}`, `{Episode:2}` и т.п.
   - Lampa (`parser_torrent_type=prowlarr`): `query` + `type=tvsearch|search` + `categories` — запрос поднимается до card-поиска как у Jackett (`title`/`title_original`/`year`, `is_serial` 1=фильм / 2=сериал).
   - Один агрегированный indexer `id=1`; ответ в схеме ReleaseResource (`guid`, `title`, `size`, `seeders`, `magnetUrl`, `categories`, …).
-  - JacRed-расширения как у Jackett: `ffprobe`, `languages`, `info` при `tracks: true` (иначе поля опускаются / null).
+  - JacBlack-расширения как у Jackett: `ffprobe`, `languages`, `info` при `tracks: true` (иначе поля опускаются / null).
 - **`GET /torznab/api`** — Torznab XML, основной endpoint (`t=search|tvsearch|moviesearch|caps|indexers`).
 - **`GET /api/v2.0/indexers/{id}/results/torznab/api`** — Torznab XML (Jackett-алиас, тот же обработчик).
 
@@ -670,7 +670,7 @@ Swagger UI по умолчанию загружает **`/openapi.yaml`**; в в
   - IMDB/KP ID (`tt…`, `kp…`) → поиск через v1 с `exact=true`.
   - Card mode (Lampa): `title` + `title_original` + `year` + `is_serial` + `genres`.
   - Объединение v1+v2, bilingual `Русский / English`, post-filter по сезону/эпизоду/году/категории.
-- **`GET /api/v1.0/torrents`** — поиск торрентов (собственный JSON API JacRed, не Torznab и не Jackett).
+- **`GET /api/v1.0/torrents`** — поиск торрентов (собственный JSON API JacBlack, не Torznab и не Jackett).
   - Параметры: `query` (поисковый запрос), `tracker` (трекер), `category` (категория), `quality` (качество).
 - **`GET /api/v1.0/qualitys`** — список доступных качеств.
 
@@ -728,7 +728,7 @@ REST API и страница **`/settings`** для редактирования
 
 **Хранение tracks (`Data/tracks/`):**
 
-- Канонический layout (JacRed + lampa-tracks): `{aa}/{b}/{hash}.json` — **lowercase hex** (совпадает с hash-значением).
+- Канонический layout (JacBlack + lampa-tracks): `{aa}/{b}/{hash}.json` — **lowercase hex** (совпадает с hash-значением).
 - Чтение поддерживает uppercase export и файлы без `.json`.
 - **`BackfillTracks`** приводит файлы к `.json` и нормализует регистр в canonical lowercase layout.
 - При сохранении через модуль tracks устаревшие форматы файлов удаляются автоматически.
@@ -784,7 +784,7 @@ curl -s -H "X-Api-Key: YOUR_API_KEY" -H "X-Dev-Key: YOUR_DEV_KEY" \
 
 ### Требования для сборки
 
-- **.NET 10.0 SDK** (см. **`JacRed.csproj`**)
+- **.NET 10.0 SDK** (см. **`JacBlack.csproj`**)
 - **Git** (для генерации версии из тегов)
 - **Bash** (для скрипта сборки)
 
@@ -899,8 +899,8 @@ volumes:
 **Типовые варианты:**
 
 1. **Cron на хосте** (чаще всего) — в crontab пользователя на машине, где крутится Docker, вызывать `curl` на опубликованный порт (например `http://127.0.0.1:9117/...`). Запрос с хоста в контейнер обычно приходит с адреса из **приватной подсети** (в т.ч. шлюз Docker `172.x`), что удовлетворяет проверке «локальная/приватная сеть» в приложении.
-2. **Отдельный контейнер с cron** — маленький образ (например `curl` + `cron`), в том же Docker Compose, который по расписанию дергает сервис JacRed по **внутреннему** имени и порту (например `http://jacred:9117/...`). Убедитесь, что с точки зрения JacRed IP источника остаётся в приватном диапазоне (типично так и есть в user-defined bridge-сети).
-3. **Kubernetes CronJob**, **systemd timer** на хосте — по сути то же, что п.1: периодический HTTP-запрос к JacRed.
+2. **Отдельный контейнер с cron** — маленький образ (например `curl` + `cron`), в том же Docker Compose, который по расписанию дергает сервис JacBlack по **внутреннему** имени и порту (например `http://jacred:9117/...`). Убедитесь, что с точки зрения JacBlack IP источника остаётся в приватном диапазоне (типично так и есть в user-defined bridge-сети).
+3. **Kubernetes CronJob**, **systemd timer** на хосте — по сути то же, что п.1: периодический HTTP-запрос к JacBlack.
 
 **Ориентир по расписанию:** в репозитории лежит пример **`Data/crontab`** (парсинг по трекерам и `*/5 * * * *` для **`/jsondb/save`**). Скопируйте нужные строки в свой crontab на хосте (или в свой шаблон для контейнера с cron) и:
 
@@ -926,7 +926,7 @@ volumes:
 
 ### База данных не обновляется
 
-- Проверьте, что cron настроен правильно: `crontab -l` (на **хосте** или в отдельном контейнере с планировщиком; **внутри** образа JacRed cron нет)
+- Проверьте, что cron настроен правильно: `crontab -l` (на **хосте** или в отдельном контейнере с планировщиком; **внутри** образа JacBlack cron нет)
 - Для Docker: убедитесь, что по расписанию вызываются **`/cron/...`** и при необходимости **`/jsondb/save`**, с учётом **`apikey`** / **`devkey`** в `curl`, если они заданы в конфиге
 - Убедитесь, что `syncapi` указан корректно (если используется синхронизация)
 - Проверьте логи парсеров: `tail -f Data/log/{tracker}.log`
@@ -957,7 +957,7 @@ volumes:
 
 ## Архитектура
 
-JacRed — **ASP.NET Core 10** (single project `JacRed.csproj`):
+JacBlack — **ASP.NET Core 10** (single project `JacBlack.csproj`):
 
 ```
 Controllers/          → HTTP (тонкий слой)
@@ -971,8 +971,8 @@ Models/               → DTO и контракты API
 
 | Компонент | Путь | Назначение |
 | --------- | ---- | ---------- |
-| **Security** | `Infrastructure/Security/` | `JacRedEndpointRegistry`, `JacRedAuthorizationMiddleware`, `UseJacRedSecurity()` |
-| **Logging** | `Infrastructure/Logging/` | `JacRedLog`, console categories, M.E.Logging |
+| **Security** | `Infrastructure/Security/` | `JacBlackEndpointRegistry`, `JacBlackAuthorizationMiddleware`, `UseJacBlackSecurity()` |
+| **Logging** | `Infrastructure/Logging/` | `JacBlackLog`, console categories, M.E.Logging |
 | **FileDB** | `Infrastructure/Persistence/FileDB/` | Файловая БД, `masterDb`, cron fdb |
 | **Search** | `Infrastructure/Indexers/`, `Application/Search/` | Jackett / Torznab / v1 torrents |
 | **Trackers** | `Infrastructure/Trackers/{Name}/` | Parser + SyncService на трекер |

@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     /// <summary>
     /// Одна раздача глазами живого опроса: с какого она трекера, какие у неё

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace JacRed.Models.tParse
+namespace JacBlack.Models.tParse
 {
     /// <summary>Response from /api/v1/anime/torrents</summary>
     public class AnilibertyApiResponse

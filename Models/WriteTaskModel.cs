@@ -1,7 +1,7 @@
-﻿using JacRed.Infrastructure.Persistence;
+﻿using JacBlack.Infrastructure.Persistence;
 using System;
 
-namespace JacRed.Models
+namespace JacBlack.Models
 {
     public class WriteTaskModel
     {

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal sealed class TracksIndexFile
     {

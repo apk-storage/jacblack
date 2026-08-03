@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 
-namespace JacRed.Infrastructure.Parsing
+namespace JacBlack.Infrastructure.Parsing
 {
     /// <summary>
     /// Счётчики одного прогона парсера. Считаются НЕ в самих парсерах, а в месте,

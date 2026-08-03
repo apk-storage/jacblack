@@ -5,13 +5,13 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.tParse;
 using IO = System.IO;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.Megapeer
+namespace JacBlack.Infrastructure.Trackers.Megapeer
 {
     public class MegapeerSyncService
     {
@@ -95,7 +95,7 @@ namespace JacRed.Infrastructure.Trackers.Megapeer
                     {
                         // Страница просто не попадёт в задание — обход её пропустит
                         // и ничем этого не покажет. Поэтому пишем.
-                        JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Trackers,
                             $"megapeer: страница {page} категории {cat} не попала в задание", ex);
                     }
                 }

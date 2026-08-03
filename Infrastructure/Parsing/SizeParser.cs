@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Parsing
+namespace JacBlack.Infrastructure.Parsing
 {
     /// <summary>
     /// Разбор человеческой строки размера («5.09 ГБ», «700 MB») в байты.

@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 using AngleSharp.Html.Dom;
 using AngleSharp.Html.Parser;
 
-namespace JacRed.Infrastructure.Parsing
+namespace JacBlack.Infrastructure.Parsing
 {
     /// <summary>
     /// Разбор страниц трекеров через дерево документа вместо регулярок по разметке.

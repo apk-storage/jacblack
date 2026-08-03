@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace JacRed.Models.Details
+namespace JacBlack.Models.Details
 {
     public class TorrentDetails : TorrentBaseDetails, ICloneable
     {

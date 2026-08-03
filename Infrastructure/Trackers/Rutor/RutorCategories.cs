@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Trackers.Rutor
+namespace JacBlack.Infrastructure.Trackers.Rutor
 {
     public enum RutorTitleKind
     {
@@ -22,7 +22,7 @@ namespace JacRed.Infrastructure.Trackers.Rutor
     }
 
     /// <summary>
-    /// Single source of truth for Rutor browse ids, JacRed types, and title-parse strategy.
+    /// Single source of truth for Rutor browse ids, JacBlack types, and title-parse strategy.
     /// </summary>
     static class RutorCategories
     {

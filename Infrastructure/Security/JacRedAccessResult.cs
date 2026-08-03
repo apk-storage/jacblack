@@ -1,21 +1,21 @@
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
-    public readonly struct JacRedAccessResult
+    public readonly struct JacBlackAccessResult
     {
-        public static JacRedAccessResult Allow { get; } = new(true, 0, false);
+        public static JacBlackAccessResult Allow { get; } = new(true, 0, false);
 
         public bool IsAllowed { get; }
         public int DenyStatusCode { get; }
         public bool SetPrivateNetworkHeaderOnDeny { get; }
 
-        JacRedAccessResult(bool isAllowed, int denyStatusCode, bool setPrivateNetworkHeaderOnDeny)
+        JacBlackAccessResult(bool isAllowed, int denyStatusCode, bool setPrivateNetworkHeaderOnDeny)
         {
             IsAllowed = isAllowed;
             DenyStatusCode = denyStatusCode;
             SetPrivateNetworkHeaderOnDeny = setPrivateNetworkHeaderOnDeny;
         }
 
-        public static JacRedAccessResult Deny(int statusCode, bool setPrivateNetworkHeader = true)
+        public static JacBlackAccessResult Deny(int statusCode, bool setPrivateNetworkHeader = true)
             => new(false, statusCode, setPrivateNetworkHeader);
     }
 }

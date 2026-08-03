@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace JacRed.Models.Api
+namespace JacBlack.Models.Api
 {
     public class TorrentInfo
     {
@@ -80,6 +80,6 @@ namespace JacRed.Models.Api
         /// Пустую сводку не отдаём вовсе: у большинства раздач ffprobe нет, и
         /// карточка не должна показывать пустые плашки.
         /// </summary>
-        public JacRed.Infrastructure.Parsing.MediaTracks.Summary media { get; set; }
+        public JacBlack.Infrastructure.Parsing.MediaTracks.Summary media { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JacRed.Models.tParse
+namespace JacBlack.Models.tParse
 {
     public class TaskParse
     {

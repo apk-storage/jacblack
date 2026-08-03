@@ -4,10 +4,10 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Lostfilm
+namespace JacBlack.Infrastructure.Trackers.Lostfilm
 {
     public static partial class LostfilmParser
     {

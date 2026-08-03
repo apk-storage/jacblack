@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace JacRed.Models.tParse
+namespace JacBlack.Models.tParse
 {
     /// <summary>Ответ api.php?get=torrents. Official error shape is {"error":"message"} (string).</summary>
     public class BitruApiResponse

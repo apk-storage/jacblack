@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     /// <summary>Что известно про один глубокий обход.</summary>
     public class CrawlRun

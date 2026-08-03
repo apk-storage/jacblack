@@ -2,7 +2,7 @@
 using BencodeNET.Torrents;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Parsing
+namespace JacBlack.Infrastructure.Parsing
 {
     public static class BencodeTo
     {

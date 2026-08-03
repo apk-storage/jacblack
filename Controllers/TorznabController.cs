@@ -1,6 +1,6 @@
-using JacRed.Application.Search;
-using JacRed.Infrastructure.Indexers;
-using JacRed.Models.Api;
+using JacBlack.Application.Search;
+using JacBlack.Infrastructure.Indexers;
+using JacBlack.Models.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     /// <summary>
     /// Native Torznab XML API.
@@ -179,7 +179,7 @@ namespace JacRed.Controllers
                 return NotFound();
 
             var query = HttpContext.Request.Query;
-            if (!IndexerRequestParams.ProwlarrIndexerIdsIncludeJacRed(query))
+            if (!IndexerRequestParams.ProwlarrIndexerIdsIncludeJacBlack(query))
                 return Json(Array.Empty<object>());
 
             string type = (query["type"].ToString() ?? "search").Trim();

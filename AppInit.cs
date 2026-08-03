@@ -1,9 +1,9 @@
-using JacRed.Configuration;
-using JacRed.Configuration.Schema;
+using JacBlack.Configuration;
+using JacBlack.Configuration.Schema;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 
-namespace JacRed
+namespace JacBlack
 {
     /// <summary>Slim facade over <see cref="AppConfigurationProvider"/> — preserves AppInit.conf and Config API entry points.</summary>
     public class AppInit : AppOptions

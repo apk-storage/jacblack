@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Application.Dev
+namespace JacBlack.Application.Dev
 {
     public class DevDiagnosticsService : IDevDiagnosticsService
     {

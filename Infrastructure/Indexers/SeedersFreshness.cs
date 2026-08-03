@@ -1,6 +1,6 @@
 using System;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     /// <summary>
     /// Считается ли число раздающих в записи проверенным по её свежести.

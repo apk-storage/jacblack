@@ -1,7 +1,7 @@
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Models.Details;
-using JacRed.Models.Tracks;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Models.Details;
+using JacBlack.Models.Tracks;
 using MonoTorrent;
 using Newtonsoft.Json;
 using System;
@@ -11,7 +11,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static class TracksExportService
     {
@@ -250,7 +250,7 @@ namespace JacRed.Infrastructure.Tracks
                         job.error = ex.Message;
                     }
 
-                    JacRedLog.Error(JacRedLogCategories.TracksExport, ex.ToString());
+                    JacBlackLog.Error(JacBlackLogCategories.TracksExport, ex.ToString());
                 }
                 finally
                 {
@@ -262,7 +262,7 @@ namespace JacRed.Infrastructure.Tracks
         }
 
         /// <summary>
-        /// Экспорт всех ffprobe/tracks в JSON-файлы (layout JacRed → lampa-tracks).
+        /// Экспорт всех ffprobe/tracks в JSON-файлы (layout JacBlack → lampa-tracks).
         /// </summary>
         internal static TracksExportResult ExportAll(string outputDir = "Data/tracks-export", bool dryRun = false, bool includeTorrentDb = true, TracksExportJobStatus progress = null)
         {
@@ -356,7 +356,7 @@ namespace JacRed.Infrastructure.Tracks
             {
                 // Сам вывод состоялся, не записалась только опись. Молчание здесь
                 // означало бы, что итог экспорта проверить нечем.
-                JacRedLog.Swallowed(JacRedLogCategories.TracksExport, "опись экспорта не записалась", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.TracksExport, "опись экспорта не записалась", ex);
             }
 
             return result;
@@ -445,7 +445,7 @@ namespace JacRed.Infrastructure.Tracks
             {
                 // Сам вывод состоялся, не записалась только опись. Молчание здесь
                 // означало бы, что итог экспорта проверить нечем.
-                JacRedLog.Swallowed(JacRedLogCategories.TracksExport, "опись экспорта не записалась", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.TracksExport, "опись экспорта не записалась", ex);
             }
 
             return result;

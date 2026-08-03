@@ -6,16 +6,16 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 using Newtonsoft.Json;
 using IO = System.IO;
 
-namespace JacRed.Infrastructure.Trackers.Bitru
+namespace JacBlack.Infrastructure.Trackers.Bitru
 {
     public class BitruApiSyncService
     {
@@ -507,7 +507,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                         Persistence.DeadReleases.Remember("bitru", id.ToString());
                         result[id.ToString()] = (0, 0);
 
-                        JacRedLog.Information(JacRedLogCategories.Trackers,
+                        JacBlackLog.Information(JacBlackLogCategories.Trackers,
                             $"bitru: раздача {id} на трекере не найдена, убрана из выдачи");
                         continue;
                     }
@@ -521,7 +521,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
                 }
                 catch (Exception ex)
                 {
-                    JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"bitru: живые сиды по раздаче {id} не получены", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"bitru: живые сиды по раздаче {id} не получены", ex);
                 }
             }
 
@@ -634,7 +634,7 @@ namespace JacRed.Infrastructure.Trackers.Bitru
             {
                 // Отметка не сдвинется — следующий проход снова начнёт со старой даты
                 // и молча перелопатит уже пройденное.
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers,
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers,
                     "bitru: не записалась отметка последней раздачи", ex);
             }
         }

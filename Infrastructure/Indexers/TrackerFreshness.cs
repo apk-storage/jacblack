@@ -3,10 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     /// <summary>Что известно про свежесть одного источника.</summary>
     public class TrackerFreshnessEntry
@@ -82,7 +82,7 @@ namespace JacRed.Infrastructure.Indexers
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "отметки свежести источников не загрузились", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "отметки свежести источников не загрузились", ex);
             }
         }
 
@@ -155,7 +155,7 @@ namespace JacRed.Infrastructure.Indexers
             catch (Exception ex)
             {
                 Interlocked.Exchange(ref _dirty, 1);
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "отметки свежести источников не сохранились", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "отметки свежести источников не сохранились", ex);
             }
         }
     }

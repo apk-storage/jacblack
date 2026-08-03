@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using JacRed.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Parsing;
 
-namespace JacRed.Infrastructure.Trackers.NNMClub
+namespace JacBlack.Infrastructure.Trackers.NNMClub
 {
     /// <summary>
     /// Разбор выдачи tracker.php — страницы поиска по раздачам.

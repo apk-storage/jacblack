@@ -1,6 +1,6 @@
-using JacRed.Application.Dev.Migrations;
+using JacBlack.Application.Dev.Migrations;
 
-namespace JacRed.Application.Dev
+namespace JacBlack.Application.Dev
 {
     public class DevMigrationService : IDevMigrationService
     {

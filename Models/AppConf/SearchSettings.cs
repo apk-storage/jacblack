@@ -1,4 +1,4 @@
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// Combined indexer search: Jackett JSON and Torznab XML (shared pipeline).

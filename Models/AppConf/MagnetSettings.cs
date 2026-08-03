@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// Гигиена magnet-ссылок на выдаче. Правится здесь, а не при индексации:

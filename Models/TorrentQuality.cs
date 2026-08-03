@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace JacRed.Models
+namespace JacBlack.Models
 {
     public class TorrentQuality
     {

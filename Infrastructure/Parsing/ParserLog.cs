@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security;
-using JacRed.Infrastructure.Logging;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Parsing
+namespace JacBlack.Infrastructure.Parsing
 {
     public static class ParserLog
     {
@@ -130,27 +130,27 @@ namespace JacRed.Infrastructure.Parsing
             }
             catch (IOException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"I/O error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"I/O error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (UnauthorizedAccessException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (SecurityException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (NotSupportedException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (ArgumentNullException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (ArgumentException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
         }
 
@@ -202,27 +202,27 @@ namespace JacRed.Infrastructure.Parsing
             }
             catch (IOException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"I/O error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"I/O error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (UnauthorizedAccessException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (SecurityException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (NotSupportedException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (ArgumentNullException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
             catch (ArgumentException ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
+                JacBlackLog.Error(JacBlackLogCategories.Parser, $"Unexpected error while writing tracker log for '{trackerName}': {ex}");
             }
         }
 

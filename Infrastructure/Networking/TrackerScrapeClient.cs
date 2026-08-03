@@ -7,7 +7,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Networking
+namespace JacBlack.Infrastructure.Networking
 {
     /// <summary>
     /// Клиент UDP-scrape по BEP 15. Спрашивает у трекера, сколько сейчас сидов

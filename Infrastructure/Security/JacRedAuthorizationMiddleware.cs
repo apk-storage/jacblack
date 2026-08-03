@@ -1,18 +1,18 @@
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
-    public sealed class JacRedAuthorizationMiddleware
+    public sealed class JacBlackAuthorizationMiddleware
     {
         readonly RequestDelegate _next;
-        readonly IJacRedAccessEvaluator _accessEvaluator;
+        readonly IJacBlackAccessEvaluator _accessEvaluator;
 
-        public JacRedAuthorizationMiddleware(RequestDelegate next, IJacRedAccessEvaluator accessEvaluator)
+        public JacBlackAuthorizationMiddleware(RequestDelegate next, IJacBlackAccessEvaluator accessEvaluator)
         {
             _next = next;
             _accessEvaluator = accessEvaluator;
@@ -59,10 +59,10 @@ namespace JacRed.Infrastructure.Security
                 : $"{elapsedMs}ms";
             var ts = DateTime.Now.ToString("HH:mm:ss");
             var fail = status >= 400 ? " FAIL" : "";
-            var level = status == 200 && JacRedLogSettings.CronSkipFastMs > 0 && elapsedMs < JacRedLogSettings.CronSkipFastMs
+            var level = status == 200 && JacBlackLogSettings.CronSkipFastMs > 0 && elapsedMs < JacBlackLogSettings.CronSkipFastMs
                 ? LogLevel.Debug
                 : LogLevel.Information;
-            JacRedLog.Write(JacRedLogCategories.CronHttp, level, $"[{ts}] {label} {elapsed} {status}{fail}");
+            JacBlackLog.Write(JacBlackLogCategories.CronHttp, level, $"[{ts}] {label} {elapsed} {status}{fail}");
         }
     }
 }

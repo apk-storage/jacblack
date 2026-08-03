@@ -1,6 +1,6 @@
-using JacRed.Models.AppConf;
+using JacBlack.Models.AppConf;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
     public static class IndexerSearchOptions
     {

@@ -1,6 +1,6 @@
 using Newtonsoft.Json.Linq;
 
-namespace JacRed.Models
+namespace JacBlack.Models
 {
     /// <summary>Request body for config validate, diff, and save.</summary>
     public class ConfigSaveRequest

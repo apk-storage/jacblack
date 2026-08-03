@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using JacRed.Models.Details;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Yts
+namespace JacBlack.Infrastructure.Trackers.Yts
 {
     /// <summary>
     /// Разбор ответа YTS.

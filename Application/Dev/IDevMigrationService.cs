@@ -1,4 +1,4 @@
-namespace JacRed.Application.Dev
+namespace JacBlack.Application.Dev
 {
     public interface IDevMigrationService
     {

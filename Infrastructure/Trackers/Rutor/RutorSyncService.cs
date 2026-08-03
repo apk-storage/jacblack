@@ -1,19 +1,19 @@
 using System;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.tParse;
 using Newtonsoft.Json;
 using IO = System.IO;
 
-namespace JacRed.Infrastructure.Trackers.Rutor
+namespace JacBlack.Infrastructure.Trackers.Rutor
 {
     public class RutorSyncService
     {
@@ -85,7 +85,7 @@ namespace JacRed.Infrastructure.Trackers.Rutor
                     }
                     catch (Exception ex)
                     {
-                        JacRedLog.Swallowed(JacRedLogCategories.Parser, $"rutor: очередь для категории {cat} не построена", ex);
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Parser, $"rutor: очередь для категории {cat} не построена", ex);
                     }
                 }
             }

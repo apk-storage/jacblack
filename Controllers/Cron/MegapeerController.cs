@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Megapeer;
+using JacBlack.Infrastructure.Trackers.Megapeer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     [Route("/cron/megapeer/[action]")]
     public class MegapeerController : BaseController

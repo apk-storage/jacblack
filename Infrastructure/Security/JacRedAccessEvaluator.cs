@@ -1,67 +1,67 @@
 using Microsoft.AspNetCore.Http;
 
-namespace JacRed.Infrastructure.Security
+namespace JacBlack.Infrastructure.Security
 {
-    public interface IJacRedAccessEvaluator
+    public interface IJacBlackAccessEvaluator
     {
-        JacRedAccessResult EvaluatePath(string path, HttpContext httpContext);
+        JacBlackAccessResult EvaluatePath(string path, HttpContext httpContext);
         bool ShouldSetPrivateNetworkHeader(IClientNetworkContext network, string path);
     }
 
-    public sealed class JacRedAccessEvaluator : IJacRedAccessEvaluator
+    public sealed class JacBlackAccessEvaluator : IJacBlackAccessEvaluator
     {
-        readonly IJacRedApiKeyValidator _apiKeyValidator;
-        readonly IJacRedDevKeyValidator _devKeyValidator;
+        readonly IJacBlackApiKeyValidator _apiKeyValidator;
+        readonly IJacBlackDevKeyValidator _devKeyValidator;
 
-        public JacRedAccessEvaluator(IJacRedApiKeyValidator apiKeyValidator, IJacRedDevKeyValidator devKeyValidator)
+        public JacBlackAccessEvaluator(IJacBlackApiKeyValidator apiKeyValidator, IJacBlackDevKeyValidator devKeyValidator)
         {
             _apiKeyValidator = apiKeyValidator;
             _devKeyValidator = devKeyValidator;
         }
 
-        public JacRedAccessResult EvaluatePath(string path, HttpContext httpContext)
+        public JacBlackAccessResult EvaluatePath(string path, HttpContext httpContext)
         {
-            var policy = JacRedEndpointRegistry.ResolvePolicy(path);
+            var policy = JacBlackEndpointRegistry.ResolvePolicy(path);
             var network = ClientNetworkContext.From(httpContext);
             var method = httpContext.Request.Method;
 
-            if (policy == JacRedAccessPolicy.DevAdmin)
+            if (policy == JacBlackAccessPolicy.DevAdmin)
                 return EvaluateDevAdmin(network, httpContext, method);
 
-            if (policy == JacRedAccessPolicy.ConfigApi)
+            if (policy == JacBlackAccessPolicy.ConfigApi)
                 return EvaluateConfigApi(network, httpContext, method);
 
-            if (policy == JacRedAccessPolicy.ApiKeyWhenConfigured && _apiKeyValidator.IsConfigured)
+            if (policy == JacBlackAccessPolicy.ApiKeyWhenConfigured && _apiKeyValidator.IsConfigured)
             {
                 if (_apiKeyValidator.Validate(httpContext))
-                    return JacRedAccessResult.Allow;
+                    return JacBlackAccessResult.Allow;
 
-                return JacRedAccessResult.Deny(
+                return JacBlackAccessResult.Deny(
                     DenyStatus(keyConfigured: true, method),
                     setPrivateNetworkHeader: ShouldSetPrivateNetworkHeader(network, path));
             }
 
-            return JacRedAccessResult.Allow;
+            return JacBlackAccessResult.Allow;
         }
 
         public bool ShouldSetPrivateNetworkHeader(IClientNetworkContext network, string path)
-            => network.IsTrustedContext || !JacRedEndpointRegistry.IsRestrictedAdminPath(path);
+            => network.IsTrustedContext || !JacBlackEndpointRegistry.IsRestrictedAdminPath(path);
 
-        JacRedAccessResult EvaluateDevAdmin(IClientNetworkContext network, HttpContext httpContext, string method)
+        JacBlackAccessResult EvaluateDevAdmin(IClientNetworkContext network, HttpContext httpContext, string method)
         {
             if (IsDevEndpointAccessAllowed(network, httpContext))
-                return JacRedAccessResult.Allow;
-            return JacRedAccessResult.Deny(DenyStatus(_devKeyValidator.IsConfigured, method));
+                return JacBlackAccessResult.Allow;
+            return JacBlackAccessResult.Deny(DenyStatus(_devKeyValidator.IsConfigured, method));
         }
 
-        JacRedAccessResult EvaluateConfigApi(IClientNetworkContext network, HttpContext httpContext, string method)
+        JacBlackAccessResult EvaluateConfigApi(IClientNetworkContext network, HttpContext httpContext, string method)
             => EvaluateDevAdmin(network, httpContext, method);
 
         static bool IsDevEndpointAccessAllowed(IClientNetworkContext network, HttpContext httpContext)
         {
             if (IsTrustedLanClient(network, httpContext))
                 return true;
-            return JacRedKeyUtils.DevKeyMatches(httpContext, AppInit.conf?.devkey);
+            return JacBlackKeyUtils.DevKeyMatches(httpContext, AppInit.conf?.devkey);
         }
 
         /// <summary>

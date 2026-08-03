@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using JacRed.Infrastructure.Tracks;
-using JacRed.Models.Details;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Tracks;
+using JacBlack.Models.Details;
+using JacBlack.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     public partial class FileDB
     {
@@ -209,7 +209,7 @@ namespace JacRed.Infrastructure.Persistence
                 {
                     // Сезоны и голоса останутся незаполненными — раздача найдётся,
                     // но фильтры по сезону её пропустят. Debug: путь горячий.
-                    JacRedLog.Swallowed(JacRedLogCategories.Fdb,
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Fdb,
                         "не разобрались сезоны из заголовка", ex, LogLevel.Debug);
                 }
             }

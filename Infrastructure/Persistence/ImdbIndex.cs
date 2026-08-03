@@ -3,10 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     /// <summary>Что мы знаем о фильме по коду IMDB.</summary>
     public class ImdbTitle
@@ -169,11 +169,11 @@ namespace JacRed.Infrastructure.Persistence
                     }
                 }
 
-                JacRedLog.Information(JacRedLogCategories.Fdb, $"словарь кодов IMDB загружен: {_titles.Count}");
+                JacBlackLog.Information(JacBlackLogCategories.Fdb, $"словарь кодов IMDB загружен: {_titles.Count}");
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "словарь кодов IMDB не загрузился", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "словарь кодов IMDB не загрузился", ex);
             }
         }
 
@@ -377,7 +377,7 @@ namespace JacRed.Infrastructure.Persistence
             catch (Exception ex)
             {
                 Interlocked.Exchange(ref _dirty, 1);
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "словарь кодов IMDB не сохранился", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "словарь кодов IMDB не сохранился", ex);
             }
         }
     }

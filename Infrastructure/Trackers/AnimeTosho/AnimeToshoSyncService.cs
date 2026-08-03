@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Persistence;
 using Newtonsoft.Json;
 
-namespace JacRed.Infrastructure.Trackers.AnimeTosho
+namespace JacBlack.Infrastructure.Trackers.AnimeTosho
 {
     /// <summary>
     /// Обход AnimeTosho через её JSON-ленту. Авторизация не нужна, magnet приходит

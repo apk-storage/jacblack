@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Application.Index
+namespace JacBlack.Application.Index
 {
     public class FastDbIndex : IFastDbIndex
     {
@@ -36,7 +36,7 @@ namespace JacRed.Application.Index
                     return _fastdb;
 
                 if (update)
-                    JacRedLog.Information("fastdb", $"rebuild start / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    JacBlackLog.Information("fastdb", $"rebuild start / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 
                 var fastdb = new Dictionary<string, List<string>>();
 
@@ -57,7 +57,7 @@ namespace JacRed.Application.Index
                 _fastdb = fastdb;
 
                 if (update)
-                    JacRedLog.Information("fastdb", $"rebuild end / {DateTime.Now:yyyy-MM-dd HH:mm:ss} keys={fastdb.Count}");
+                    JacBlackLog.Information("fastdb", $"rebuild end / {DateTime.Now:yyyy-MM-dd HH:mm:ss} keys={fastdb.Count}");
             }
 
             return _fastdb;

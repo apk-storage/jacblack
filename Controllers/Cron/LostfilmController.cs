@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Lostfilm;
+using JacBlack.Infrastructure.Trackers.Lostfilm;
 using Microsoft.AspNetCore.Mvc;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     [Route("/cron/lostfilm/[action]")]
     public class LostfilmController : Controller

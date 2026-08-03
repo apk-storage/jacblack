@@ -5,15 +5,15 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Infrastructure.Stats;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Stats;
 using Microsoft.Extensions.Logging;
-using JacRed.Models.Details;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Lostfilm
+namespace JacBlack.Infrastructure.Trackers.Lostfilm
 {
     public class LostfilmSyncService
     {
@@ -302,7 +302,7 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
                     }
                     catch (Exception ex)
                     {
-                        JacRedLog.Swallowed(JacRedLogCategories.Stats, $"lostfilm: шард {item.Key} не прочитался", ex, LogLevel.Debug);
+                        JacBlackLog.Swallowed(JacBlackLogCategories.Stats, $"lostfilm: шард {item.Key} не прочитался", ex, LogLevel.Debug);
                     }
                 }
             }
@@ -543,7 +543,7 @@ namespace JacRed.Infrastructure.Trackers.Lostfilm
             catch (Exception ex)
             {
                 // Не смогли заглянуть в базу — просто пойдём на сайт.
-                JacRedLog.Swallowed(JacRedLogCategories.Parser, $"lostfilm: не проверилось наличие {bareUrl} в базе", ex, LogLevel.Debug);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Parser, $"lostfilm: не проверилось наличие {bareUrl} в базе", ex, LogLevel.Debug);
                 return null;
             }
         }

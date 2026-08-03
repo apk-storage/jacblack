@@ -1,4 +1,4 @@
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// Фоновая проверка живости раздач. Отдельно от поискового опроса:

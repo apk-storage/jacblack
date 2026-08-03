@@ -1,6 +1,6 @@
-using JacRed.Infrastructure.Logging;
-using JacRed.Models.Details;
-using JacRed.Models.Tracks;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Models.Details;
+using JacBlack.Models.Tracks;
 using MonoTorrent;
 using Newtonsoft.Json;
 using System;
@@ -10,7 +10,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static partial class TracksAnalyzer
     {
@@ -63,10 +63,10 @@ namespace JacRed.Infrastructure.Tracks
         internal static void LogAnalysisFailure(int typetask, string infohash, int apiStatusCode, int remaining, string errorMessage)
         {
             var detail = $"Анализ треков для {infohash} без результата. Код ответа API: {apiStatusCode}. Осталось {remaining} попыток.";
-            if (!JacRedLogSettings.TracksConsoleDetail)
+            if (!JacBlackLogSettings.TracksConsoleDetail)
             {
                 var body = $"[task:{typetask}] hash={infohash} code={apiStatusCode} remaining={remaining} msg={TracksFailureMsgKey(errorMessage, apiStatusCode)}";
-                JacRedLog.Write(JacRedLogCategories.Tracks, LogLevel.Warning, body);
+                JacBlackLog.Write(JacBlackLogCategories.Tracks, LogLevel.Warning, body);
                 if (AppInit.conf?.trackslog == true)
                     TracksDB.LogToFile(detail, typetask);
                 return;

@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Application.Maintenance;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Application.Maintenance;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     [Route("/cron/sweep/[action]")]
     public class SweepController : BaseController
@@ -61,7 +61,7 @@ namespace JacRed.Controllers.Cron
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "отчёт проверки живости не сохранился", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "отчёт проверки живости не сохранился", ex);
             }
 
             return Json(report);
@@ -81,7 +81,7 @@ namespace JacRed.Controllers.Cron
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "отчёт проверки живости не прочитался", ex, LogLevel.Debug);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "отчёт проверки живости не прочитался", ex, LogLevel.Debug);
                 return null;
             }
         }

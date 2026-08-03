@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Web;
-using JacRed.Models.Details;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.AnimeTosho
+namespace JacBlack.Infrastructure.Trackers.AnimeTosho
 {
     /// <summary>
     /// Разбор заголовков AnimeTosho. Заголовки приходят в виде

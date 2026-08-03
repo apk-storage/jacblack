@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     public class BaseController : Controller
     {

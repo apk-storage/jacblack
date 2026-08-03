@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Anidub;
+using JacBlack.Infrastructure.Trackers.Anidub;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     [Route("/cron/anidub/[action]")]
     public class AnidubController : BaseController

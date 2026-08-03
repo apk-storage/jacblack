@@ -4,9 +4,9 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Parsing;
 
-namespace JacRed.Infrastructure.Trackers
+namespace JacBlack.Infrastructure.Trackers
 {
     /// <summary>
     /// Вход на трекер с формой и сохранение сессионной cookie.

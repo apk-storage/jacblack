@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Web;
-using JacRed.Infrastructure.Trackers.Knaben;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Trackers.Knaben;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.PirateBay
+namespace JacBlack.Infrastructure.Trackers.PirateBay
 {
     /// <summary>
     /// Разбор ответа apibay.

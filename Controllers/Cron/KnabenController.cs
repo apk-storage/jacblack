@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Knaben;
+using JacBlack.Infrastructure.Trackers.Knaben;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     /// <summary>
     /// Knaben API v1 — TV + Movies from TPB, 1337x, EZTV, Rutracker.

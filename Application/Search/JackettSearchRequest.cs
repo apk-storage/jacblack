@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     public class JackettSearchRequest
     {

@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.TorrentBy;
+using JacBlack.Infrastructure.Trackers.TorrentBy;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     [Route("/cron/torrentby/[action]")]
     public class TorrentByController : BaseController

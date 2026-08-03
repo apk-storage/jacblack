@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
 
-namespace JacRed.Infrastructure.Trackers.NNMClub
+namespace JacBlack.Infrastructure.Trackers.NNMClub
 {
     /// <summary>
     /// Живые сиды с nnmclub — через его собственный поиск.
@@ -64,7 +64,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"nnmclub: тема t={id} не проверена", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"nnmclub: тема t={id} не проверена", ex);
                 return null;
             }
         }
@@ -111,7 +111,7 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             }
             catch (Exception ex)
             {
-                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"nnmclub: живые сиды по «{title}» не получены", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"nnmclub: живые сиды по «{title}» не получены", ex);
             }
 
             return result;

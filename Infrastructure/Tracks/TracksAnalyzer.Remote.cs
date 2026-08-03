@@ -1,4 +1,4 @@
-using JacRed.Models.Tracks;
+using JacBlack.Models.Tracks;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
@@ -11,7 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static partial class TracksAnalyzer
     {

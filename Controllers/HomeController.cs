@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Text;
 using System.Security;
 
-namespace JacRed.Controllers
+namespace JacBlack.Controllers
 {
     public class HomeController : Controller
     {
@@ -33,8 +33,8 @@ namespace JacRed.Controllers
             var xml = string.Join('\n',
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
                 "<OpenSearchDescription xmlns=\"http://a9.com/-/spec/opensearch/1.1/\">",
-                "  <ShortName>JacRed</ShortName>",
-                "  <Description>Поиск торрентов JacRed</Description>",
+                "  <ShortName>JacBlack</ShortName>",
+                "  <Description>Поиск торрентов JacBlack</Description>",
                 "  <InputEncoding>UTF-8</InputEncoding>",
                 $"  <Image width=\"32\" height=\"32\" type=\"image/png\">{SecurityElement.Escape(iconUrl)}</Image>",
                 $"  <Url type=\"text/html\" method=\"get\" template=\"{SecurityElement.Escape(searchTemplate)}\"/>",

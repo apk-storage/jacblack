@@ -1,14 +1,14 @@
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Stats;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Stats;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Models.Details;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace JacRed.Infrastructure.Tracks
+namespace JacBlack.Infrastructure.Tracks
 {
     internal static class TracksStatsCache
     {
@@ -180,7 +180,7 @@ namespace JacRed.Infrastructure.Tracks
                 };
 
                 WriteStatsCacheFile(cache);
-                JacRedLog.Information(JacRedLogCategories.TracksStats, $"wrote cache to {TracksStatsPath} / total={cache.entries[0].stats.total} / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                JacBlackLog.Information(JacBlackLogCategories.TracksStats, $"wrote cache to {TracksStatsPath} / total={cache.entries[0].stats.total} / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 return updatedAt;
             }
         }

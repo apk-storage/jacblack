@@ -1,21 +1,21 @@
 using System;
-using JacRed.Infrastructure.Logging;
+using JacBlack.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Persistence;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
 using IO = System.IO;
 
-namespace JacRed.Infrastructure.Trackers.Rutracker
+namespace JacBlack.Infrastructure.Trackers.Rutracker
 {
     public class RutrackerSyncService
     {
@@ -101,7 +101,7 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
             {
                 // Вход не удался — обход пойдёт гостем и не увидит закрытые
                 // разделы. Раньше это выглядело как обычная работа.
-                JacRedLog.Swallowed(JacRedLogCategories.Parser, "rutracker: вход не выполнен", ex);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Parser, "rutracker: вход не выполнен", ex);
             }
 
             return false;
@@ -177,7 +177,7 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                 {
                     // Категория не попала в очередь обхода: раздачи из неё
                     // просто не будут собраны, и заметить это было бы нечем.
-                    JacRedLog.Swallowed(JacRedLogCategories.Parser, $"rutracker: очередь для категории {cat} не построена", ex);
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Parser, $"rutracker: очередь для категории {cat} не построена", ex);
                 }
             }
 

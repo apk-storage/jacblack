@@ -7,7 +7,7 @@ ARG DOTNET_VERSION=10.0
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-alpine AS build
 
 ARG TARGETARCH
-ARG JACRED_VERSION=dev
+ARG JACBLACK_VERSION=dev
 
 # Install bash, git (version script), and Node for Vue SPA build
 RUN apk add --no-cache bash git nodejs npm
@@ -30,10 +30,10 @@ RUN set -eu; \
     arm64) RID=linux-musl-arm64 ;; \
     *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    # Publish the app project only — solution publish also builds JacRed.Tests
+    # Publish the app project only — solution publish also builds JacBlack.Tests
     # and fails with NETSDK1098 under PublishSingleFile.
-    dotnet restore JacRed.csproj --verbosity minimal && \
-    dotnet publish JacRed.csproj \
+    dotnet restore JacBlack.csproj --verbosity minimal && \
+    dotnet publish JacBlack.csproj \
     --runtime "$RID" \
     --configuration Release \
     --self-contained true \
@@ -53,12 +53,12 @@ RUN set -eu; \
 ################################################################################
 FROM alpine:${ALPINE_VERSION} AS runtime
 
-ARG JACRED_VERSION=dev
+ARG JACBLACK_VERSION=dev
 
 LABEL maintainer="Pavel Pikta <devops@pavelpikta.com>" \
-    org.opencontainers.image.title="JacRed" \
+    org.opencontainers.image.title="JacBlack" \
     org.opencontainers.image.description="Jacred - Torrent tracker aggregator" \
-    org.opencontainers.image.revision="${JACRED_VERSION}"
+    org.opencontainers.image.revision="${JACBLACK_VERSION}"
 
 # Install runtime dependencies and create user
 RUN set -eux; \
@@ -86,8 +86,8 @@ RUN set -eux; \
 
 WORKDIR /app
 
-# Copy publish output: /dist contains JacRed (binary), wwwroot/, Data/
-COPY --from=build --chown=jacred:jacred --chmod=550 /dist/JacRed /app/JacRed
+# Copy publish output: /dist contains JacBlack (binary), wwwroot/, Data/
+COPY --from=build --chown=jacred:jacred --chmod=550 /dist/JacBlack /app/JacBlack
 COPY --from=build --chown=jacred:jacred --chmod=750 /dist/wwwroot /app/wwwroot
 COPY --from=build --chown=jacred:jacred --chmod=750 /dist/Data /app/Data
 # Default config files for first run when Data is overridden by bind mount (./data:/app/Data)
@@ -96,7 +96,7 @@ COPY --from=build --chown=jacred:jacred /dist/Data/init.yaml /app/defaults/
 COPY --chown=jacred:jacred --chmod=550 entrypoint.sh /entrypoint.sh
 
 # Environment variables
-ENV JACRED_VERSION="${JACRED_VERSION}" \
+ENV JACBLACK_VERSION="${JACBLACK_VERSION}" \
     DOTNET_EnableDiagnostics=0 \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
@@ -121,4 +121,4 @@ HEALTHCHECK --interval=30s \
     CMD curl -f -s --max-time 10 http://127.0.0.1:9117/health || exit 1
 
 ENTRYPOINT ["dumb-init", "--", "/entrypoint.sh"]
-CMD ["./JacRed"]
+CMD ["./JacBlack"]

@@ -1,7 +1,7 @@
-using JacRed.Application.Index;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Application.Index;
+using JacBlack.Infrastructure.Persistence;
 
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     /// <summary>
     /// Наполняет словарь всеми написаниями названия — русским, оригинальным,

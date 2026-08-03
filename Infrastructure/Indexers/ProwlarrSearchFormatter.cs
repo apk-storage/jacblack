@@ -1,15 +1,15 @@
-using JacRed.Models.Api;
+using JacBlack.Models.Api;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace JacRed.Infrastructure.Indexers
+namespace JacBlack.Infrastructure.Indexers
 {
-    /// <summary>Maps JacRed <see cref="Result"/> rows to Prowlarr Search Feed (ReleaseResource) JSON.</summary>
+    /// <summary>Maps JacBlack <see cref="Result"/> rows to Prowlarr Search Feed (ReleaseResource) JSON.</summary>
     public static class ProwlarrSearchFormatter
     {
-        const int JacRedIndexerId = 1;
-        const string JacRedIndexerName = "JacRed (all trackers)";
+        const int JacBlackIndexerId = 1;
+        const string JacBlackIndexerName = "JacBlack (all trackers)";
 
         static readonly Dictionary<int, string> CategoryNames = new()
         {
@@ -68,8 +68,8 @@ namespace JacRed.Infrastructure.Indexers
                 ageHours = Math.Max(0, ageSpan.TotalHours),
                 ageMinutes = Math.Max(0, ageSpan.TotalMinutes),
                 size = sizeBytes,
-                indexerId = JacRedIndexerId,
-                indexer = string.IsNullOrWhiteSpace(torrent.Tracker) ? JacRedIndexerName : torrent.Tracker,
+                indexerId = JacBlackIndexerId,
+                indexer = string.IsNullOrWhiteSpace(torrent.Tracker) ? JacBlackIndexerName : torrent.Tracker,
                 title = displayTitle,
                 sortTitle = displayTitle,
                 publishDate,
@@ -82,7 +82,7 @@ namespace JacRed.Infrastructure.Indexers
                 infoHash,
                 seeders = torrent.Seeders,
                 leechers = torrent.Peers,
-                // JacRed extensions (same payload as Jackett /api/v2.0/.../results when tracks: true)
+                // JacBlack extensions (same payload as Jackett /api/v2.0/.../results when tracks: true)
                 torrent.ffprobe,
                 torrent.languages,
                 torrent.info

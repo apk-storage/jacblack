@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace JacRed.Models.Sync.v2
+namespace JacBlack.Models.Sync.v2
 {
     public class RootObject
     {

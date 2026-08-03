@@ -1,4 +1,4 @@
-namespace JacRed.Models.AppConf
+namespace JacBlack.Models.AppConf
 {
     /// <summary>
     /// Прохождение проверки Cloudflare через FlareSolverr — безголовый браузер,

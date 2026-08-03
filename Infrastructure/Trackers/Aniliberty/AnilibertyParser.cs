@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using JacRed.Models.Details;
-using JacRed.Models.tParse;
+using JacBlack.Models.Details;
+using JacBlack.Models.tParse;
 
-namespace JacRed.Infrastructure.Trackers.Aniliberty
+namespace JacBlack.Infrastructure.Trackers.Aniliberty
 {
     public static class AnilibertyParser
     {

@@ -1,10 +1,10 @@
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.Eztv;
+using JacBlack.Infrastructure.Trackers.Eztv;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     /// <summary>
     /// EZTV — англоязычные сериалы, около миллиона раздач, открытое API.

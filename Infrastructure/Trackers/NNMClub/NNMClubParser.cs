@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using JacRed.Infrastructure.Parsing;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Parsing;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.NNMClub
+namespace JacBlack.Infrastructure.Trackers.NNMClub
 {
     public static class NNMClubParser
     {

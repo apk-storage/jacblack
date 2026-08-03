@@ -4,14 +4,14 @@ using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using System.IO;
 
-namespace JacRed.Infrastructure.Logging
+namespace JacBlack.Infrastructure.Logging
 {
-    /// <summary>Writes log message as-is (JacRedLog embeds category prefix in the line).</summary>
-    public sealed class JacRedConsoleFormatter : ConsoleFormatter
+    /// <summary>Writes log message as-is (JacBlackLog embeds category prefix in the line).</summary>
+    public sealed class JacBlackConsoleFormatter : ConsoleFormatter
     {
         public const string FormatterName = "jacred";
 
-        public JacRedConsoleFormatter() : base(FormatterName) { }
+        public JacBlackConsoleFormatter() : base(FormatterName) { }
 
         public override void Write<TState>(in LogEntry<TState> logEntry, IExternalScopeProvider scopeProvider, TextWriter textWriter)
         {
@@ -21,11 +21,11 @@ namespace JacRed.Infrastructure.Logging
         }
     }
 
-    public sealed class JacRedConsoleFormatterConfigureOptions : IConfigureOptions<ConsoleLoggerOptions>
+    public sealed class JacBlackConsoleFormatterConfigureOptions : IConfigureOptions<ConsoleLoggerOptions>
     {
         public void Configure(ConsoleLoggerOptions options)
         {
-            options.FormatterName = JacRedConsoleFormatter.FormatterName;
+            options.FormatterName = JacBlackConsoleFormatter.FormatterName;
         }
     }
 }

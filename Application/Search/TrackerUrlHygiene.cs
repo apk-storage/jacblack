@@ -1,6 +1,6 @@
 using System;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     /// <summary>
     /// Приводит ссылку на раздачу к живому домену.

@@ -2,12 +2,12 @@ using System;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Networking;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Networking;
 using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json.Linq;
 
-namespace JacRed.Application.Search
+namespace JacBlack.Application.Search
 {
     /// <summary>
     /// Превращает `tt0111161` или `kp326` в название фильма: по идентификатору
@@ -59,7 +59,7 @@ namespace JacRed.Application.Search
                 // Одного предупреждения достаточно: иначе оно польётся на каждый запрос.
                 if (Interlocked.Exchange(ref _warnedNoToken, 1) == 0)
                 {
-                    JacRedLog.Warning(JacRedLogCategories.Host,
+                    JacBlackLog.Warning(JacBlackLogCategories.Host,
                         "поиск по идентификатору kp/imdb пришёл, но titleapi.token не задан — название узнать не у кого");
                 }
 
@@ -84,7 +84,7 @@ namespace JacRed.Application.Search
 
                 if (found.original_name == null && found.name == null)
                 {
-                    JacRedLog.Warning(JacRedLogCategories.Host,
+                    JacBlackLog.Warning(JacBlackLogCategories.Host,
                         $"titleapi не вернул название для {id}: {root?.Value<string>("error_info") ?? "пустой ответ"}");
                 }
 

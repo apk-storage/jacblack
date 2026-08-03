@@ -4,12 +4,12 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Infrastructure.Persistence;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     /// <summary>
     /// Сторож доменов, на которые ведут ссылки в базе.
@@ -83,7 +83,7 @@ namespace JacRed.Controllers.Cron
                 else
                 {
                     dead.Add(row);
-                    JacRedLog.Warning(JacRedLogCategories.Host,
+                    JacBlackLog.Warning(JacBlackLogCategories.Host,
                         $"домен {pair.Key} перестал резолвиться, а на него ведут ссылки трекеров: {string.Join(", ", trackersByHost[pair.Key])}. " +
                         "Если у трекера появилось живое зеркало — добавьте подмену в urlhygiene.replaceHosts");
                 }
@@ -145,7 +145,7 @@ namespace JacRed.Controllers.Cron
 
             foreach (string announce in silent)
             {
-                JacRedLog.Warning(JacRedLogCategories.Host,
+                JacBlackLog.Warning(JacBlackLogCategories.Host,
                     $"анонс {announce} не отвечает, а мы дописываем его в ссылки без трекеров. " +
                     "Замените в magnet.defaultTrackers, иначе клиент будет стучаться в пустоту");
             }

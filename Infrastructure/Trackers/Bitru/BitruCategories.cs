@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace JacRed.Infrastructure.Trackers.Bitru
+namespace JacBlack.Infrastructure.Trackers.Bitru
 {
     /// <summary>
-    /// Single source of truth for BitRu API category request filters and JacRed types.
+    /// Single source of truth for BitRu API category request filters and JacBlack types.
     /// Official docs: https://bitru.org/api.php
     /// </summary>
     static class BitruCategories

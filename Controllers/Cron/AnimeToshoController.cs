@@ -1,10 +1,10 @@
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Trackers.AnimeTosho;
+using JacBlack.Infrastructure.Trackers.AnimeTosho;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace JacRed.Controllers.Cron
+namespace JacBlack.Controllers.Cron
 {
     [Route("/cron/animetosho/[action]")]
     public class AnimeToshoController : BaseController

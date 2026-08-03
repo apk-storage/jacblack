@@ -1,8 +1,8 @@
 using System;
 using System.Text.RegularExpressions;
-using JacRed.Models.Details;
+using JacBlack.Models.Details;
 
-namespace JacRed.Infrastructure.Trackers.Lostfilm
+namespace JacBlack.Infrastructure.Trackers.Lostfilm
 {
     public static partial class LostfilmParser
     {

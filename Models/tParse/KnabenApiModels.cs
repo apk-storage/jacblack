@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace JacRed.Models.tParse
+namespace JacBlack.Models.tParse
 {
     /// <summary>Request body for Knaben API v1 (POST JSON).</summary>
     public class KnabenApiRequest

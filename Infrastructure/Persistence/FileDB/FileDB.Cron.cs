@@ -2,11 +2,11 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Logging;
-using JacRed.Models;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Models;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     public partial class FileDB
     {
@@ -35,7 +35,7 @@ namespace JacRed.Infrastructure.Persistence
                 // проглатывался — торренты пропадали бесследно, а обход
                 // рапортовал, что всё сохранено.
                 try { wtm.db.SaveChangesIfNeeded(); }
-                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, $"вытеснение {key}: сохранить не удалось", ex, LogLevel.Error); }
+                catch (Exception ex) { JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, $"вытеснение {key}: сохранить не удалось", ex, LogLevel.Error); }
             }
 
             return true;
@@ -56,9 +56,9 @@ namespace JacRed.Infrastructure.Persistence
                         .Where(i => DateTime.UtcNow > i.Value.lastread.AddHours(AppInit.conf.evercache.validHour))
                         .Count(i => TryEvictCacheEntry(i.Key));
                     if (evicted > 0)
-                        JacRedLog.Warning(JacRedLogCategories.Fdb, $"evicted {evicted} cache entries (validHour) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                        JacBlackLog.Warning(JacBlackLogCategories.Fdb, $"evicted {evicted} cache entries (validHour) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 }
-                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, "уборка кеша по времени", ex); }
+                catch (Exception ex) { JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "уборка кеша по времени", ex); }
             }
         }
 
@@ -80,10 +80,10 @@ namespace JacRed.Infrastructure.Persistence
 
                         int dropped = query.Take(AppInit.conf.evercache.dropCacheTake).Count(i => TryEvictCacheEntry(i.Key));
                         if (dropped > 0)
-                            JacRedLog.Warning(JacRedLogCategories.Fdb, $"dropped {dropped} cache entries (maxOpenWriteTask) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                            JacBlackLog.Warning(JacBlackLogCategories.Fdb, $"dropped {dropped} cache entries (maxOpenWriteTask) / {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                     }
                 }
-                catch (Exception ex) { JacRedLog.Swallowed(JacRedLogCategories.Fdb, "уборка кеша по размеру", ex); }
+                catch (Exception ex) { JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "уборка кеша по размеру", ex); }
             }
         }
         #endregion

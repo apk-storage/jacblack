@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading.Tasks;
-using JacRed.Infrastructure.Utils;
-using JacRed.Infrastructure.Networking;
-using JacRed.Infrastructure.Logging;
-using JacRed.Models;
-using JacRed.Models.Details;
+using JacBlack.Infrastructure.Utils;
+using JacBlack.Infrastructure.Networking;
+using JacBlack.Infrastructure.Logging;
+using JacBlack.Models;
+using JacBlack.Models.Details;
 using Microsoft.Extensions.Logging;
 
-namespace JacRed.Infrastructure.Persistence
+namespace JacBlack.Infrastructure.Persistence
 {
     public partial class FileDB
     {
@@ -331,7 +331,7 @@ namespace JacRed.Infrastructure.Persistence
                 // Здесь пишется индекс всей базы и его суточная копия. Молчание
                 // означало бы, что копии просто нет, а узнать об этом было бы
                 // не от кого — до дня, когда она понадобится.
-                JacRedLog.Swallowed(JacRedLogCategories.Fdb, "запись masterDb и суточной копии", ex, LogLevel.Error);
+                JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "запись masterDb и суточной копии", ex, LogLevel.Error);
             }
         }
         #endregion
@@ -344,7 +344,7 @@ namespace JacRed.Infrastructure.Persistence
         /// <param name="magnet">Magnet-ссылка торрента для поиска</param>
         /// <param name="ffprobeTryingData">Новое значение счетчика попыток</param>
         /// <param name="ffprobeResult">Результаты анализа ffprobe (опционально)</param>
-        public static void UpdateTorrentFfprobeInfo(string torrentKey, string magnet, int ffprobeTryingData, JacRed.Models.Tracks.FfprobeModel ffprobeResult = null)
+        public static void UpdateTorrentFfprobeInfo(string torrentKey, string magnet, int ffprobeTryingData, JacBlack.Models.Tracks.FfprobeModel ffprobeResult = null)
         {
             if (string.IsNullOrEmpty(torrentKey) || string.IsNullOrEmpty(magnet))
                 return;
@@ -356,7 +356,7 @@ namespace JacRed.Infrastructure.Persistence
             }
             catch (Exception ex)
             {
-                JacRedLog.Error(JacRedLogCategories.Fdb, $"Ошибка при обновлении ffprobe информации: {ex.Message}");
+                JacBlackLog.Error(JacBlackLogCategories.Fdb, $"Ошибка при обновлении ffprobe информации: {ex.Message}");
             }
         }
 

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
-using JacRed.Infrastructure.Parsing;
+using JacBlack.Infrastructure.Parsing;
 
-namespace JacRed.Infrastructure.Trackers.Lostfilm
+namespace JacBlack.Infrastructure.Trackers.Lostfilm
 {
     public static partial class LostfilmParser
     {

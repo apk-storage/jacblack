@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using JacRed.Models.Tracks;
+using JacBlack.Models.Tracks;
 
-namespace JacRed.Infrastructure.Parsing
+namespace JacBlack.Infrastructure.Parsing
 {
     /// <summary>
     /// Сводка дорожек для выдачи поиска: кодек картинки, кодеки звука и,

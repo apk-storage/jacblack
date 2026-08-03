@@ -1,4 +1,4 @@
-namespace JacRed.Application.Dev.Migrations
+namespace JacBlack.Application.Dev.Migrations
 {
     public interface IDevMigration
     {

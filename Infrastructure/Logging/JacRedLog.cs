@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
 using System;
 
-namespace JacRed.Infrastructure.Logging
+namespace JacBlack.Infrastructure.Logging
 {
-    public static class JacRedLog
+    public static class JacBlackLog
     {
         static ILoggerFactory _factory;
 
@@ -38,7 +38,7 @@ namespace JacRed.Infrastructure.Logging
 
         public static void Write(string category, LogLevel level, string message)
         {
-            if (!JacRedLogSettings.IsEnabled(category, level))
+            if (!JacBlackLogSettings.IsEnabled(category, level))
                 return;
 
             var line = FormatLine(category, message);
@@ -48,12 +48,12 @@ namespace JacRed.Infrastructure.Logging
                 return;
             }
 
-            _factory.CreateLogger("JacRed." + category).Log(level, "{Line}", line);
+            _factory.CreateLogger("JacBlack." + category).Log(level, "{Line}", line);
         }
 
         static string FormatLine(string category, string message)
         {
-            if (JacRedLogSettings.ConsoleTimestamp && !message.StartsWith("[", StringComparison.Ordinal))
+            if (JacBlackLogSettings.ConsoleTimestamp && !message.StartsWith("[", StringComparison.Ordinal))
                 return $"{category}: [{DateTime.Now:HH:mm:ss}] {message}";
             return $"{category}: {message}";
         }

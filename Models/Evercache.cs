@@ -1,4 +1,4 @@
-﻿namespace JacRed.Models
+﻿namespace JacBlack.Models
 {
     public class Evercache
     {

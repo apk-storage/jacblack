@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace JacRed.Infrastructure.Trackers.Lostfilm
+namespace JacBlack.Infrastructure.Trackers.Lostfilm
 {
     public static partial class LostfilmParser
     {

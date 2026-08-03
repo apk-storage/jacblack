@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
-namespace JacRed.Configuration.Schema
+namespace JacBlack.Configuration.Schema
 {
     public static class ConfigSchema
     {
@@ -47,8 +47,8 @@ namespace JacRed.Configuration.Schema
                     }),
                     Group("sync", "Синхронизация", null, new[]
                     {
-                        Field("syncapi", "string", "Sync API URL", "URL удалённого JacRed"),
-                        Field("synctrackers", "stringList", "Sync трекеры", "Трекеры для синхронизации с удалённым JacRed", enumValues: KnownTrackerSlugs.OrderBy(x => x).ToArray()),
+                        Field("syncapi", "string", "Sync API URL", "URL удалённого JacBlack"),
+                        Field("synctrackers", "stringList", "Sync трекеры", "Трекеры для синхронизации с удалённым JacBlack", enumValues: KnownTrackerSlugs.OrderBy(x => x).ToArray()),
                         Field("disable_trackers", "stringList", "Отключённые трекеры", "Трекеры, которые не должны работать на этом инстансе", enumValues: KnownTrackerSlugs.OrderBy(x => x).ToArray()),
                         Field("syncsport", "bool", "Sync sport", null),
                         Field("syncspidr", "bool", "Sync spidr", null),
