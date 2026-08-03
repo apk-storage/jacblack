@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using JacRed.Infrastructure.Logging;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -394,6 +394,115 @@ namespace JacRed.Infrastructure.Trackers.Kinozal
 
                 return log.ToString();
             });
+        }
+
+        /// <summary>
+        /// Живые сиды по названию — через поиск самого трекера.
+        ///
+        /// Опросить анонс kinozal нельзя: он не отвечает посторонним, а
+        /// торрент-файлы помечены private, из-за чего не работают ни DHT, ни
+        /// обмен пирами. Страницу отдельной раздачи гостю он тоже не отдаёт.
+        /// Зато список поиска несёт колонки сидов и пиров — те же, что читает
+        /// обход, — и приходит одним запросом на всё название.
+        ///
+        /// Ключ — номер раздачи из details.php?id=, по нему выдача сопоставляется
+        /// с нашими записями.
+        /// </summary>
+        public async Task<Dictionary<string, (int sid, int pir)>> LiveSeedersAsync(params string[] titles)
+        {
+            var result = new Dictionary<string, (int sid, int pir)>(StringComparer.Ordinal);
+
+            // Спрашиваем обоими названиями карточки. Одного мало: «The Boys» —
+            // слишком общий запрос, наши 67 раздач тонули среди чужих строк с
+            // этим словом, и 65 из них оставались без проверки (замер
+            // 01.08.2026). Русское «Пацаны» находит их сразу.
+            var queries = (titles ?? Array.Empty<string>())
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (queries.Length == 0)
+                return result;
+
+            try
+            {
+                if (!await EnsureLoggedIn())
+                    return result;
+
+                // Листинг отдаёт 50 строк за страницу, а у популярной карточки
+                // раздач больше: у «Пацанов» их 67, и одной страницей 67 раздач
+                // оставались без проверки (замер 01.08.2026). Берём три страницы
+                // РАЗОМ — по времени это один поход, а не три.
+                // Пять страниц на название: у популярной карточки раздач
+                // больше трёхсот. У «Пацанов» при трёх страницах оставались
+                // непроверенными 13–27 раздач (замер 02.08.2026).
+                var pages = await Task.WhenAll(
+                    from title in queries
+                    from page in Enumerable.Range(0, 5)
+                    select GetBrowseHtml(
+                        $"{AppInit.conf.Kinozal.host}/browse.php?s={System.Web.HttpUtility.UrlEncode(title, Encoding.GetEncoding(1251))}"
+                        + (page > 0 ? $"&page={page}" : string.Empty)));
+
+                foreach (string html in pages)
+                {
+                    if (!IsValidBrowsePage(html))
+                        continue;
+
+                    var document = Parsing.Html.Parse(html);
+
+                    foreach (var row in document.QuerySelectorAll("tr.bg"))
+                    {
+                        var link = row.QuerySelector("td.nam a[href*='details.php?id=']");
+                        var m = Regex.Match(Parsing.Html.Attr(link, "href") ?? string.Empty, @"details\.php\?id=(\d+)");
+                        if (!m.Success)
+                            continue;
+
+                        int.TryParse(Parsing.Html.Text(row.QuerySelector("td.sl_s")), out int sid);
+                        int.TryParse(Parsing.Html.Text(row.QuerySelector("td.sl_p")), out int pir);
+
+                        result[m.Groups[1].Value] = (sid, pir);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"kinozal: живые сиды по «{string.Join("», «", queries)}» не получены", ex);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Пропала ли раздача с трекера. true — сказал сам трекер, false — она
+        /// на месте, null — судить не по чему.
+        ///
+        /// Признак — фраза «Нет раздачи с таким ID» в теле страницы. По длине
+        /// или коду ответа судить нельзя: код всегда 200, а без входа и живая,
+        /// и пропавшая отдают одну и ту же форму входа. Проверено 03.08.2026:
+        /// на форме входа этой фразы НЕТ, поэтому протухшая сессия даёт «не
+        /// знаю», а не ложную смерть всему трекеру.
+        /// </summary>
+        public async Task<bool?> IsDeletedAsync(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return null;
+
+            if (!await EnsureLoggedIn())
+                return null;
+
+            string html = await GetBrowseHtml($"{AppInit.conf.Kinozal.host}/details.php?id={id}");
+            if (string.IsNullOrWhiteSpace(html))
+                return null;
+
+            if (html.Contains("Нет раздачи с таким ID"))
+                return true;
+
+            // Живая страница раздачи ссылается сама на себя и на соседние
+            // раздачи. Форма входа — нет, и это единственный оставшийся случай.
+            if (html.Contains("details.php?id="))
+                return false;
+
+            return null;
         }
 
         async Task<bool> parsePage(string cat, int page, string arg = null)

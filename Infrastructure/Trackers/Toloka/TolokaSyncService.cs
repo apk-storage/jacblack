@@ -40,6 +40,111 @@ namespace JacRed.Infrastructure.Trackers.Toloka
             _memoryCache = memoryCache;
         }
 
+        /// <summary>
+        /// Живые сиды по названию — через поиск самого трекера.
+        ///
+        /// Toloka вылезала в остатке у каждой карточки: живого опроса для неё
+        /// не было вовсе, и её раздачи показывали снимок из базы. Замер
+        /// 01.08.2026: у «Мандалорца» три непроверенных из 126 — все toloka.
+        ///
+        /// Гостю поиск закрыт, поэтому идём под входом — тем же, что и обход.
+        /// Список несёт колонки сидов и пиров, один запрос на всё название.
+        /// </summary>
+        /// <summary>
+        /// Пропала ли раздача. У toloka признак честный: пропавшей тема отдаёт
+        /// 404, живая — 200 (проверено 03.08.2026). Спутать с отказом входа
+        /// нельзя: форма входа приходит с кодом 200, а не 404.
+        /// </summary>
+        public async Task<bool?> IsDeletedAsync(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return null;
+
+            try
+            {
+                if (Cookie(_memoryCache) == null && !await TakeLogin(_memoryCache))
+                    return null;
+
+                var (_, response) = await HttpClient.BaseGetAsync(
+                    $"{AppInit.conf.Toloka.host}/t{id}",
+                    cookie: Cookie(_memoryCache),
+                    timeoutSeconds: 12,
+                    useproxy: AppInit.conf.Toloka.useproxy);
+
+                return DeletedReleaseProbe.FromStatusCode(
+                    response?.StatusCode ?? System.Net.HttpStatusCode.InternalServerError);
+            }
+            catch (Exception ex)
+            {
+                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"toloka: раздача t{id} не проверена", ex);
+                return null;
+            }
+        }
+
+        public async Task<Dictionary<string, (int sid, int pir)>> LiveSeedersAsync(string title)
+        {
+            var result = new Dictionary<string, (int sid, int pir)>(StringComparer.Ordinal);
+
+            if (string.IsNullOrWhiteSpace(title))
+                return result;
+
+
+            try
+            {
+                if (Cookie(_memoryCache) == null && !await TakeLogin(_memoryCache))
+                    return result;
+
+                string url = $"{AppInit.conf.Toloka.host}/tracker.php?nm={System.Web.HttpUtility.UrlEncode(title, Encoding.UTF8)}";
+                string html = await HttpClient.Get(url, cookie: Cookie(_memoryCache), timeoutSeconds: 15, useproxy: AppInit.conf.Toloka.useproxy);
+
+                if (string.IsNullOrEmpty(html))
+                    return result;
+
+                // Разметка страницы ПОИСКА отличается от форумного листинга:
+                // класса topictitle там нет вовсе, из-за чего разбор молча
+                // давал ноль на странице в 141 КБ (замер 01.08.2026). Поэтому
+                // идём не по классам, а по строкам таблицы: в строке есть
+                // ссылка на раздачу и её же счётчики. Так разбирается и та
+                // разметка, и другая.
+                var rows = Regex.Matches(html, @"<tr[^>]*>(?:(?!</tr>).)*</tr>",
+                    RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+                foreach (Match row in rows)
+                {
+                    // Toloka адресует раздачи коротко и ОТНОСИТЕЛЬНО — в строке
+                    // стоит href="t690003", без косой черты и без имени файла.
+                    // Из-за косой черты в шаблоне разбор давал ноль на странице,
+                    // где счётчиков было 17 (замер 01.08.2026). Длинную форму
+                    // принимаем тоже: под ней лежат старые записи в базе.
+                    var id = Regex.Match(row.Value, @"(?:viewtopic\.php\?t=|href=[""']/?t)(\d+)");
+                    if (!id.Success)
+                        continue;
+
+                    var sm = Regex.Match(row.Value, @"seedmed[^>]*>\s*(?:<b>\s*)?(\d+)", RegexOptions.IgnoreCase);
+                    var lm = Regex.Match(row.Value, @"leechmed[^>]*>\s*(?:<b>\s*)?(\d+)", RegexOptions.IgnoreCase);
+
+                    if (!sm.Success)
+                        continue;
+
+                    int.TryParse(sm.Groups[1].Value, out int sid);
+                    int.TryParse(lm.Success ? lm.Groups[1].Value : "0", out int pir);
+
+                    result[id.Groups[1].Value] = (sid, pir);
+                }
+
+                if (result.Count == 0)
+                    JacRedLog.Warning(JacRedLogCategories.Trackers,
+                        $"toloka: поиск по «{title}» разобран в ноль ({html.Length} байт, строк {rows.Count}, " +
+                        $"счётчиков {Regex.Matches(html, "seedmed", RegexOptions.IgnoreCase).Count}) — проверить разметку страницы поиска");
+            }
+            catch (Exception ex)
+            {
+                JacRedLog.Swallowed(JacRedLogCategories.Trackers, $"toloka: живые сиды по «{title}» не получены", ex);
+            }
+
+            return result;
+        }
+
         static string Cookie(IMemoryCache memoryCache)
         {
             if (memoryCache.TryGetValue("cron:TolokaController:Cookie", out string cookie))

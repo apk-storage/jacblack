@@ -19,6 +19,15 @@ namespace JacRed.Infrastructure.Persistence
 
         [JsonProperty("y")]
         public int Year { get; set; }
+
+        /// <summary>
+        /// Все написания названия, встреченные под этим кодом: русское,
+        /// оригинальное, украинское. Отсюда строится перевод запроса.
+        /// Поле необязательное — словари, записанные до его появления,
+        /// читаются как есть и пополняются при первом же обходе.
+        /// </summary>
+        [JsonProperty("a", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> Aka { get; set; }
     }
 
     /// <summary>
@@ -60,10 +69,64 @@ namespace JacRed.Infrastructure.Persistence
         static readonly ConcurrentDictionary<string, string> _byTitle =
             new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// «Приведённое название → все написания того же фильма». Список общий
+        /// с записью в <see cref="_titles"/>, поэтому пополняется сам.
+        /// </summary>
+        static readonly ConcurrentDictionary<string, List<string>> _akaByTitle =
+            new ConcurrentDictionary<string, List<string>>(StringComparer.Ordinal);
+
         static int _dirty;
         static int _loaded;
 
+        /// <summary>Когда словарь записывали в последний раз, в тиках UTC.</summary>
+        static long _lastSave;
+
+        static readonly TimeSpan MinSaveInterval = TimeSpan.FromMinutes(5);
+
         public static int Count => _titles.Count;
+
+        /// <summary>
+        /// Все известные оригинальные названия с годами, от новых к старым.
+        ///
+        /// Нужен обходу piratebay: его API не умеет постраничность — проверено
+        /// 03.08.2026, `page=1` и `page=2` отдают одно и то же, — зато на поиск
+        /// по названию отвечает сотней раздач.
+        ///
+        /// Названия берём и оригинальное, и основное: у фильма не на английском
+        /// они расходятся («Le Fabuleux Destin d'Amélie Poulain» против
+        /// «Amélie»), и на TPB он лежит под тем, что покороче.
+        ///
+        /// От новых к старым потому, что свежие релизы и ищут чаще, и на TPB
+        /// их заметно больше.
+        /// </summary>
+        public static IReadOnlyList<(string Title, int Year)> AllTitles()
+        {
+            var list = new List<(string Title, int Year)>(_titles.Count);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var t in _titles.Values)
+            {
+                if (t == null)
+                    continue;
+
+                foreach (string candidate in new[] { t.OriginalName, t.Name })
+                {
+                    if (string.IsNullOrWhiteSpace(candidate))
+                        continue;
+
+                    string name = candidate.Trim();
+                    if (name.Length < 2)
+                        continue;
+
+                    if (seen.Add(name))
+                        list.Add((name, t.Year));
+                }
+            }
+
+            list.Sort((a, b) => b.Year.CompareTo(a.Year));
+            return list;
+        }
 
         public static void Load()
         {
@@ -75,7 +138,14 @@ namespace JacRed.Infrastructure.Persistence
                 if (!File.Exists(Path))
                     return;
 
-                var data = JsonConvert.DeserializeObject<Dictionary<string, ImdbTitle>>(File.ReadAllText(Path));
+                // Потоком, а не через ReadAllText: файл вырос до 45 МБ, и целая
+                // строка такого размера уходит в кучу больших объектов, откуда
+                // её сборщик мусора не выселит до перезапуска.
+                Dictionary<string, ImdbTitle> data;
+                using (var reader = new StreamReader(Path))
+                using (var json = new JsonTextReader(reader))
+                    data = new JsonSerializer().Deserialize<Dictionary<string, ImdbTitle>>(json);
+
                 if (data == null)
                     return;
 
@@ -87,6 +157,16 @@ namespace JacRed.Infrastructure.Persistence
                     _titles[kv.Key] = kv.Value;
                     RememberTitleKey(kv.Key, kv.Value.OriginalName, kv.Value.Year);
                     RememberTitleKey(kv.Key, kv.Value.Name, kv.Value.Year);
+
+                    if (kv.Value.Aka != null)
+                    {
+                        foreach (string title in kv.Value.Aka)
+                        {
+                            string normalized = Utils.StringConvert.SearchName(title);
+                            if (!string.IsNullOrWhiteSpace(normalized))
+                                IndexAka(normalized, kv.Value.Aka);
+                        }
+                    }
                 }
 
                 JacRedLog.Information(JacRedLogCategories.Fdb, $"словарь кодов IMDB загружен: {_titles.Count}");
@@ -99,8 +179,16 @@ namespace JacRed.Infrastructure.Persistence
 
         /// <summary>
         /// Запомнить связку. Вызывается при записи раздачи, у которой источник
-        /// сообщил код. Уже известное не перезаписываем: первый источник обычно
-        /// не хуже следующего, а лишние записи на диск ни к чему.
+        /// сообщил код. Сама пара «код → название» не перезаписывается: первый
+        /// источник обычно не хуже следующего.
+        ///
+        /// А вот НАЗВАНИЯ копим все. Один и тот же фильм приходит от русских
+        /// трекеров как «Веном: Последний танец / Venom: The Last Dance», а от
+        /// yts — как «Venom: The Last Dance» на обоих полях. Кто попал в словарь
+        /// первым, тот и определял бы единственное known-название, и русского
+        /// в словаре могло не оказаться вовсе — проверено 31.07.2026: записей
+        /// со словом «Веном» в словаре было ноль, потому что первым пришёл yts.
+        /// Из накопленных названий строится перевод запроса (см. Counterparts).
         /// </summary>
         public static void Remember(string imdb, string name, string originalname, int year)
         {
@@ -114,6 +202,9 @@ namespace JacRed.Infrastructure.Persistence
 
             RememberTitleKey(imdb, originalname, year);
             RememberTitleKey(imdb, name, year);
+
+            RememberAka(imdb, name);
+            RememberAka(imdb, originalname);
         }
 
         static void RememberTitleKey(string imdb, string title, int year)
@@ -121,6 +212,79 @@ namespace JacRed.Infrastructure.Persistence
             string key = TitleKey(title, year);
             if (key != null)
                 _byTitle.TryAdd(key, imdb);
+        }
+
+        /// <summary>
+        /// Копит все написания названия под одним кодом и связывает их между
+        /// собой. Пишется в тот же файл словаря отдельным полем.
+        /// </summary>
+        static void RememberAka(string imdb, string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return;
+
+            string normalized = Utils.StringConvert.SearchName(title);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return;
+
+            if (!_titles.TryGetValue(imdb, out var entry))
+                return;
+
+            entry.Aka ??= new List<string>();
+
+            lock (entry)
+            {
+                foreach (string known in entry.Aka)
+                {
+                    if (string.Equals(Utils.StringConvert.SearchName(known), normalized, StringComparison.Ordinal))
+                    {
+                        IndexAka(normalized, entry.Aka);
+                        return;
+                    }
+                }
+
+                entry.Aka.Add(title.Trim());
+                Interlocked.Exchange(ref _dirty, 1);
+                IndexAka(normalized, entry.Aka);
+            }
+        }
+
+        static void IndexAka(string normalized, List<string> aka)
+        {
+            _akaByTitle[normalized] = aka;
+        }
+
+        /// <summary>
+        /// Как ещё называется то, что просят.
+        ///
+        /// Зачем. Индекс базы ищет подстроку по склейке «название :
+        /// оригинальное название». У русских трекеров там оба языка, поэтому
+        /// они находятся хоть по-русски, хоть по-английски. А у yts, eztv и
+        /// piratebay оба поля английские — в строке без единой кириллической
+        /// буквы запрос «Веном» совпасть не может физически. Замер 31.07.2026:
+        /// «Веном» — 196 раздач и ни одной от yts, «Venom» — 213, из них 35.
+        /// Перевод запроса по словарю закрывает этот разрыв.
+        /// </summary>
+        public static IReadOnlyList<string> Counterparts(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return Array.Empty<string>();
+
+            string normalized = Utils.StringConvert.SearchName(query);
+            if (string.IsNullOrWhiteSpace(normalized) || !_akaByTitle.TryGetValue(normalized, out var aka))
+                return Array.Empty<string>();
+
+            var result = new List<string>();
+            lock (aka)
+            {
+                foreach (string title in aka)
+                {
+                    if (!string.Equals(Utils.StringConvert.SearchName(title), normalized, StringComparison.Ordinal))
+                        result.Add(title);
+                }
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -154,9 +318,41 @@ namespace JacRed.Infrastructure.Persistence
             return !string.IsNullOrWhiteSpace(imdb) && _titles.TryGetValue(imdb, out title);
         }
 
-        /// <summary>Сохраняет, только если что-то добавилось с прошлого раза.</summary>
-        public static void SaveIfDirty()
+        /// <summary>
+        /// Сохраняет, только если что-то добавилось с прошлого раза, и не чаще
+        /// раза в пять минут.
+        ///
+        /// Ограничение по времени появилось вместе с выгрузкой IMDb: словарь
+        /// вырос с 12 МБ до 45, а сборщик кодов с rutracker звал сохранение
+        /// после КАЖДОГО добытого кода. Пока файл был маленьким, это сходило
+        /// с рук; теперь это десятки мегабайт записи на одну строчку.
+        ///
+        /// <paramref name="force"/> — для миграций и остановки, когда потерять
+        /// накопленное нельзя.
+        /// </summary>
+        public static void SaveIfDirty(bool force = false)
         {
+            if (Volatile.Read(ref _dirty) == 0)
+                return;
+
+            if (!force)
+            {
+                long now = DateTime.UtcNow.Ticks;
+                long last = Interlocked.Read(ref _lastSave);
+
+                if (now - last < MinSaveInterval.Ticks)
+                    return;
+
+                // Отметку времени занимаем до записи: иначе два потока,
+                // подошедшие разом, оба решат, что пора, и запишут дважды.
+                if (Interlocked.CompareExchange(ref _lastSave, now, last) != last)
+                    return;
+            }
+            else
+            {
+                Interlocked.Exchange(ref _lastSave, DateTime.UtcNow.Ticks);
+            }
+
             if (Interlocked.Exchange(ref _dirty, 0) == 0)
                 return;
 
@@ -166,11 +362,16 @@ namespace JacRed.Infrastructure.Persistence
 
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path));
 
-                // Обычным JSON, а не сжатым: словарь маленький, и его полезно
-                // уметь открыть глазами. Пишем через временный файл, чтобы
-                // обрыв на середине не оставил половину словаря.
+                // Обычным JSON, а не сжатым: его полезно уметь открыть глазами.
+                // А вот отступы убраны — после вливания выгрузки IMDb в словаре
+                // 400 тысяч записей, и на отступах файл раздувается со 45 МБ до
+                // 120. Пишем через временный файл, чтобы обрыв на середине не
+                // оставил половину словаря.
                 string temp = Path + ".tmp";
-                File.WriteAllText(temp, JsonConvert.SerializeObject(snapshot, Formatting.Indented));
+
+                using (var writer = new StreamWriter(temp))
+                    new JsonSerializer().Serialize(writer, snapshot);
+
                 File.Move(temp, Path, overwrite: true);
             }
             catch (Exception ex)

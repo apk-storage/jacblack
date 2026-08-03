@@ -25,6 +25,17 @@ namespace JacRed.Controllers.Cron
         public Task<string> Parse(CancellationToken cancellationToken = default)
             => _syncService.ParseAsync(cancellationToken);
 
+        /// <summary>
+        /// Глубокий обход: спрашиваем TPB о названиях из своего словаря кодов.
+        ///
+        /// Обычный проход упирается в потолок 700 раздач — списки «сотня самых
+        /// раздаваемых» по семи разделам, и больше их взяться неоткуда.
+        /// Постраничности у API нет. Поэтому идём поиском по названиям,
+        /// которых у нас 75 тысяч.
+        /// </summary>
+        public Task<string> ParseAllTask(int maxQueries = 20000, CancellationToken cancellationToken = default)
+            => _syncService.ParseAllTaskAsync(maxQueries, cancellationToken);
+
         /// <summary>Точечный дозабор по названию.</summary>
         public Task<string> Search(string query, CancellationToken cancellationToken = default)
             => _syncService.SearchAsync(query, cancellationToken);

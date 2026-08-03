@@ -17,6 +17,7 @@ namespace JacRed.Application.Dev
         readonly NormalizeWhitespaceMigration _normalizeWhitespace;
         readonly RemoveOrphanShardsMigration _removeOrphanShards;
         readonly FillImdbFromDictionaryMigration _fillImdb;
+        readonly RebuildImdbAkaMigration _rebuildImdbAka;
 
         public DevMigrationService(
             FixKnabenNamesMigration fixKnabenNames,
@@ -31,7 +32,8 @@ namespace JacRed.Application.Dev
             RemoveNonTmdbContentMigration removeNonTmdb,
             NormalizeWhitespaceMigration normalizeWhitespace,
             RemoveOrphanShardsMigration removeOrphanShards,
-            FillImdbFromDictionaryMigration fillImdb)
+            FillImdbFromDictionaryMigration fillImdb,
+            RebuildImdbAkaMigration rebuildImdbAka)
         {
             _fixAnimeToshoNames = fixAnimeToshoNames;
             _fixAnimeToshoUrls = fixAnimeToshoUrls;
@@ -40,6 +42,7 @@ namespace JacRed.Application.Dev
             _normalizeWhitespace = normalizeWhitespace;
             _removeOrphanShards = removeOrphanShards;
             _fillImdb = fillImdb;
+            _rebuildImdbAka = rebuildImdbAka;
             _fixKnabenNames = fixKnabenNames;
             _fixBitruNames = fixBitruNames;
             _cleanup = cleanup;
@@ -85,6 +88,10 @@ namespace JacRed.Application.Dev
         /// <summary>Проставить код IMDB по названию и году из словаря.</summary>
         public object FillImdbFromDictionary(bool dryRun) =>
             dryRun ? _fillImdb.DryRun() : _fillImdb.Run();
+
+        /// <summary>Наполнить словарь всеми написаниями названия для перевода запроса.</summary>
+        public object RebuildImdbAka(bool dryRun) =>
+            dryRun ? _rebuildImdbAka.DryRun() : _rebuildImdbAka.Run();
 
         public object FixDomainDuplicates(bool dryRun) =>
             dryRun ? _fixDomainDuplicates.DryRun() : _fixDomainDuplicates.Run();

@@ -1,5 +1,7 @@
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using JacRed.Application.Index;
@@ -13,11 +15,24 @@ namespace JacRed.Application.Search
     {
         readonly IFastDbIndex _fastDbIndex;
         readonly ILiveSeeders _liveSeeders;
+        readonly Infrastructure.Trackers.Kinozal.KinozalSyncService _kinozal;
+        readonly Infrastructure.Trackers.Toloka.TolokaSyncService _toloka;
+        readonly Infrastructure.Trackers.Bitru.BitruApiSyncService _bitru;
+        readonly ClosedTrackerSeeders _closedTrackers;
 
-        public JackettSearchService(IFastDbIndex fastDbIndex, ILiveSeeders liveSeeders = null)
+        public JackettSearchService(
+            IFastDbIndex fastDbIndex,
+            ILiveSeeders liveSeeders = null,
+            Infrastructure.Trackers.Kinozal.KinozalSyncService kinozal = null,
+            Infrastructure.Trackers.Toloka.TolokaSyncService toloka = null,
+            Infrastructure.Trackers.Bitru.BitruApiSyncService bitru = null)
         {
             _fastDbIndex = fastDbIndex;
             _liveSeeders = liveSeeders;
+            _kinozal = kinozal;
+            _toloka = toloka;
+            _bitru = bitru;
+            _closedTrackers = new ClosedTrackerSeeders(kinozal, toloka, bitru);
         }
 
         public async Task<List<Result>> SearchAsync(JackettSearchRequest request, IMemoryCache cache, CancellationToken ct = default)
@@ -38,6 +53,8 @@ namespace JacRed.Application.Search
             if (string.IsNullOrWhiteSpace(query) && string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(title_original))
                 return new List<Result>();
 
+            title_original = ResolveCounterpartTitle(query, title, title_original);
+
             var req = IndexerSearchHelper.BuildRequest(q, request.ApiKey, rqnum, query, title, title_original, year, is_serial);
             var results = await IndexerSearchEngine.SearchCombinedAsync(req, cache, this);
             var filtered = IndexerSearchHelper.ApplyPostFilters(results, q, req);
@@ -47,7 +64,193 @@ namespace JacRed.Application.Search
             if (_liveSeeders != null)
                 filtered = await _liveSeeders.ApplyAsync(filtered, ct);
 
+            // Закрытые трекеры опросом анонса не берутся: их анонс не отвечает
+            // посторонним, а торрент-файлы помечены private, из-за чего не
+            // работают ни DHT, ни обмен пирами. Зато у каждого есть свой путь —
+            // всё это живёт в общем слое, которым пользуется и выдача сайта.
+            var targets = filtered
+                .Select(r => new SeedTarget
+                {
+                    Key = r.Details,
+                    Tracker = r.Tracker,
+                    Urls = AllUrls(r),
+                    Apply = (sid, pir) =>
+                    {
+                        r.Seeders = sid;
+                        r.Peers = pir;
+
+                        if (r.info != null)
+                            r.info.seedersLive = true;
+                    }
+                })
+                .ToList();
+
+            await _closedTrackers.ApplyAsync(targets, title_original ?? query, title, ct);
+
+            // Раздачи, которых на трекере уже нет, из выдачи убираем: скачать
+            // их нельзя, а число сидов у них — прошлогодний снимок. Признак
+            // ставится только по прямому ответу трекера «Тема не найдена».
+            filtered = filtered
+                .Where(r => !ClosedTrackerSeeders.IsDead(r.Tracker, AllUrls(r)))
+                .ToList();
+
+            // Пересортировываем в самом конце, и это важно: список пришёл
+            // отсортированным по сидам ДО живого опроса, а опрос числа менял —
+            // порядок к этому моменту уже не соответствует показанному.
+            //
+            // Проверенные идут выше непроверенных при любом раскладе.
+            // Непроверенное число — это снимок неизвестной давности, и
+            // прошлогодние 96 раздающих не должны стоять над сегодняшними 44.
+            // Именно так удалённая раздача «Кода 8» оказывалась первой строкой
+            // выдачи (случай 02.08.2026).
+            filtered = filtered
+                .OrderByDescending(r => r.info != null && r.info.seedersLive)
+                .ThenByDescending(r => r.Seeders)
+                .ThenByDescending(r => r.Peers)
+                .ToList();
+
+            // Если код карточки неизвестен — заказываем разовый поход за ним.
+            // Он нужен заслону, который разводит тёзок по коду; без кода
+            // «Наследники» (Succession) и «Наследники» (Descendants) для нас
+            // одно и то же.
+            HarvestCardImdb(filtered, title_original, year);
+
             return filtered;
+        }
+
+        /// <summary>
+        /// Подставляет оригинальное название, если клиент его не прислал.
+        ///
+        /// Зачем. Индекс базы ищет подстроку по склейке «название :
+        /// оригинальное название». У русских трекеров там оба языка, поэтому
+        /// они находятся на любом. А у yts, eztv и piratebay оба поля
+        /// английские — запрос «Веном» не совпадёт с ними физически. Замер
+        /// 31.07.2026: «Веном» — 196 раздач и ни одной от yts, «Venom» — 213,
+        /// из них 35 от yts.
+        ///
+        /// Лампа код IMDB не присылает вовсе (проверено по журналу: ноль из
+        /// тридцати двух содержательных запросов) — только название, причём
+        /// то русское, то оригинальное. Значит рассчитывать на код нельзя,
+        /// и перевод надо делать самим, по накопленному словарю.
+        ///
+        /// Берём ровно одно название: <see cref="JackettCardMatcher"/>
+        /// принимает одно поле, а лишние варианты только размывали бы выдачу.
+        /// </summary>
+        /// <remarks>
+        /// Описание выше относится к ResolveCounterpartTitle ниже по файлу:
+        /// методы живых сидов вставлены между описанием и самим методом.
+        /// </remarks>
+
+        /// <summary>
+        /// Одна раздача бывает объединена из нескольких трекеров, и тогда в поле
+        /// трекера лежит перечень через запятую. Точное сравнение такие записи
+        /// пропускало: из 77 раздач по карточке «Извне» 14 оставались без живого
+        /// опроса именно поэтому.
+        /// </summary>
+        /// <summary>
+        /// Все адреса раздачи разом: основной плюс адреса склеенных копий.
+        /// Искать идентификатор нужно во всех — у объединённой записи основной
+        /// адрес принадлежит лишь одному из трекеров.
+        /// </summary>
+        /// <summary>
+        /// Заказывает добычу кода карточки, если его ещё нет. Берём любую
+        /// раздачу rutracker из выдачи — на его страницах ссылка на imdb
+        /// стоит почти всегда (проверено: два адреса из трёх).
+        /// </summary>
+        void HarvestCardImdb(List<Result> results, string titleOriginal, int year)
+        {
+            if (results == null || results.Count == 0 || string.IsNullOrWhiteSpace(titleOriginal) || year <= 0)
+                return;
+
+            foreach (var r in results)
+            {
+                if (!FromTracker(r, "rutracker"))
+                    continue;
+
+                var m = Regex.Match(AllUrls(r), @"https?://[^\s""]*viewtopic\.php\?t=\d+");
+                if (!m.Success)
+                    continue;
+
+                Infrastructure.Trackers.Rutracker.RutrackerImdbHarvester.EnsureInBackground(
+                    m.Value, r.info?.name, titleOriginal, year);
+                return;
+            }
+
+            // Kinozal вторым источником кодов не годится, хотя раздача его
+            // есть почти в каждой карточке: он ссылается на Кинопоиск, а кода
+            // IMDB на его странице нет вовсе — проверено 02.08.2026 на полной
+            // странице под входом (33 907 байт, ни одной ссылки на imdb).
+            //
+            // Заодно выяснилось, кому код вообще нужен: у зарубежных карточек
+            // он и так есть у 24–44 раздач из yts и eztv. Без кода остаётся
+            // русское и советское кино — а у него кода нет ни на одном из
+            // наших трекеров, и добывать его неоткуда.
+        }
+
+        /// <summary>
+        /// Выбрасывает из выдачи раздачи, удалённые с трекера.
+        ///
+        /// Их всё равно не скачать: у rutracker торрент-файл лежит только на
+        /// самом трекере, а тема удалена вместе с ним. Оставлять такую запись
+        /// значит предлагать человеку заведомо мёртвую ссылку — и ещё с
+        /// прошлогодним числом раздающих.
+        /// </summary>
+        static List<Result> DropDeadReleases(List<Result> results)
+        {
+            if (results == null || results.Count == 0 || Infrastructure.Persistence.DeadReleases.Count == 0)
+                return results;
+
+            var kept = new List<Result>(results.Count);
+
+            foreach (var r in results)
+            {
+                if (FromTracker(r, "rutracker"))
+                {
+                    var m = Regex.Match(AllUrls(r), @"viewtopic\.php\?t=(\d+)");
+                    if (m.Success && Infrastructure.Persistence.DeadReleases.IsDead("rutracker", m.Groups[1].Value))
+                        continue;
+                }
+
+                if (FromTracker(r, "bitru"))
+                {
+                    var m = Regex.Match(AllUrls(r), @"details\.php\?id=(\d+)");
+                    if (m.Success && Infrastructure.Persistence.DeadReleases.IsDead("bitru", m.Groups[1].Value))
+                        continue;
+                }
+
+                kept.Add(r);
+            }
+
+            return kept;
+        }
+
+        static string AllUrls(Result r)
+        {
+            string main = r?.Details ?? string.Empty;
+            var extra = r?.info?.sources;
+
+            return extra == null || extra.Count == 0
+                ? main
+                : main + " " + string.Join(" ", extra);
+        }
+
+        static bool FromTracker(Result r, string tracker)
+        {
+            string s = r?.Tracker;
+            return !string.IsNullOrEmpty(s) && s.Contains(tracker, StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static string ResolveCounterpartTitle(string query, string title, string title_original)
+        {
+            if (!string.IsNullOrWhiteSpace(title_original))
+                return title_original;
+
+            string source = !string.IsNullOrWhiteSpace(query) ? query : title;
+            if (string.IsNullOrWhiteSpace(source))
+                return title_original;
+
+            var counterparts = JacRed.Infrastructure.Persistence.ImdbIndex.Counterparts(source);
+            return counterparts.Count > 0 ? counterparts[0] : title_original;
         }
 
         public List<Result> SearchResults(string apikey, string query, string title, string title_original, int year, Dictionary<string, string> category, int is_serial, bool rqnum, IMemoryCache memoryCache)

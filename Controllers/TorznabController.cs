@@ -110,11 +110,11 @@ namespace JacRed.Controllers
                 new
                 {
                     id = "all",
-                    name = "JacRed (all trackers)",
-                    description = "Aggregated JacRed search across all configured trackers",
+                    name = "JacBlack (all trackers)",
+                    description = "Aggregated JacBlack search across all configured trackers",
                     type = "public",
                     configured = true,
-                    link = "https://github.com/jacred-fdb/jacred"
+                    link = "https://jac.black"
                 }
             });
         }
@@ -134,8 +134,8 @@ namespace JacRed.Controllers
                 new
                 {
                     id = 1,
-                    name = "JacRed (all trackers)",
-                    description = "Aggregated JacRed search across all configured trackers",
+                    name = "JacBlack (all trackers)",
+                    description = "Aggregated JacBlack search across all configured trackers",
                     implementation = "Torznab",
                     implementationName = "Torznab",
                     enable = true,
@@ -159,8 +159,8 @@ namespace JacRed.Controllers
             return Json(new
             {
                 id = 1,
-                name = "JacRed (all trackers)",
-                description = "Aggregated JacRed search across all configured trackers",
+                name = "JacBlack (all trackers)",
+                description = "Aggregated JacBlack search across all configured trackers",
                 implementation = "Torznab",
                 implementationName = "Torznab",
                 enable = true,

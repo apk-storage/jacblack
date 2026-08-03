@@ -22,5 +22,6 @@ namespace JacRed.Application.Dev
         object RemoveOrphanShards(bool dryRun);
 
         object FillImdbFromDictionary(bool dryRun);
+        object RebuildImdbAka(bool dryRun);
     }
 }

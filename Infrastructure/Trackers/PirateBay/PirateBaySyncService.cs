@@ -26,7 +26,22 @@ namespace JacRed.Infrastructure.Trackers.PirateBay
         const string TrackerName = "piratebay";
         const int RequestDelayMs = 1200;
 
+        /// <summary>
+        /// Пауза глубокого обхода. Меньше обычной: ему идти сотнями тысяч
+        /// запросов, и на 1.2 с круг растянулся бы на два месяца. Замер
+        /// 03.08.2026: двадцать запросов подряд с паузой 0.4 с прошли все
+        /// двадцать, отказов нет. Берём 0.6 с — вдвое быстрее прежнего и
+        /// в полтора раза осторожнее измеренного предела.
+        /// </summary>
+        const int DeepRequestDelayMs = 600;
+
         static readonly TrackerParseLock _parseLock = new TrackerParseLock();
+
+        /// <summary>
+        /// Глубокий обход идёт часами, поэтому у него свой признак занятости —
+        /// иначе очередной запуск по расписанию налез бы на текущий.
+        /// </summary>
+        static readonly TrackerWorkFlag _parseAllTaskWork = new TrackerWorkFlag();
 
         static string Host => (AppInit.conf.PirateBay?.host ?? "https://apibay.org").TrimEnd('/');
 
@@ -97,6 +112,190 @@ namespace JacRed.Infrastructure.Trackers.PirateBay
                     return $"error: {ex.Message}";
                 }
             });
+        }
+
+        /// <summary>
+        /// Глубокий обход: спрашиваем TPB о том, что уже знаем сами.
+        ///
+        /// Почему не перебором страниц. У apibay постраничности НЕТ — проверено
+        /// 03.08.2026: `page=1` и `page=2` отдают одно и то же, параметр просто
+        /// игнорируется. Списки «сотня самых раздаваемых» дают ровно 700 записей
+        /// на семь разделов, и это потолок по построению: сколько ни запускай,
+        /// новых взяться неоткуда. Оттого в базе за всё время и накопилось 776
+        /// раздач при миллионе с лишним у остальных источников, а суточная
+        /// сводка показывала 31 489 «обновлённых» — те же семьсот, перечитанные
+        /// сорок пять раз.
+        ///
+        /// Зато поиск отвечает сотней раздач на запрос. Запросы берём из своего
+        /// словаря кодов IMDB: там 75 тысяч оригинальных названий, собранных из
+        /// yts, eztv и страниц rutracker. TPB англоязычный, и такие названия он
+        /// понимает — проверено на живых запросах, «The Mandalorian», «Silo»,
+        /// «Dune» вернули по сотне.
+        ///
+        /// Побочная польза важнее прямой: мы не просто набираем объём, а
+        /// добираем ИМЕННО те раздачи, которые лягут в уже существующие карточки
+        /// рядом с русскими. Для Лампы это лишний источник с сидами на два
+        /// порядка выше.
+        ///
+        /// Обход возобновляемый: положение в словаре хранится в файле, как
+        /// страница у bitru. Прервали — следующий заход продолжит с того же
+        /// места, а не начнёт круг заново.
+        /// </summary>
+        public async Task<string> ParseAllTaskAsync(int maxQueries = 20000, CancellationToken cancellationToken = default)
+        {
+            return await TrackerSyncHelpers.RunParseAllTaskAsync(TrackerName, _parseAllTaskWork, checkDisabled: true, async () =>
+            {
+                var titles = ImdbIndex.AllTitles();
+                if (titles.Count == 0)
+                {
+                    ParserLog.Write(TrackerName, "глубокий обход: словарь названий пуст, идти не с чем");
+                    return;
+                }
+
+                var sw = Stopwatch.StartNew();
+                int cursor = ReadCursor();
+                if (cursor >= titles.Count)
+                    cursor = 0;
+
+                ParserLog.Write(TrackerName,
+                    $"глубокий обход: названий {titles.Count}, продолжаю с {cursor}");
+
+                int asked = 0, fetched = 0, saved = 0, empty = 0, skipped = 0;
+
+                try
+                {
+                    while (asked < maxQueries && cursor < titles.Count)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        var (title, year) = titles[cursor];
+                        cursor++;
+
+                        // Кириллицу и иероглифы не спрашиваем вовсе: TPB
+                        // англоязычный, такой запрос гарантированно вернёт
+                        // пустоту. После вливания выгрузки IMDb в словаре
+                        // 56 тысяч русских названий — это 19 часов запросов
+                        // впустую, если их не отсеять.
+                        if (!LooksLatin(title))
+                        {
+                            skipped++;
+                            SaveCursor(cursor);
+                            continue;
+                        }
+
+                        asked++;
+
+                        string url = $"{Host}/q.php?q={Uri.EscapeDataString(title)}&cat=200";
+                        string json = await HttpClient.Get(url, timeoutSeconds: 20, useproxy: AppInit.conf.PirateBay.useproxy);
+
+                        if (!string.IsNullOrWhiteSpace(json))
+                        {
+                            List<PirateBayItem> items = null;
+                            try { items = JsonConvert.DeserializeObject<List<PirateBayItem>>(json); }
+                            catch (JsonException) { }
+
+                            // Пустой ответ API возвращает не пустым списком, а
+                            // одной записью с нулевым идентификатором.
+                            if (items != null && items.Count > 0 && items[0]?.Id != "0")
+                            {
+                                fetched += items.Count;
+
+                                var torrents = PirateBayParser.ParseItems(items);
+                                if (torrents.Count > 0)
+                                {
+                                    FileDB.AddOrUpdate(torrents);
+                                    saved += torrents.Count;
+                                }
+                            }
+                            else
+                            {
+                                empty++;
+                            }
+                        }
+
+                        SaveCursor(cursor);
+
+                        if (asked % 25 == 0)
+                            ParserLog.Write(TrackerName,
+                                $"глубокий обход: запросов {asked}, в ответах {fetched}, сохранено {saved}, " +
+                                $"пустых {empty}, пропущено нелатинских {skipped}, " +
+                                $"положение {cursor}/{titles.Count}, идёт {sw.Elapsed.TotalMinutes:F0} мин");
+
+                        await Task.Delay(DeepRequestDelayMs, cancellationToken);
+                    }
+
+                    if (cursor >= titles.Count)
+                    {
+                        ParserLog.Write(TrackerName, "глубокий обход: словарь пройден целиком, начинаем круг заново");
+                        SaveCursor(0);
+                    }
+
+                    ParserLog.Write(TrackerName,
+                        $"глубокий обход завершён | запросов={asked}, в ответах={fetched}, сохранено={saved}, " +
+                        $"пустых={empty}, пропущено нелатинских={skipped}, заняло={sw.Elapsed.TotalMinutes:F1} мин");
+                }
+                catch (OperationCanceledException)
+                {
+                    ParserLog.Write(TrackerName,
+                        $"глубокий обход прерван | запросов={asked}, сохранено={saved}, положение {cursor}");
+                }
+            }, cancellationToken);
+        }
+
+        /// <summary>
+        /// Написано ли название латиницей. Диакритика допускается («Amélie»,
+        /// «Kærlighed»), кириллица, греческий и иероглифы — нет: латинские
+        /// блоки Юникода заканчиваются на 0x024F, дальше начинаются чужие.
+        /// </summary>
+        static bool LooksLatin(string title)
+        {
+            // Явным кодом точки, а не самим знаком: буква U+024F в исходнике
+            // неотличима от опечатки и переживает не всякую перекодировку.
+            const char lastLatin = 'ɏ';
+
+            bool hasLetter = false;
+
+            foreach (char c in title)
+            {
+                if (!char.IsLetter(c))
+                    continue;
+
+                if (c > lastLatin)
+                    return false;
+
+                hasLetter = true;
+            }
+
+            return hasLetter;
+        }
+
+        static string CursorPath => "Data/temp/piratebay_query_cursor.txt";
+
+        static int ReadCursor()
+        {
+            try
+            {
+                return System.IO.File.Exists(CursorPath)
+                    && int.TryParse(System.IO.File.ReadAllText(CursorPath).Trim(), out int v) && v >= 0 ? v : 0;
+            }
+            catch (System.IO.IOException)
+            {
+                return 0;
+            }
+        }
+
+        static void SaveCursor(int value)
+        {
+            try
+            {
+                System.IO.Directory.CreateDirectory("Data/temp");
+                System.IO.File.WriteAllText(CursorPath, value.ToString());
+            }
+            catch (System.IO.IOException)
+            {
+                // Не записалось — следующий заход начнёт сначала. Повтор просто
+                // обновит уже известное, потери данных нет.
+            }
         }
 
         /// <summary>

@@ -138,7 +138,13 @@ namespace JacRed.Infrastructure.Trackers.NNMClub
             return true;
         }
 
-        private static void ParseTitleNames(NNMClubTitleKind titleKind, string title, out string name, out string originalname, out int relased)
+        /// <summary>
+        /// Разбор заголовка на название, оригинальное название и год.
+        /// Открыт для обхода архива через tracker.php: там те же заголовки,
+        /// и разбирать их вторым способом значило бы завести два расхождения
+        /// вместо одного правила.
+        /// </summary>
+        internal static void ParseTitleNames(NNMClubTitleKind titleKind, string title, out string name, out string originalname, out int relased)
         {
             (name, originalname, relased) = titleKind switch
             {

@@ -280,12 +280,26 @@ namespace JacRed.Application.Search
                         quality = i.quality,
                         voices = i.voices,
                         seasons = i.seasons != null && i.seasons.Count > 0 ? i.seasons : null,
-                        types = i.types
+                        types = i.types,
+                        media = MediaSummary(ffprobe, i.title),
+                        imdb = i.imdb,
+                        seedersLive = Infrastructure.Indexers.SeedersFreshness.IsFresh(i.updateTime),
+                        seedersUnknown = Infrastructure.Indexers.SeedersFreshness.TrackerHidesSeeders(i.trackerName)
                     }
                 });
             }
 
             return Results;
+        }
+
+        /// <summary>
+        /// Сводку не отдаём, если в ней ничего нет: пустая плашка на карточке
+        /// хуже отсутствующей.
+        /// </summary>
+        static Infrastructure.Parsing.MediaTracks.Summary MediaSummary(System.Collections.Generic.List<JacRed.Models.Tracks.ffStream> ffprobe, string title)
+        {
+            var summary = Infrastructure.Parsing.MediaTracks.Build(ffprobe, title);
+            return summary.IsEmpty ? null : summary;
         }
     }
 }

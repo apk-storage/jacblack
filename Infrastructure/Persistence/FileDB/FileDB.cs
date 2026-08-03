@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using JacRed.Infrastructure.Indexers;
 using JacRed.Infrastructure.Parsing;
 using JacRed.Infrastructure.Utils;
 using JacRed.Models;
@@ -39,6 +40,49 @@ namespace JacRed.Infrastructure.Persistence
                 return new Dictionary<string, TorrentDetails>(Database);
         }
 
+        /// <summary>
+        /// Записывает результат разбора дорожек. Вынесено сюда из статического
+        /// метода по двум причинам.
+        ///
+        /// Первая: перебор шёл по ЖИВОМУ словарю мимо замка, тогда как всё
+        /// остальное работает под ним. Достаточно было одновременной записи в
+        /// тот же шард, чтобы перебор упал с «коллекция изменена».
+        ///
+        /// Вторая: разбор дорожек поднимал updateTime, то есть запись
+        /// выглядела только что обойдённой, хотя на трекер никто не ходил. Тот
+        /// же изъян уже убран у обновления размера и подробностей — свежесть
+        /// должен менять обход, а не служебная работа.
+        /// </summary>
+        internal void ApplyFfprobe(string magnet, int ffprobeTryingData, JacRed.Models.Tracks.FfprobeModel ffprobeResult)
+        {
+            lock (_dbLock)
+            {
+                var torrent = Database.Values.FirstOrDefault(t =>
+                    !string.IsNullOrEmpty(t.magnet) &&
+                    t.magnet.Equals(magnet, StringComparison.OrdinalIgnoreCase));
+
+                if (torrent == null)
+                    return;
+
+                bool updated = false;
+
+                if (torrent.ffprobe_tryingdata != ffprobeTryingData)
+                {
+                    torrent.ffprobe_tryingdata = ffprobeTryingData;
+                    updated = true;
+                }
+
+                if (ffprobeResult?.streams != null && ffprobeResult.streams.Count > 0)
+                {
+                    torrent.ffprobe = ffprobeResult.streams;
+                    updated = true;
+                }
+
+                if (updated)
+                    savechanges = true;
+            }
+        }
+
         internal void SaveChangesIfNeeded()
         {
             lock (_dbLock)
@@ -57,14 +101,29 @@ namespace JacRed.Infrastructure.Persistence
 
         public void AddOrUpdate(TorrentBaseDetails torrent)
         {
+            TorrentDetails migrate;
+            string newKey;
+
             lock (_dbLock)
-            {
-                AddOrUpdateCore(torrent);
-            }
+                migrate = AddOrUpdateCore(torrent, out newKey);
+
+            // Переезд в чужой шард делаем ЗА пределами замка. Раньше он шёл
+            // изнутри: поток держал замок шарда A и брал замок шарда B, а
+            // встречный переезд B→A в это же время держал B и ждал A —
+            // классическая взаимная блокировка, которая повесила бы обход
+            // намертво и без единой записи в журнале.
+            if (migrate != null)
+                MigrateTorrentToNewKey(migrate, newKey);
         }
 
-        void AddOrUpdateCore(TorrentBaseDetails torrent)
+        /// <summary>
+        /// Возвращает запись, которую нужно перенести в другой шард, и ключ
+        /// этого шарда. Сам перенос — забота вызывающего: он делается уже без
+        /// замка (см. <see cref="AddOrUpdate(TorrentBaseDetails)"/>).
+        /// </summary>
+        TorrentDetails AddOrUpdateCore(TorrentBaseDetails torrent, out string migrateToKey)
         {
+            migrateToKey = null;
             bool foundById = false;
             if (!Database.TryGetValue(torrent.url, out TorrentDetails t))
             {
@@ -97,11 +156,17 @@ namespace JacRed.Infrastructure.Persistence
                 // всех семнадцати источников, а поштучный лог ведут только шесть.
                 ParseCounters.Updated(torrent.trackerName);
 
+                // Отдельно от счётчиков: они живут один прогон, а это переживает
+                // перезапуск и отвечает на вопрос «источник ещё что-то выкладывает».
+                TrackerFreshness.NoteSeen(torrent.trackerName, torrent.createTime);
+
                 bool updateFull = false;
+                bool changed = false;
 
                 void upt(bool uptfull = false, bool updatetime = true)
                 {
                     savechanges = true;
+                    changed = true;
 
                     if (updatetime)
                     {
@@ -114,23 +179,14 @@ namespace JacRed.Infrastructure.Persistence
                 }
 
                 #region types
-                if (torrent.types != null)
+                // Раньше набор типов присваивался БЕЗ отметки об изменении, если
+                // он только сузился: upt() звали лишь при появлении нового типа.
+                // Запись при этом молча менялась в памяти, а на диск не просилась
+                // — правка терялась, пока её случайно не выносило соседнее поле.
+                if (torrent.types != null && (t.types == null || !t.types.SequenceEqual(torrent.types)))
                 {
-                    if (t.types == null)
-                    {
-                        t.types = torrent.types;
-                        upt(true);
-                    }
-                    else
-                    {
-                        foreach (string type in torrent.types)
-                        {
-                            if (type != null && !t.types.Contains(type))
-                                upt(true);
-                        }
-
-                        t.types = torrent.types;
-                    }
+                    t.types = torrent.types;
+                    upt(true);
                 }
                 #endregion
 
@@ -281,6 +337,9 @@ namespace JacRed.Infrastructure.Persistence
                 else if (AppInit.conf.logFdb)
                     AppendFdbLog(torrent, t);
 
+                if (changed)
+                    TrackerFreshness.NoteChanged(t.trackerName);
+
                 // Было DateTime.Now при том, что createTime и updateTime в этой же
                 // записи пишутся в UTC. Смесь двух часов в одной записи уже
                 // приводила к неверным выводам при разборе.
@@ -313,10 +372,11 @@ namespace JacRed.Infrastructure.Persistence
                     {
                         Database.Remove(t.url);
                         savechanges = true;
-                        MigrateTorrentToNewKey(t, newKey);
                         if (Database.Count == 0)
                             RemoveKeyFromMasterDb(fdbkey);
-                        return;
+
+                        migrateToKey = newKey;
+                        return t;
                     }
                 }
                 AddOrUpdateMasterDb(t);
@@ -324,7 +384,7 @@ namespace JacRed.Infrastructure.Persistence
             else
             {
                 if (string.IsNullOrWhiteSpace(torrent.magnet) || torrent.types == null || torrent.types.Length == 0)
-                    return;
+                    return null;
 
                 var name = torrent.name ?? torrent.title ?? "";
                 // For Russian content where originalname is null, use name instead of title
@@ -384,6 +444,8 @@ namespace JacRed.Infrastructure.Persistence
                 Database.TryAdd(t.url, t);
                 AddOrUpdateMasterDb(t);
                 ParseCounters.Added(t.trackerName);
+                TrackerFreshness.NoteSeen(t.trackerName, t.createTime);
+                TrackerFreshness.NoteAdded(t.trackerName);
 
                 // Drop legacy bare episode/movie URL once a #quality row is stored.
                 if (string.Equals(t.trackerName, "lostfilm", StringComparison.OrdinalIgnoreCase)
@@ -397,6 +459,8 @@ namespace JacRed.Infrastructure.Persistence
                     }
                 }
             }
+
+            return null;
         }
         #endregion
 
@@ -513,14 +577,23 @@ namespace JacRed.Infrastructure.Persistence
         {
             SaveChangesIfNeeded();
 
-            if (openWriteTask.TryGetValue(fdbkey, out WriteTaskModel val))
+            // Отпускаем ИМЕННО свою запись в кеше. Раньше проверки на тождество
+            // не было, и разовый экземпляр (его создаёт чтение мимо кеша) при
+            // закрытии уменьшал счётчик ЧУЖОГО, живого шарда — вплоть до
+            // вытеснения того из-под работающих с ним потоков.
+            if (!openWriteTask.TryGetValue(fdbkey, out WriteTaskModel val) || !ReferenceEquals(val.db, this))
+                return;
+
+            lock (val)
             {
                 val.openconnection -= 1;
-                if (0 >= val.openconnection)
-                {
-                    if (!AppInit.conf.evercache.enable || (AppInit.conf.evercache.enable && AppInit.conf.evercache.validHour > 0))
-                        openWriteTask.TryRemove(fdbkey, out _);
-                }
+                if (val.openconnection > 0)
+                    return;
+
+                val.openconnection = 0;
+
+                if (!AppInit.conf.evercache.enable || AppInit.conf.evercache.validHour > 0)
+                    openWriteTask.TryRemove(fdbkey, out _);
             }
         }
         #endregion

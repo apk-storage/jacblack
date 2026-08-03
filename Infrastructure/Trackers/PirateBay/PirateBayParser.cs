@@ -103,7 +103,15 @@ namespace JacRed.Infrastructure.Trackers.PirateBay
                 magnet = BuildMagnet(item.InfoHash, title),
                 name = name,
                 originalname = name,
-                relased = relased
+                relased = relased,
+
+                // Код IMDB из ответа API. Поле в записи было объявлено, ответ
+                // разбирался — а в базу код не попадал: строчку просто забыли.
+                // Замер 03.08.2026: код есть у 53 записей из 100, то есть
+                // piratebay не просто пользуется словарём кодов, но и заметно
+                // его пополняет. Без этой строки словарь рос только с yts,
+                // eztv и разовых походов на rutracker.
+                imdb = Yts.YtsParser.NormalizeImdb(item.Imdb)
             };
         }
 

@@ -252,15 +252,65 @@ namespace JacRed.Infrastructure.Networking
 
                         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
 
+                        // Хост уже просил подождать — не ломимся. Ждём в пределах
+                        // отпущенного нам времени; дольше — честнее пропустить
+                        // страницу, чем висеть до собственного таймаута.
+                        if (!await HostThrottle.WaitAsync(requestHost, TimeSpan.FromSeconds(timeoutSeconds)))
+                            break;
+
                         using (HttpResponseMessage response = await client.SendAsync(req, timeoutCts.Token))
                         {
+                            // Просьба сбавить обороты — это не отказ и не проверка
+                            // Cloudflare. Запоминаем паузу по этому хосту; на
+                            // остальные трекеры она не распространяется.
+                            if (HostThrottle.IsThrottleResponse(response))
+                            {
+                                HostThrottle.Throttled(requestHost, response);
+                                break;
+                            }
+
+                            if (response.StatusCode == HttpStatusCode.OK)
+                            {
+                                HostThrottle.Ok(requestHost);
+                                // Проверку могли снять. Раз обычный клиент прошёл —
+                                // возвращаемся к дешёвому пути, не дожидаясь, пока
+                                // истекут guardedHours.
+                                CloudflareClearance.Unguard(requestHost);
+                            }
+
                             if (response.StatusCode != HttpStatusCode.OK)
                             {
                                 // Прилетел вызов Cloudflare: запоминаем хост и
                                 // забираем страницу браузером. Свой таймаут у
                                 // браузера, поэтому token вызывающего сюда не идёт —
                                 // с ним первое обращение всегда обрывалось бы.
-                                if (CloudflareClearance.IsChallenge(response))
+                                //
+                                // Одного заголовка мало: старые виды проверки
+                                // приходят без `cf-mitigated`, разметкой в теле.
+                                // А судить по `cf-ray`, как делалось раньше,
+                                // нельзя вовсе — он стоит на каждом ответе любого
+                                // сайта за Cloudflare, и обычная перегрузка
+                                // трекера выглядела как проверка.
+                                bool challenge = CloudflareClearance.IsChallenge(response);
+
+                                if (!challenge
+                                    && (response.StatusCode == HttpStatusCode.Forbidden
+                                        || response.StatusCode == HttpStatusCode.ServiceUnavailable))
+                                {
+                                    try
+                                    {
+                                        challenge = CloudflareClearance.IsChallengeBody(
+                                            await response.Content.ReadAsStringAsync());
+                                    }
+                                    catch
+                                    {
+                                        // Тело не прочиталось — остаёмся при «проверки
+                                        // нет». Ошибочная пометка дороже: она уводит
+                                        // хост в браузер на часы, и обход встаёт.
+                                    }
+                                }
+
+                                if (challenge)
                                 {
                                     CloudflareClearance.MarkGuarded(requestHost);
 

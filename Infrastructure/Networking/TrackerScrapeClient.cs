@@ -49,6 +49,51 @@ namespace JacRed.Infrastructure.Networking
             if (!TryParseUdp(announceUrl, out string host, out int port))
                 return result;
 
+            try
+            {
+                // Часть трекеров живёт только на IPv6, поэтому это семейство
+                // не отбрасываем.
+                var addresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
+
+                // Выбрать одно семейство и на нём успокоиться нельзя: у
+                // opentor.net резолвер отдаёт ОБА адреса, но IPv4 у него
+                // мёртвый — по нему таймаут, а по IPv6 ответ за 36 мс.
+                // Поэтому перебираем по очереди, пока какой-нибудь не ответит:
+                // IPv4 первым, потому что он доступен чаще.
+                var candidates = addresses
+                    .Where(a => a.AddressFamily == AddressFamily.InterNetwork || a.AddressFamily == AddressFamily.InterNetworkV6)
+                    .OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+                    .Take(4)
+                    .ToList();
+
+                if (candidates.Count == 0)
+                    return result;
+
+                foreach (var candidate in candidates)
+                {
+                    var counts = await ScrapeAtAddressAsync(candidate, port, hashes, timeoutMs, cancellationToken);
+                    if (counts.Count > 0)
+                        return counts;
+                }
+
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                return result;
+            }
+            catch (SocketException)
+            {
+                return result;
+            }
+        }
+
+        /// <summary>Одна попытка опроса по конкретному адресу.</summary>
+        static async Task<Dictionary<string, Counts>> ScrapeAtAddressAsync(
+            IPAddress address, int port, IReadOnlyList<byte[]> hashes, int timeoutMs, CancellationToken cancellationToken)
+        {
+            var result = new Dictionary<string, Counts>(StringComparer.OrdinalIgnoreCase);
+
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(timeoutMs);
             var token = cts.Token;
@@ -56,14 +101,6 @@ namespace JacRed.Infrastructure.Networking
             Socket socket = null;
             try
             {
-                // Часть трекеров живёт только на IPv6 — семейство выбираем по факту,
-                // а не жёстко AF_INET, иначе получаем молчание вместо ответа.
-                var addresses = await Dns.GetHostAddressesAsync(host, token);
-                var address = addresses.FirstOrDefault(a =>
-                                  a.AddressFamily == AddressFamily.InterNetwork ||
-                                  a.AddressFamily == AddressFamily.InterNetworkV6);
-                if (address == null)
-                    return result;
 
                 socket = new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                 await socket.ConnectAsync(new IPEndPoint(address, port), token);

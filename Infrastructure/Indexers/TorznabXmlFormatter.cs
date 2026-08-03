@@ -23,7 +23,7 @@ namespace JacRed.Infrastructure.Indexers
             var apiEsc = EscapeXml(apiUrl.TrimEnd('/'));
             return $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <caps>
-  <server version=""1.0"" title=""JacRed"" strapline=""Native Torznab API"" email=""info@localhost"" url=""{apiEsc}""/>
+  <server version=""1.0"" title=""JacBlack"" strapline=""Native Torznab API"" email=""info@localhost"" url=""{apiEsc}""/>
   <limits max=""1000"" default=""100""/>
   <searching>
     <search available=""yes"" supportedParams=""q,imdbid""/>
@@ -43,7 +43,7 @@ namespace JacRed.Infrastructure.Indexers
   <indexer id=""all"" configured=""true"">
     <title>JacRed (all trackers)</title>
     <description>Aggregated JacRed search across all configured trackers</description>
-    <link>https://github.com/jacred-fdb/jacred</link>
+    <link>https://jac.black</link>
     <language>ru-RU</language>
     <type>public</type>
   </indexer>
