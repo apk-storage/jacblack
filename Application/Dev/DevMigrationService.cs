@@ -18,6 +18,7 @@ namespace JacBlack.Application.Dev
         readonly RemoveOrphanShardsMigration _removeOrphanShards;
         readonly FillImdbFromDictionaryMigration _fillImdb;
         readonly FillKinopoiskFromDictionaryMigration _fillKinopoisk;
+        readonly FixMissingYearMigration _fixMissingYear;
         readonly RebuildImdbAkaMigration _rebuildImdbAka;
 
         public DevMigrationService(
@@ -35,8 +36,10 @@ namespace JacBlack.Application.Dev
             RemoveOrphanShardsMigration removeOrphanShards,
             FillImdbFromDictionaryMigration fillImdb,
             FillKinopoiskFromDictionaryMigration fillKinopoisk,
+            FixMissingYearMigration fixMissingYear,
             RebuildImdbAkaMigration rebuildImdbAka)
         {
+            _fixMissingYear = fixMissingYear;
             _fixAnimeToshoNames = fixAnimeToshoNames;
             _fixAnimeToshoUrls = fixAnimeToshoUrls;
             _fixDomainDuplicates = fixDomainDuplicates;
@@ -95,6 +98,10 @@ namespace JacBlack.Application.Dev
         /// <summary>Проставить код Кинопоиска по названию и году из словаря.</summary>
         public object FillKinopoiskFromDictionary(bool dryRun) =>
             dryRun ? _fillKinopoisk.DryRun() : _fillKinopoisk.Run();
+
+        /// <summary>Восстановить год из заголовка там, где разбор его потерял.</summary>
+        public object FixMissingYear(bool dryRun) =>
+            dryRun ? _fixMissingYear.DryRun() : _fixMissingYear.Run();
 
         /// <summary>Наполнить словарь всеми написаниями названия для перевода запроса.</summary>
         public object RebuildImdbAka(bool dryRun) =>

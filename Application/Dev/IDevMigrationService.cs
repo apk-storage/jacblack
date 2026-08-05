@@ -23,6 +23,7 @@ namespace JacBlack.Application.Dev
 
         object FillImdbFromDictionary(bool dryRun);
         object FillKinopoiskFromDictionary(bool dryRun);
+        object FixMissingYear(bool dryRun);
         object RebuildImdbAka(bool dryRun);
     }
 }
