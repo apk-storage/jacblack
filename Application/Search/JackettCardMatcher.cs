@@ -125,9 +125,13 @@ namespace JacBlack.Application.Search
                                     if (Regex.IsMatch(t.title, " (сезон|сери(и|я|й))", RegexOptions.IgnoreCase))
                                         continue;
 
+                                    // Год у фильма точный. Допуск ±1 стоял на
+                                    // случай расхождения года премьеры и года
+                                    // производства, но платой были чужие
+                                    // фильмы-тёзки соседних лет.
                                     if (year > 0)
                                     {
-                                        if (t.relased == year || t.relased == (year - 1) || t.relased == (year + 1))
+                                        if (t.relased == year)
                                             JackettResultBuilder.AddTorrent(torrents, t);
                                     }
                                     else
@@ -212,7 +216,8 @@ namespace JacBlack.Application.Search
                                 {
                                     if (t.types.Contains("movie") || t.types.Contains("multfilm") || t.types.Contains("documovie"))
                                     {
-                                        if (t.relased == year || t.relased == (year - 1) || t.relased == (year + 1))
+                                        // Год точный — см. ветку фильма выше.
+                                        if (t.relased == year)
                                             JackettResultBuilder.AddTorrent(torrents, t);
                                     }
                                     else
@@ -285,6 +290,25 @@ namespace JacBlack.Application.Search
                                 if (exact)
                                 {
                                     if ((t._sn ?? StringConvert.SearchName(t.name)) != _s && (t._so ?? StringConvert.SearchName(t.originalname)) != _s)
+                                        continue;
+                                }
+
+                                // Год в запросе не учитывался здесь вовсе — и
+                                // это второй путь, которым в выдачу попадали
+                                // тёзки чужих лет. Раз год указан, он условие:
+                                // у фильма точный, у сериала — не раньше
+                                // премьеры (сезоны идут вперёд), а раздача
+                                // с неразобранным годом не проходит.
+                                if (year > 0)
+                                {
+                                    if (t.relased <= 0)
+                                        continue;
+
+                                    bool сериал = is_serial == 2 || is_serial == 3 || is_serial == 4
+                                        || t.types.Contains("serial") || t.types.Contains("multserial")
+                                        || t.types.Contains("docuserial") || t.types.Contains("tvshow");
+
+                                    if (сериал ? t.relased < year - 1 : t.relased != year)
                                         continue;
                                 }
 

@@ -77,6 +77,13 @@ namespace JacBlack.Controllers.Dev
         public JsonResult FillKinopoiskFromDictionary(bool dryRun = true) => Json(_migrationService.FillKinopoiskFromDictionary(dryRun));
 
         /// <summary>
+        /// Восстановить год из заголовка у записей, где разбор его потерял.
+        /// Нужен потому, что год в запросе теперь жёсткое условие отбора,
+        /// и запись без года в карточку с годом не попадает. Сначала ?dryRun=true.
+        /// </summary>
+        public JsonResult FixMissingYear(bool dryRun = true) => Json(_migrationService.FixMissingYear(dryRun));
+
+        /// <summary>
         /// Наполнить словарь всеми написаниями названия, чтобы поиск переводил
         /// запрос: «Веном» дотягивался до английских раздач yts и наоборот.
         /// Записи не меняются, только словарь. Сначала ?dryRun=true.
