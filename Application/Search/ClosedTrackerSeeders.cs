@@ -323,28 +323,53 @@ namespace JacBlack.Application.Search
         };
 
         /// <summary>
-        /// Есть ли среди адресов записи та, которой на трекере уже нет.
-        /// Скачать такую нельзя, а число сидов у неё — прошлогодний снимок.
+        /// Мертва ли запись — то есть скачать её уже НЕЛЬЗЯ ни на одном трекере.
+        ///
+        /// Тонкость. Одна раздача часто склеена из копий на РАЗНЫХ трекерах (общий
+        /// инфохеш): в поле трекера — перечень через запятую, в адресах — все копии.
+        /// Пока жива хоть одна копия, раздача качается, и выбрасывать её нельзя.
+        /// Прежняя версия роняла всю склейку, если мёртвой оказывалась ЛЮБАЯ копия —
+        /// так живая rutracker-раздача «Дома дракона» (452 сида) выпадала из-за
+        /// мёртвой копии соседнего трекера. Плюс id доставался первым совпадением
+        /// шаблона по СКЛЕЙКЕ всех адресов, из-за чего id bitru подставлялся в
+        /// проверку kinozal, а id rutracker — в проверку nnmclub (ложные пометки).
+        ///
+        /// Теперь: разбираем КАЖДЫЙ адрес по ЕГО домену и мёртвой считаем запись
+        /// только если опознали хотя бы одну копию и МЕРТВЫ ВСЕ опознанные.
         /// </summary>
         public static bool IsDead(string tracker, string urls)
         {
-            if (string.IsNullOrEmpty(tracker) || string.IsNullOrEmpty(urls))
+            if (string.IsNullOrEmpty(urls))
                 return false;
 
-            // Имя трекера здесь обязательно: адрес сам по себе неоднозначен —
-            // «viewtopic.php?t=» есть и у rutracker, и у nnmclub, а
-            // «details.php?id=» и у bitru, и у kinozal.
-            foreach (var (name, pattern) in DeadIdPatterns)
-            {
-                if (!tracker.Contains(name, StringComparison.OrdinalIgnoreCase))
-                    continue;
+            bool anyIdentified = false;
 
-                var m = Regex.Match(urls, pattern);
-                if (m.Success && DeadReleases.IsDead(name, m.Groups[1].Value))
-                    return true;
+            foreach (string url in urls.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                foreach (var (name, pattern) in DeadIdPatterns)
+                {
+                    // Домен опознаётся по имени трекера в самом адресе (rutracker.org,
+                    // nnmclub.to, bitru.org, kinozal.guru, toloka.to) — так id берётся
+                    // из адреса ИМЕННО этого трекера, а не первым по всей склейке.
+                    if (!url.Contains(name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var m = Regex.Match(url, pattern);
+                    if (!m.Success)
+                        continue;
+
+                    anyIdentified = true;
+
+                    // Нашли живую (не помеченную мёртвой) копию — запись качается.
+                    if (!DeadReleases.IsDead(name, m.Groups[1].Value))
+                        return false;
+
+                    break; // трекер этого адреса опознан
+                }
             }
 
-            return false;
+            // Сюда дошли, только если ни одной живой копии не встретилось.
+            return anyIdentified;
         }
     }
 }
