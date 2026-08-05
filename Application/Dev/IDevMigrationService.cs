@@ -22,6 +22,7 @@ namespace JacBlack.Application.Dev
         object RemoveOrphanShards(bool dryRun);
 
         object FillImdbFromDictionary(bool dryRun);
+        object FillKinopoiskFromDictionary(bool dryRun);
         object RebuildImdbAka(bool dryRun);
     }
 }

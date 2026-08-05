@@ -237,6 +237,58 @@ namespace JacBlack.Infrastructure.Indexers
                 }
             }
 
+            // Код Кинопоиска — та же работа, но для русского кино, где кода
+            // IMDB нет ни у одной раздачи. Карточку сводим к коду по паре
+            // «название + год»; спрашиваем оба названия, потому что у русской
+            // вещи оригинальное совпадает с русским.
+            string cardKinopoisk = null;
+            if (req.Year > 0)
+            {
+                if (!string.IsNullOrWhiteSpace(req.TitleOriginal))
+                    JacBlack.Infrastructure.Persistence.KinopoiskIndex.TryGetByTitle(req.TitleOriginal, req.Year, out cardKinopoisk);
+
+                if (string.IsNullOrEmpty(cardKinopoisk) && !string.IsNullOrWhiteSpace(req.Title))
+                    JacBlack.Infrastructure.Persistence.KinopoiskIndex.TryGetByTitle(req.Title, req.Year, out cardKinopoisk);
+            }
+
+            // Словарь знает не всё, но код можно вывести из самой выдачи —
+            // как и для IMDB. Голосуем по раздачам, совпавшим по названию:
+            // они заведомо свои, и их код — код карточки.
+            //
+            // Для русского кино голосуем по ЛЮБОМУ из названий, а не только по
+            // оригинальному: у него оба поля русские и совпадают, а требовать
+            // «оригинальное» значило бы не голосовать вовсе.
+            if (string.IsNullOrEmpty(cardKinopoisk))
+            {
+                var votes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var r in results)
+                {
+                    string code = r.info?.kinopoisk;
+                    if (string.IsNullOrEmpty(code))
+                        continue;
+
+                    bool hit = (!string.IsNullOrEmpty(en) && Hits(r.info?.name, r.info?.originalname, en, req.TitleOriginal))
+                        || (!string.IsNullOrEmpty(ru) && Hits(r.info?.name, r.info?.originalname, ru, req.Title));
+
+                    if (!hit)
+                        continue;
+
+                    votes.TryGetValue(code, out int n);
+                    votes[code] = n + 1;
+                }
+
+                int best = 0;
+                foreach (var pair in votes)
+                {
+                    if (pair.Value > best)
+                    {
+                        best = pair.Value;
+                        cardKinopoisk = pair.Key;
+                    }
+                }
+            }
+
             var kept = new List<Result>(results.Count);
 
             foreach (var r in results)
@@ -246,6 +298,17 @@ namespace JacBlack.Infrastructure.Indexers
                 string imdb = r.info?.imdb;
                 if (!string.IsNullOrEmpty(cardImdb) && !string.IsNullOrEmpty(imdb)
                     && !string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // То же правило по коду Кинопоиска. Записи без кода не трогаем:
+                // он известен у малой части базы, и строгость по нему выкосила
+                // бы почти всё верное.
+                string kinopoisk = r.info?.kinopoisk;
+                if (!string.IsNullOrEmpty(cardKinopoisk) && !string.IsNullOrEmpty(kinopoisk)
+                    && !string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!TypeFits(r, req.IsSerial))
                     continue;
 
                 if (!YearFits(r, req.Year, req.IsSerial))
@@ -296,10 +359,17 @@ namespace JacBlack.Infrastructure.Indexers
                 // код IMDB подтверждает — либо его у раздачи нет вовсе и
                 // опровергнуть нечем (у аниме кода обычно нет, и терять его
                 // из-за этого нельзя).
+                //
+                // Кинопоиск здесь особенно к месту: совпадение по русскому
+                // названию — ровно тот случай, где тёзки и лезут, а код IMDB
+                // у русского кино отсутствует и подтвердить ничего не может.
                 bool byRussian = Hits(name, original, ru, req.Title)
                     && (string.IsNullOrEmpty(cardImdb)
                         || string.IsNullOrEmpty(imdb)
-                        || string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase));
+                        || string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase))
+                    && (string.IsNullOrEmpty(cardKinopoisk)
+                        || string.IsNullOrEmpty(kinopoisk)
+                        || string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase));
 
                 bool ok = byOriginal || byRussian;
 
@@ -354,6 +424,43 @@ namespace JacBlack.Infrastructure.Indexers
         /// Раздачи без года пропускаем: он разобран не у всех, и молчаливо
         /// терять их из-за этого нельзя.
         /// </summary>
+        /// <summary>
+        /// Отсев по типу: в карточке фильма сериалу не место.
+        ///
+        /// Зачем отдельно от года. Год — не заслон, когда его нет: раздача
+        /// с неразобранным годом проходит намеренно, иначе потеряли бы много
+        /// верного. А тип известен почти всегда, и он отвергает чужое даже
+        /// при нулевом годе. Именно так в карточку фильма «Одиссея» 2026
+        /// попадали сериалы 1968, 1992 и 1994 годов: год у них не разобрался,
+        /// русское название совпало дословно, кода нет ни у карточки, ни
+        /// у раздач — отвергнуть было нечем.
+        ///
+        /// Правило то же, что на пути из базы (<c>JackettCardMatcher</c>):
+        /// фильму годятся movie, multfilm, documovie и anime. Аниме остаётся
+        /// с обеих сторон намеренно — полнометражное аниме тоже фильм.
+        ///
+        /// Судим только карточку фильма. Для сериальной обратное правило
+        /// опасно: одиночные серии и сборники на трекерах сплошь и рядом
+        /// помечены как movie, и строгость выкосила бы верную выдачу.
+        /// </summary>
+        static bool TypeFits(Result r, int cardIsSerial)
+        {
+            if (cardIsSerial != 1)
+                return true;
+
+            var types = r.info?.types;
+            if (types == null || types.Length == 0)
+                return true;
+
+            foreach (string t in types)
+            {
+                if (t == "movie" || t == "multfilm" || t == "documovie" || t == "anime")
+                    return true;
+            }
+
+            return false;
+        }
+
         static bool YearFits(Result r, int cardYear, int cardIsSerial)
         {
             if (cardYear <= 0)

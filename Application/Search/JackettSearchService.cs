@@ -115,6 +115,17 @@ namespace JacBlack.Application.Search
             // одно и то же.
             HarvestCardImdb(filtered, title_original, year);
 
+            // То же самое для русского кино: там кода IMDB не существует, и
+            // тёзок разводит только Кинопоиск.
+            //
+            // Ищем в НЕотфильтрованном списке, и это принципиально: код нужен
+            // ровно затем, чтобы заслон работал лучше, — требовать, чтобы
+            // раздача kinozal уже пережила заслон, значит не добыть код там,
+            // где он нужнее всего. Проверено на «Русской жене» 2024: заслон
+            // оставлял одну раздачу с rutor, kinozal-раздачи отсеивались, и
+            // сборщик не срабатывал ни разу, хотя их в базе полтора десятка.
+            HarvestCardKinopoisk(results, title, title_original, year);
+
             return filtered;
         }
 
@@ -176,15 +187,92 @@ namespace JacBlack.Application.Search
                 return;
             }
 
-            // Kinozal вторым источником кодов не годится, хотя раздача его
+            // Kinozal вторым источником кодов IMDB не годится, хотя раздача его
             // есть почти в каждой карточке: он ссылается на Кинопоиск, а кода
             // IMDB на его странице нет вовсе — проверено 02.08.2026 на полной
             // странице под входом (33 907 байт, ни одной ссылки на imdb).
             //
             // Заодно выяснилось, кому код вообще нужен: у зарубежных карточек
             // он и так есть у 24–44 раздач из yts и eztv. Без кода остаётся
-            // русское и советское кино — а у него кода нет ни на одном из
-            // наших трекеров, и добывать его неоткуда.
+            // русское и советское кино — а у него кода IMDB нет ни на одном из
+            // наших трекеров.
+            //
+            // Зато у него есть код Кинопоиска, и берём мы его именно оттуда.
+        }
+
+        /// <summary>
+        /// Заказывает добычу кода Кинопоиска — тем же способом и по той же
+        /// причине, что и код IMDB, но для русского кино.
+        ///
+        /// Почему отдельным проходом, а не вместе с IMDB: коды нужны разным
+        /// карточкам. У зарубежной вещи код IMDB и так есть у десятков раздач,
+        /// а Кинопоиск ей ничего не добавит; у русской наоборот — IMDB взять
+        /// негде, и единственная зацепка это kinozal.
+        /// </summary>
+        void HarvestCardKinopoisk(List<Result> results, string title, string titleOriginal, int year)
+        {
+            if (_kinozal == null || results == null || results.Count == 0 || year <= 0)
+                return;
+
+            string card = !string.IsNullOrWhiteSpace(titleOriginal) ? titleOriginal : title;
+            if (string.IsNullOrWhiteSpace(card))
+                return;
+
+            // Уже знаем — не тревожим трекер.
+            if (Infrastructure.Persistence.KinopoiskIndex.TryGetByTitle(card, year, out _))
+                return;
+
+            string cardKey = Infrastructure.Utils.StringConvert.SearchName(card);
+            string titleKey = Infrastructure.Utils.StringConvert.SearchName(title);
+
+            foreach (var r in results)
+            {
+                if (!FromTracker(r, "kinozal"))
+                    continue;
+
+                // Раздача должна принадлежать ИМЕННО этой карточке. Список сюда
+                // приходит нефильтрованным — это поиск подстрокой, и в нём лежат
+                // посторонние фильмы. Проверено на «Русской жене» 2024: первой
+                // раздачей kinozal там оказалась «В плену надежды», и её код
+                // 4491006 записался карточке «Русской жены». Такой словарь хуже
+                // пустого: он не разводит тёзок, а плодит их.
+                //
+                // Сверяем строгим равенством, а не похожестью: пропустить
+                // добычу — просто не выиграть, записать чужой код — сломать
+                // поиск. И год обязателен по той же причине.
+                if (r.info == null || r.info.relased != year)
+                    continue;
+
+                string n = Infrastructure.Utils.StringConvert.SearchName(r.info.name);
+                string o = Infrastructure.Utils.StringConvert.SearchName(r.info.originalname);
+
+                bool совпало =
+                    (!string.IsNullOrEmpty(cardKey) && (cardKey == n || cardKey == o))
+                    || (!string.IsNullOrEmpty(titleKey) && (titleKey == n || titleKey == o));
+
+                if (!совпало)
+                    continue;
+
+                // Разбираем адрес именно kinozal: у склеенной записи в перечне
+                // лежат адреса нескольких трекеров, и `details.php?id=` есть не
+                // только у него — на этом уже обжигались при отсеве мёртвых,
+                // когда id bitru уходил в проверку kinozal.
+                var m = Regex.Match(AllUrls(r), @"https?://[^\s""]*kinozal[^\s""]*details\.php\?id=(\d+)");
+                if (!m.Success)
+                    continue;
+
+                // Подписываем словарь СОБСТВЕННЫМИ названиями раздачи, а не
+                // названиями карточки. Причина: оригинальное название клиент
+                // присылает не всегда, и тогда служба подставляет его сама —
+                // догадкой по словарю. Догадка бывает неверной: карточке
+                // «Русская жена» подставилось «В плену надежды», и код лёг под
+                // чужим именем (проверено, словарь получался хуже пустого).
+                // А названия раздачи мы только что сверили с карточкой — они
+                // заведомо те самые.
+                Infrastructure.Trackers.Kinozal.KinozalKinopoiskHarvester.EnsureInBackground(
+                    _kinozal, m.Groups[1].Value, r.info.name, r.info.originalname, year);
+                return;
+            }
         }
 
         /// <summary>

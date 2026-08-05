@@ -64,7 +64,11 @@ namespace JacBlack.Infrastructure.Trackers.Rutracker
 
                     string imdb = m.Groups[1].Value.ToLowerInvariant();
                     ImdbIndex.Remember(imdb, name, originalname, year);
-                    ImdbIndex.SaveIfDirty();
+
+                    // Сразу на диск: поход за кодом редкий (один на карточку),
+                    // а отсрочка сохранения стирает добытое при перезапуске
+                    // в ближайшие минуты — проверено на близнеце по Кинопоиску.
+                    ImdbIndex.SaveIfDirty(force: true);
 
                     JacBlackLog.Information(JacBlackLogCategories.Trackers,
                         $"rutracker: код {imdb} запомнен для «{originalname}» ({year})");

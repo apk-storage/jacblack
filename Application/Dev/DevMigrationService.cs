@@ -17,6 +17,7 @@ namespace JacBlack.Application.Dev
         readonly NormalizeWhitespaceMigration _normalizeWhitespace;
         readonly RemoveOrphanShardsMigration _removeOrphanShards;
         readonly FillImdbFromDictionaryMigration _fillImdb;
+        readonly FillKinopoiskFromDictionaryMigration _fillKinopoisk;
         readonly RebuildImdbAkaMigration _rebuildImdbAka;
 
         public DevMigrationService(
@@ -33,6 +34,7 @@ namespace JacBlack.Application.Dev
             NormalizeWhitespaceMigration normalizeWhitespace,
             RemoveOrphanShardsMigration removeOrphanShards,
             FillImdbFromDictionaryMigration fillImdb,
+            FillKinopoiskFromDictionaryMigration fillKinopoisk,
             RebuildImdbAkaMigration rebuildImdbAka)
         {
             _fixAnimeToshoNames = fixAnimeToshoNames;
@@ -42,6 +44,7 @@ namespace JacBlack.Application.Dev
             _normalizeWhitespace = normalizeWhitespace;
             _removeOrphanShards = removeOrphanShards;
             _fillImdb = fillImdb;
+            _fillKinopoisk = fillKinopoisk;
             _rebuildImdbAka = rebuildImdbAka;
             _fixKnabenNames = fixKnabenNames;
             _fixBitruNames = fixBitruNames;
@@ -88,6 +91,10 @@ namespace JacBlack.Application.Dev
         /// <summary>Проставить код IMDB по названию и году из словаря.</summary>
         public object FillImdbFromDictionary(bool dryRun) =>
             dryRun ? _fillImdb.DryRun() : _fillImdb.Run();
+
+        /// <summary>Проставить код Кинопоиска по названию и году из словаря.</summary>
+        public object FillKinopoiskFromDictionary(bool dryRun) =>
+            dryRun ? _fillKinopoisk.DryRun() : _fillKinopoisk.Run();
 
         /// <summary>Наполнить словарь всеми написаниями названия для перевода запроса.</summary>
         public object RebuildImdbAka(bool dryRun) =>

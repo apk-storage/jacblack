@@ -283,6 +283,7 @@ namespace JacBlack.Application.Search
                         types = i.types,
                         media = MediaSummary(ffprobe, i.title),
                         imdb = i.imdb,
+                        kinopoisk = i.kinopoisk,
                         seedersLive = Infrastructure.Indexers.SeedersFreshness.IsFresh(i.updateTime),
                         seedersUnknown = Infrastructure.Indexers.SeedersFreshness.TrackerHidesSeeders(i.trackerName)
                     }

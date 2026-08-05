@@ -505,6 +505,44 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
             return null;
         }
 
+        /// <summary>
+        /// Достаёт код Кинопоиска со страницы раздачи.
+        ///
+        /// Почему только отсюда. Ссылка на Кинопоиск есть ТОЛЬКО на
+        /// индивидуальной странице раздачи: массовый обход читает `browse.php`
+        /// и добирает хеш отдельным запросом, а опрос сидов идёт через scrape —
+        /// ни там, ни там страницы раздачи нет. Значит за кодом надо сходить
+        /// отдельно, и делать это стоит бережно: kinozal ограничивает частоту.
+        ///
+        /// Возвращает null, если страница не открылась или ссылки на ней нет, —
+        /// чтобы вызывающий отличил «нет кода» от «не знаю».
+        /// </summary>
+        public async Task<string> GetKinopoiskIdAsync(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return null;
+
+            if (!await EnsureLoggedIn())
+                return null;
+
+            string html = await GetBrowseHtml($"{AppInit.conf.Kinozal.host}/details.php?id={id}");
+            if (string.IsNullOrWhiteSpace(html))
+                return null;
+
+            var m = KinopoiskLink.Match(html);
+            return m.Success ? m.Groups[1].Value : null;
+        }
+
+        /// <summary>
+        /// Ссылка вида `kinopoisk.ru/film/1234567/` или `/series/…`. Берём
+        /// только число: оно и есть код.
+        /// </summary>
+        static readonly System.Text.RegularExpressions.Regex KinopoiskLink =
+            new System.Text.RegularExpressions.Regex(
+                @"kinopoisk\.ru/(?:film|series)/(\d{2,})",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                | System.Text.RegularExpressions.RegexOptions.Compiled);
+
         async Task<bool> parsePage(string cat, int page, string arg = null)
         {
             if (!await EnsureLoggedIn())

@@ -10,6 +10,34 @@ namespace JacBlack.Infrastructure.Trackers.Rutracker
     {
         const string TrackerName = "rutracker";
 
+        /// <summary>
+        /// Год из квадратных скобок — запасной путь, когда лесенка шаблонов
+        /// не разобрала заголовок.
+        ///
+        /// Зачем. Шаблоны требуют перед скобками ровно одну круглую скобку,
+        /// с постановщиками. У сериалов их часто две: сначала число серий,
+        /// потом постановщики — «Серии: 1-8 (08) (Mario Bava) [1968, Италия…».
+        /// Шаблон об это спотыкается, название подхватывает запасной путь,
+        /// а год оставался нулевым. Нулевой год хуже отсутствующей записи:
+        /// фильтр карточки не может его отбросить (неизвестный год — это не
+        /// «не совпал»), и раздача лезет в чужую карточку. Так «Одиссея» 1968,
+        /// 1992 и 1994 годов попадала в карточку фильма 2026 года.
+        ///
+        /// Почему это надёжно. Блок в квадратных скобках у rutracker всегда
+        /// начинается годом — «[1968, Италия, Приключения, DVDRip]». Берём
+        /// именно первое поле блока и только правдоподобный год, чтобы не
+        /// принять за него разрешение или битрейт.
+        /// </summary>
+        static readonly Regex YearInBrackets = new Regex(
+            @"\[(1[89]\d{2}|20\d{2})\s*[,\]-]", RegexOptions.Compiled);
+
+        /// <summary>Год из скобок, либо 0, если правдоподобного года там нет.</summary>
+        static int YearFromBrackets(string title)
+        {
+            var m = YearInBrackets.Match(title ?? "");
+            return m.Success && int.TryParse(m.Groups[1].Value, out int year) ? year : 0;
+        }
+
         public static List<TorrentDetails> ParseTorrentsFromPage(string html, string cat)
         {
             var torrents = new List<TorrentDetails>();
@@ -40,6 +68,11 @@ namespace JacBlack.Infrastructure.Trackers.Rutracker
 
                 if (string.IsNullOrWhiteSpace(name))
                     name = Regex.Split(title, "(\\[|\\/|\\(|\\|)", RegexOptions.IgnoreCase)[0].Trim();
+
+                // У названия запасной путь был всегда, а у года — нет, и он
+                // молча уходил нулём. Достаём из скобок.
+                if (relased <= 0)
+                    relased = YearFromBrackets(title);
 
                 if (!string.IsNullOrWhiteSpace(name))
                 {

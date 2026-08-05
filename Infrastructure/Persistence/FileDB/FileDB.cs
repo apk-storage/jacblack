@@ -305,6 +305,31 @@ namespace JacBlack.Infrastructure.Persistence
                     upt();
                 }
 
+                // Код Кинопоиска ведёт себя так же: приходит от одного источника
+                // (kinozal), пустым не затирается и раздаётся остальным по паре
+                // «название + год».
+                if (!string.IsNullOrWhiteSpace(torrent.kinopoisk) && torrent.kinopoisk != t.kinopoisk)
+                {
+                    t.kinopoisk = torrent.kinopoisk;
+                    upt();
+                }
+
+                if (!string.IsNullOrWhiteSpace(t.kinopoisk))
+                {
+                    KinopoiskIndex.Remember(t.kinopoisk, t.name, t.originalname, t.relased);
+                }
+                else if (t.relased > 1900)
+                {
+                    // У русского кино оригинальное название совпадает с русским,
+                    // поэтому спрашиваем оба — как и для IMDB.
+                    if (KinopoiskIndex.TryGetByTitle(t.originalname, t.relased, out string knownKp)
+                        || KinopoiskIndex.TryGetByTitle(t.name, t.relased, out knownKp))
+                    {
+                        t.kinopoisk = knownKp;
+                        upt(updatetime: false);
+                    }
+                }
+
                 if (!string.IsNullOrWhiteSpace(t.imdb))
                 {
                     ImdbIndex.Remember(t.imdb, t.name, t.originalname, t.relased);
@@ -413,11 +438,15 @@ namespace JacBlack.Infrastructure.Persistence
                     sizeName = torrent.sizeName,
                     magnet = torrent.magnet,
                     ffprobe = torrent.ffprobe,
-                    imdb = torrent.imdb
+                    imdb = torrent.imdb,
+                    kinopoisk = torrent.kinopoisk
                 };
 
                     if (!string.IsNullOrWhiteSpace(t.imdb))
                         ImdbIndex.Remember(t.imdb, t.name, t.originalname, t.relased);
+
+                    if (!string.IsNullOrWhiteSpace(t.kinopoisk))
+                        KinopoiskIndex.Remember(t.kinopoisk, t.name, t.originalname, t.relased);
 
                 // Всегда заполняем _sn и _so, даже если name или originalname пустые
                 // Используем fallback на title если нужно
