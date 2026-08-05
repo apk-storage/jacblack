@@ -29,6 +29,12 @@ namespace JacBlack.Infrastructure.Trackers.Bitru
             t = Regex.Replace(t, @"\s*\d{1,2}(-\d{1,2})?\s*сезон\s*.*$", "", RegexOptions.IgnoreCase);
             t = Regex.Replace(t, @"\b(Сезон|Season)\s*\d{1,2}(?!\d).*$", "", RegexOptions.IgnoreCase);
 
+            // Диапазон серий «(1-16 из 16)», «[5 из 8]» — это не часть названия.
+            // Требуем ОТКРЫВАЮЩУЮ скобку и числа с обеих сторон «из»: так не заденем
+            // ни «Один из нас» (нет числа), ни бесскобочное «5 из 9 роты» (нет скобки),
+            // а у bitru диапазон всегда в скобках.
+            t = Regex.Replace(t, @"[\(\[]\s*\d{1,3}(\s*-\s*\d{1,3})?\s+из\s+\d{1,3}\s*[\)\]]?", " ", RegexOptions.IgnoreCase);
+
             t = Regex.Replace(t, @"\b(2160p|1080p|720p|480p)\b", "", RegexOptions.IgnoreCase);
             t = Regex.Replace(t, @"\b(WEB[-\s]?DL|WEB[-\s]?Rip|BDRip|BDRemux|HDRip|BluRay|BRRip|DVDRip|HDTV)\b", "", RegexOptions.IgnoreCase);
             t = Regex.Replace(t, @"\b(x264|x265|h\.?264|h\.?265|hevc|avc|aac|ac3|dts)\b", "", RegexOptions.IgnoreCase);
