@@ -29,6 +29,11 @@ namespace JacBlack.Infrastructure.Background
             try { Infrastructure.Persistence.ImdbIndex.Load(); }
             catch (Exception ex) { _logger.LogWarning(ex, "imdb index load"); }
 
+            // Словарь кодов Кинопоиска — то же самое, но для русского кино,
+            // где кода IMDB нет ни у кого.
+            try { Infrastructure.Persistence.KinopoiskIndex.Load(); }
+            catch (Exception ex) { _logger.LogWarning(ex, "kinopoisk index load"); }
+
             try { Infrastructure.Indexers.TrackerFreshness.Load(); }
             catch (Exception ex) { _logger.LogWarning(ex, "tracker freshness load"); }
 

@@ -221,6 +221,13 @@ namespace JacBlack.Controllers
                 // Словарь кодов IMDB — им разводятся тёзки.
                 imdbCodes = Infrastructure.Persistence.ImdbIndex.Count,
 
+                // Словарь кодов Кинопоиска — то же для русского кино, у
+                // которого кода IMDB нет ни на одном трекере. Число здесь
+                // и есть мера того, скольких тёзок мы вообще способны
+                // развести: пока код не добыт, работает прежний разбор по
+                // названию, году и типу.
+                kinopoiskCodes = Infrastructure.Persistence.KinopoiskIndex.Count,
+
                 // Сколько часов запись считается проверенной после обхода.
                 freshHours = Infrastructure.Indexers.SeedersFreshness.FreshHours,
 

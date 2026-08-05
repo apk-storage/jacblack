@@ -7,11 +7,29 @@ namespace JacBlack.Controllers.Dev
     public class DevMigrationController : Controller
     {
         readonly IDevMigrationService _migrationService;
+        readonly Infrastructure.Trackers.Kinozal.KinozalSyncService _kinozal;
 
-        public DevMigrationController(IDevMigrationService migrationService)
+        public DevMigrationController(
+            IDevMigrationService migrationService,
+            Infrastructure.Trackers.Kinozal.KinozalSyncService kinozal)
         {
             _migrationService = migrationService;
+            _kinozal = kinozal;
         }
+
+        /// <summary>
+        /// Наполнить словарь кодов Кинопоиска впрок, обойдя базу.
+        ///
+        /// Возвращается сразу — работа идёт в фоне, следить за ней по
+        /// /dev/KinopoiskHarvestState или по счётчику в /stats/quality.
+        /// Не начинает, пока идёт обход kinozal.
+        /// </summary>
+        public JsonResult HarvestKinopoisk(int limit = 300, int delayMs = 1500) =>
+            Json(Infrastructure.Trackers.Kinozal.KinopoiskDictionaryHarvester.Start(_kinozal, limit, delayMs));
+
+        /// <summary>Что делает наполнитель словаря прямо сейчас.</summary>
+        public JsonResult KinopoiskHarvestState() =>
+            Json(Infrastructure.Trackers.Kinozal.KinopoiskDictionaryHarvester.Snapshot());
 
         public JsonResult FixKnabenNames() => Json(_migrationService.FixKnabenNames());
 
@@ -51,6 +69,12 @@ namespace JacBlack.Controllers.Dev
 
         /// <summary>Проставить код IMDB по названию и году. Сначала ?dryRun=true.</summary>
         public JsonResult FillImdbFromDictionary(bool dryRun = true) => Json(_migrationService.FillImdbFromDictionary(dryRun));
+
+        /// <summary>
+        /// Проставить код Кинопоиска по названию и году. Нужен русскому кино,
+        /// у которого кода IMDB нет ни на одном трекере. Сначала ?dryRun=true.
+        /// </summary>
+        public JsonResult FillKinopoiskFromDictionary(bool dryRun = true) => Json(_migrationService.FillKinopoiskFromDictionary(dryRun));
 
         /// <summary>
         /// Наполнить словарь всеми написаниями названия, чтобы поиск переводил
