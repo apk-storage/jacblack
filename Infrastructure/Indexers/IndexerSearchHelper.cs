@@ -147,7 +147,25 @@ namespace JacBlack.Infrastructure.Indexers
             bool titleGiven = query.ContainsKey("title") && !string.IsNullOrWhiteSpace(query["title"]);
 
             if (originalGiven || titleGiven)
+            {
                 results = FilterByCardTitle(results, req, originalGiven, titleGiven);
+            }
+            else if (req.Year > 0)
+            {
+                // Названий не прислали — сверять нечего, но год работать обязан.
+                // Он проверяется и выше (строка `req.Year > 0 && !req.CardMode`),
+                // однако `CardMode` истинен и для обычного поиска, поэтому та
+                // проверка молча не срабатывала: «Матрица» с годом 1812 отдавала
+                // те же 462 раздачи, что и без года вовсе.
+                var byYear = new List<Result>(results.Count);
+                foreach (var r in results)
+                {
+                    if (YearFits(r, req.Year, req.IsSerial))
+                        byYear.Add(r);
+                }
+
+                results = byYear;
+            }
 
             var (limit, offset) = IndexerRequestParams.LimitOffsetFromQuery(query);
             return IndexerResultFilters.Paginate(results, limit, offset);
@@ -371,7 +389,33 @@ namespace JacBlack.Infrastructure.Indexers
                         || string.IsNullOrEmpty(kinopoisk)
                         || string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase));
 
-                bool ok = byOriginal || byRussian;
+                // Правило «или» держится на годе: он и разводит тёзок. А в
+                // режимах поиска БЕЗ года («Оригинал», «Русский», «Оба
+                // названия») разводить нечем, и «или» пропускает всё подряд.
+                // Замер на карточке «Одиссея / The Odyssey»: 33 раздачи, из
+                // них «Одиссей / The Odyssey» 1997 года — 19 штук, плюс
+                // «Одиссея / L'odyssee» 2016, «L'Odissea» 1911 и 1969.
+                // Русское название не совпадало ни у первых, оригинальное —
+                // ни у вторых, и каждому хватало половины совпадения.
+                //
+                // Поэтому: года нет и присланы ОБА названия — требуем оба.
+                // Требуем, разумеется, только когда у самой раздачи оба
+                // разобраны: у части источников есть лишь одно, и такую
+                // запись проверить нечем.
+                //
+                // Строгость безопасна, потому что ниже стоит запасной ход: если
+                // она выкосит карточку целиком (у сериала «The Bear» карточка
+                // присылает «Медвежонок», а на трекерах он «Медведь»), выдача
+                // пересобирается по одному оригинальному названию.
+                bool ok;
+
+                bool обаПрисланы = !string.IsNullOrEmpty(en) && !string.IsNullOrEmpty(ru);
+                bool обаРазобраны = !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(original);
+
+                if (req.Year <= 0 && обаПрисланы && обаРазобраны)
+                    ok = byOriginal && byRussian;
+                else
+                    ok = byOriginal || byRussian;
 
                 if (ok)
                     kept.Add(r);
@@ -400,6 +444,39 @@ namespace JacBlack.Infrastructure.Indexers
                         continue;
 
                     if (Hits(name, original, en, req.TitleOriginal))
+                        kept.Add(r);
+                }
+            }
+
+            // Последний рубеж: карточка пуста, а раздачи с подходящим названием
+            // есть — и отсеял их ТОЛЬКО неразобранный год.
+            //
+            // Так обнулялся «Медвежонок» в режиме «Русский + Год»: четыре
+            // раздачи по названию находились, но год у них не разобран, а
+            // прежний ход не помогает — оригинального названия в этом режиме
+            // клиент не присылает.
+            //
+            // Правило остаётся прежним: год указан — он условие. Но пустая
+            // выдача хуже приблизительной, поэтому когда СТРОГО не нашлось
+            // ничего, отдаём совпавшие по названию записи без года. У тех,
+            // где год разобран, он по-прежнему обязан совпасть.
+            if (kept.Count == 0 && req.Year > 0)
+            {
+                foreach (var r in results)
+                {
+                    if ((r.info?.relased ?? 0) > 0)
+                        continue;
+
+                    string name = r.info?.name;
+                    string original = r.info?.originalname;
+
+                    if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(original))
+                        continue;
+
+                    if (!TypeFits(r, req.IsSerial))
+                        continue;
+
+                    if (Hits(name, original, en, req.TitleOriginal) || Hits(name, original, ru, req.Title))
                         kept.Add(r);
                 }
             }
