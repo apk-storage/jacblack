@@ -146,9 +146,27 @@ namespace JacBlack.Infrastructure.Indexers
             bool originalGiven = query.ContainsKey("title_original") && !string.IsNullOrWhiteSpace(query["title_original"]);
             bool titleGiven = query.ContainsKey("title") && !string.IsNullOrWhiteSpace(query["title"]);
 
-            if (originalGiven || titleGiven)
+            // Кнопка «Уточнить» в Лампе названий полями не шлёт — она склеивает
+            // их в строку запроса («Одиссея The Odyssey 2026»). Такую склейку мы
+            // разбираем на две части заранее, и раз она разобралась, запрос
+            // заведомо пришёл из карточки: человек руками два названия подряд
+            // не набирает. Значит и заслон карточки тут уместен — иначе в эти
+            // режимы лезет лишнее, вроде фильма о съёмках «The Odyssey: The
+            // Making of an Epic».
+            //
+            // Отличаем от опасного случая: словарь соответствий подставляет
+            // ОДНО название, оригинальное, когда клиент его не слал. Требовать
+            // совпадения с подставленным нельзя — на этом режим «Русский» падал
+            // со 115 раздач до 2. Здесь же заполнены ОБА, а так бывает только
+            // после разбора склейки.
+            bool derivedFromQuery = !originalGiven && !titleGiven
+                && !string.IsNullOrWhiteSpace(req.Title)
+                && !string.IsNullOrWhiteSpace(req.TitleOriginal);
+
+            if (originalGiven || titleGiven || derivedFromQuery)
             {
-                results = FilterByCardTitle(results, req, originalGiven, titleGiven);
+                results = FilterByCardTitle(results, req,
+                    originalGiven || derivedFromQuery, titleGiven || derivedFromQuery);
             }
             else if (req.Year > 0)
             {
@@ -215,8 +233,37 @@ namespace JacBlack.Infrastructure.Indexers
             // и строгость по нему выкосила бы большую часть верной выдачи.
             // Их проверяет прежнее правило по названиям.
             string cardImdb = null;
-            if (req.Year > 0 && !string.IsNullOrWhiteSpace(req.TitleOriginal))
-                JacBlack.Infrastructure.Persistence.ImdbIndex.TryGetByTitle(req.TitleOriginal, req.Year, out cardImdb);
+            if (req.Year > 0)
+                cardImdb = ResolveCardImdb(req, en, ru);
+
+            // Код из словаря принимаем, только если его несёт хоть одна раздача.
+            //
+            // Под одним названием и годом словарь знает НЕСКОЛЬКО вещей, а
+            // обратный поиск отдаёт первую попавшуюся. У «The Odyssey» 2026
+            // там три записи: tt41605854 «The Odyssey», tt43677301 «The Odyssey:
+            // The Making of an Epic» и tt33764258 «Одиссея / The Odyssey» —
+            // настоящий фильм. Словарь отдавал первую, и заслон объявлял чужими
+            // ровно те раздачи, у которых стоит ПРАВИЛЬНЫЙ код: карточка теряла
+            // TS и CAMRip, оставляя два релиза без кода. Симптом обманчив —
+            // выглядит как «находит мало», а не как ошибка кода.
+            //
+            // Если код карточки не встречается в выдаче ни разу, разводить им
+            // нечего: он не подтверждает и не опровергает ни одной записи.
+            // Тогда честнее вывести код из самой выдачи — этим занят разбор ниже.
+            if (!string.IsNullOrEmpty(cardImdb) && !AnyResultHasCode(results, r => r.info?.imdb, cardImdb))
+                cardImdb = null;
+
+            // Словарь ответить не смог — спрашиваем саму выдачу, но строго:
+            // код берём у раздач, совпавших с карточкой по ОБОИМ названиям.
+            //
+            // Обычному голосованию (ниже) это доверить нельзя: оно сверяет одно
+            // оригинальное название, а «The Odyssey: The Making of an Epic» —
+            // фильм о съёмках — по правилу подзаголовка тоже совпадает, и его
+            // трёх раздач хватило бы, чтобы перевесить две настоящих.
+            // Требование обоих названий его отсекает: русского названия
+            // карточки у него нет.
+            if (string.IsNullOrEmpty(cardImdb) && !string.IsNullOrEmpty(en) && !string.IsNullOrEmpty(ru))
+                cardImdb = CodeVotedByExactCard(results, r => r.info?.imdb, en, ru, req);
 
             // Словарь знает не всё — «FROM» в нём нет. Но код можно вывести
             // из самой выдачи: раздачи, совпавшие по ОРИГИНАЛЬНОМУ названию,
@@ -268,6 +315,11 @@ namespace JacBlack.Infrastructure.Indexers
                 if (string.IsNullOrEmpty(cardKinopoisk) && !string.IsNullOrWhiteSpace(req.Title))
                     JacBlack.Infrastructure.Persistence.KinopoiskIndex.TryGetByTitle(req.Title, req.Year, out cardKinopoisk);
             }
+
+            // То же правило, что и для IMDB: код, которого нет ни у одной
+            // раздачи, ничего не разводит, а вредить может.
+            if (!string.IsNullOrEmpty(cardKinopoisk) && !AnyResultHasCode(results, r => r.info?.kinopoisk, cardKinopoisk))
+                cardKinopoisk = null;
 
             // Словарь знает не всё, но код можно вывести из самой выдачи —
             // как и для IMDB. Голосуем по раздачам, совпавшим по названию:
@@ -520,6 +572,116 @@ namespace JacBlack.Infrastructure.Indexers
         /// опасно: одиночные серии и сборники на трекерах сплошь и рядом
         /// помечены как movie, и строгость выкосила бы верную выдачу.
         /// </summary>
+        /// <summary>
+        /// Код карточки по словарю, спрошенному ОБОИМИ названиями.
+        ///
+        /// Зачем так. Сам словарь достоверен — каждая запись настоящая.
+        /// Ненадёжен ключ: обратный поиск устроен как «название + год → код»,
+        /// а эта пара не уникальна, и одноимённые записи затирают друг друга.
+        /// У «The Odyssey» 2026 их три: сам фильм (tt33764258, у него заполнены
+        /// оба названия — «Одиссея» и «The Odyssey»), другая вещь того же года
+        /// (tt41605854) и фильм о съёмках (tt43677301). По одному английскому
+        /// названию словарь отдавал не ту, и заслон выбрасывал ровно те
+        /// раздачи, у которых стоит ПРАВИЛЬНЫЙ код.
+        ///
+        /// Поэтому спрашиваем обоими названиями и берём тот код, чья запись
+        /// сходится с карточкой по обоим. Если ответы расходятся и ни один
+        /// не сходится по обоим — кода у карточки нет: лучше не разводить
+        /// вовсе, чем развести неверно.
+        /// </summary>
+        static string ResolveCardImdb(IndexerSearchRequest req, string en, string ru)
+        {
+            string byEn = null, byRu = null;
+
+            if (!string.IsNullOrWhiteSpace(req.TitleOriginal))
+                JacBlack.Infrastructure.Persistence.ImdbIndex.TryGetByTitle(req.TitleOriginal, req.Year, out byEn);
+
+            if (!string.IsNullOrWhiteSpace(req.Title))
+                JacBlack.Infrastructure.Persistence.ImdbIndex.TryGetByTitle(req.Title, req.Year, out byRu);
+
+            // Оба названия привели к одному коду — сомнений нет.
+            if (!string.IsNullOrEmpty(byEn) && string.Equals(byEn, byRu, StringComparison.OrdinalIgnoreCase))
+                return byEn;
+
+            // Ответы разошлись: берём тот, чья запись в словаре сходится
+            // с карточкой по обоим названиям.
+            foreach (string candidate in new[] { byRu, byEn })
+            {
+                if (string.IsNullOrEmpty(candidate))
+                    continue;
+
+                if (!JacBlack.Infrastructure.Persistence.ImdbIndex.TryGet(candidate, out var entry) || entry == null)
+                    continue;
+
+                bool сошлосьПоОригиналу = string.IsNullOrEmpty(en) || Same(entry.OriginalName, en) || Same(entry.Name, en);
+                bool сошлосьПоРусскому = string.IsNullOrEmpty(ru) || Same(entry.Name, ru) || Same(entry.OriginalName, ru);
+
+                if (сошлосьПоОригиналу && сошлосьПоРусскому)
+                    return candidate;
+            }
+
+            // Карточка пришла с одним названием — сверять не с чем, берём что есть.
+            if (string.IsNullOrEmpty(en) || string.IsNullOrEmpty(ru))
+                return byEn ?? byRu;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Код, за который «голосуют» раздачи, совпавшие с карточкой по ОБОИМ
+        /// названиям. Такое совпадение — сильнейшее свидетельство: оно отсекает
+        /// и однофамильцев, и вещи-спутники вроде фильма о съёмках.
+        /// Возвращает пусто, если таких раздач нет или у них нет кода.
+        /// </summary>
+        static string CodeVotedByExactCard(
+            List<Result> results, Func<Result, string> pick, string en, string ru, IndexerSearchRequest req)
+        {
+            var votes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var r in results)
+            {
+                string code = pick(r);
+                if (string.IsNullOrEmpty(code))
+                    continue;
+
+                string name = r.info?.name;
+                string original = r.info?.originalname;
+
+                if (!Hits(name, original, en, req.TitleOriginal) || !Hits(name, original, ru, req.Title))
+                    continue;
+
+                votes.TryGetValue(code, out int n);
+                votes[code] = n + 1;
+            }
+
+            string best = null;
+            int bestCount = 0;
+
+            foreach (var pair in votes)
+            {
+                if (pair.Value > bestCount)
+                {
+                    bestCount = pair.Value;
+                    best = pair.Key;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>Встречается ли код карточки хоть у одной раздачи в выдаче.</summary>
+        static bool AnyResultHasCode(List<Result> results, Func<Result, string> pick, string code)
+        {
+            foreach (var r in results)
+            {
+                string value = pick(r);
+                if (!string.IsNullOrEmpty(value) && string.Equals(value, code, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
         static bool TypeFits(Result r, int cardIsSerial)
         {
             if (cardIsSerial != 1)

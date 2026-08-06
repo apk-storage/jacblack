@@ -53,6 +53,8 @@ namespace JacBlack.Application.Search
             if (string.IsNullOrWhiteSpace(query) && string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(title_original))
                 return new List<Result>();
 
+            SplitCombinedQuery(ref query, ref title, ref title_original);
+
             title_original = ResolveCounterpartTitle(query, title, title_original);
 
             var req = IndexerSearchHelper.BuildRequest(q, request.ApiKey, rqnum, query, title, title_original, year, is_serial);
@@ -148,6 +150,103 @@ namespace JacBlack.Application.Search
         /// принимает одно поле, а лишние варианты только размывали бы выдачу.
         /// </summary>
         /// <remarks>
+        /// <summary>
+        /// Разбирает склейку двух названий в одной строке запроса.
+        ///
+        /// Зачем. Кнопка «Уточнить» в Лампе шлёт НЕ поля названий, а одну
+        /// строку, склеенную из выбранных частей:
+        ///   «Одиссея»                     — работает,
+        ///   «Одиссея The Odyssey»         — пусто,
+        ///   «The Odyssey Одиссея 2026»    — пусто.
+        /// Раздачи с именем «Одиссея The Odyssey» не существует, поэтому поиск
+        /// склейки целиком не находит ничего. Проверено логом обращений
+        /// 06.08.2026: четыре режима из восьми отдавали пустой ответ в 65 байт.
+        ///
+        /// Разделитель бывает разный: у одних клиентов « / », у других просто
+        /// пробел. Со слэшем работало и раньше, без него — нет.
+        ///
+        /// Что делаем: разводим строку на русскую и латинскую части и отдаём их
+        /// как два названия. Дальше поиск по карточке ищет по обоим — ровно так
+        /// же, как когда клиент присылает их полями.
+        ///
+        /// Строгость от этого не включается: заслон по названиям смотрит на сами
+        /// параметры запроса, а их здесь нет. То есть мы улучшаем поиск, но не
+        /// начинаем требовать совпадения с тем, что вывели сами.
+        /// </summary>
+        static void SplitCombinedQuery(ref string query, ref string title, ref string title_original)
+        {
+            // Только для свободной строки: если клиент прислал названия полями,
+            // выводить их из строки незачем.
+            if (string.IsNullOrWhiteSpace(query)
+                || !string.IsNullOrWhiteSpace(title)
+                || !string.IsNullOrWhiteSpace(title_original))
+                return;
+
+            string s = query.Trim();
+
+            // Хвостовой год Лампа добавляет отдельным словом. Он приезжает
+            // и параметром `year`, поэтому в названии только мешает.
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"\s+(1[89]\d{2}|20\d{2})\s*$", "").Trim();
+
+            string ru, en;
+
+            int slash = s.IndexOf('/');
+            if (slash > 0 && slash < s.Length - 1)
+            {
+                string a = s.Substring(0, slash).Trim();
+                string b = s.Substring(slash + 1).Trim();
+                ru = HasCyrillic(a) ? a : b;
+                en = HasCyrillic(a) ? b : a;
+            }
+            else
+            {
+                // Граница письменностей: ищем место, где кириллица сменяется
+                // латиницей или наоборот. Разделителем служит пробел, иначе
+                // разрежем слово посередине.
+                var m = System.Text.RegularExpressions.Regex.Match(s,
+                    @"^(?<a>.*?[\p{IsCyrillic}\d\W]*?)\s+(?<b>[A-Za-z].*)$");
+
+                if (!m.Success || !HasCyrillic(m.Groups["a"].Value))
+                {
+                    // Обратный порядок: сначала латиница, потом кириллица.
+                    m = System.Text.RegularExpressions.Regex.Match(s,
+                        @"^(?<b>[A-Za-z][^\p{IsCyrillic}]*?)\s+(?<a>[\p{IsCyrillic}].*)$");
+
+                    if (!m.Success)
+                        return;
+                }
+
+                ru = m.Groups["a"].Value.Trim();
+                en = m.Groups["b"].Value.Trim();
+            }
+
+            // Обе части должны быть осмысленными и разноязычными — иначе это
+            // не склейка, а обычное название из нескольких слов.
+            if (ru.Length < 2 || en.Length < 2 || !HasCyrillic(ru) || HasCyrillic(en))
+                return;
+
+            title = ru;
+            title_original = en;
+
+            // Строку поиска оставляем русской частью: по ней строится выборка
+            // из индекса, а латинское название подхватит поиск по карточке.
+            query = ru;
+        }
+
+        static bool HasCyrillic(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return false;
+
+            foreach (char c in s)
+            {
+                if (c >= 'Ѐ' && c <= 'ӿ')
+                    return true;
+            }
+
+            return false;
+        }
+
         /// Описание выше относится к ResolveCounterpartTitle ниже по файлу:
         /// методы живых сидов вставлены между описанием и самим методом.
         /// </remarks>
