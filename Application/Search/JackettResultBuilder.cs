@@ -285,6 +285,7 @@ namespace JacBlack.Application.Search
                         imdb = i.imdb,
                         kinopoisk = i.kinopoisk,
                         seedersLive = Infrastructure.Indexers.SeedersFreshness.IsFresh(i.updateTime),
+                        deadChecks = i.deadChecks,
                         seedersUnknown = Infrastructure.Indexers.SeedersFreshness.TrackerHidesSeeders(i.trackerName)
                     }
                 });
