@@ -5,6 +5,7 @@ import FilterPanel from '@/components/FilterPanel.vue'
 import Icon from '@/components/Icon.vue'
 import TorrentCard from '@/components/TorrentCard.vue'
 import TorrServerDialog from '@/components/TorrServerDialog.vue'
+import LampaDialog from '@/components/LampaDialog.vue'
 import { useLayout } from '@/composables/useLayout'
 import { useSearch } from '@/composables/useSearch'
 import { useToast } from '@/composables/useToast'
@@ -102,14 +103,16 @@ function onTorrSaved() {
 }
 
 /**
- * «В Лампе» пока заглушка.
- *
- * Кнопка открывала magnet — то есть делала совсем не то, что написано, и
- * человек получал системную качалку вместо Лампы. Пока плагина нет,
- * честнее сказать об этом прямо, чем подменять действие.
+ * «В Лампе» — запустить раздачу на устройстве Лампы через CUB. Открывает диалог,
+ * который проведёт по шагам (вход в cub.rip → код терминала → выбор устройства).
+ * Протокол и обоснование — lampac/JACBLACK-V-LAMPE.md.
  */
-function openLampa() {
-  toast.info('Функция в разработке')
+const lampaOpen = ref(false)
+const lampaItem = ref<TorrentItem | null>(null)
+function openLampa(item: TorrentItem) {
+  if (!item.magnet) { toast.info('У этой раздачи нет magnet-ссылки'); return }
+  lampaItem.value = item
+  lampaOpen.value = true
 }
 
 onMounted(() => s.boot())
@@ -160,6 +163,15 @@ onMounted(() => s.boot())
           name="Сортировка"
           @update:model-value="(v: string) => s.setSort(v as SortValue)"
         />
+        <button
+          type="button"
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] text-g500 hover:bg-g75 hover:text-ink"
+          aria-label="Настройки TorrServer"
+          title="Настройки TorrServer"
+          @click="torrDialog = true"
+        >
+          <Icon name="server" :size="17" />
+        </button>
         <button
           type="submit"
           class="h-10 rounded-[9px] bg-ink px-5 text-[14px] font-medium text-paper disabled:opacity-50"
@@ -241,6 +253,12 @@ onMounted(() => s.boot())
       :open="torrDialog"
       @close="torrDialog = false; pending = null"
       @saved="onTorrSaved"
+    />
+
+    <LampaDialog
+      :open="lampaOpen"
+      :item="lampaItem"
+      @close="lampaOpen = false"
     />
   </div>
 </template>
