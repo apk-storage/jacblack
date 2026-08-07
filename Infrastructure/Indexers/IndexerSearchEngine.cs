@@ -324,6 +324,11 @@ namespace JacBlack.Infrastructure.Indexers
                     types = i.types,
                     media = MediaSummary(i.ffprobe, i.title),
                     imdb = i.imdb,
+                    // Без этой строки код Кинопоиска в выдачу не попадал вовсе,
+                    // и весь отбор по нему — заслон карточки, подстановка года —
+                    // работал вхолостую: поле всегда было пустым. В базе он при
+                    // этом есть, 10 260 записей проставлены миграцией.
+                    kinopoisk = i.kinopoisk,
                     seedersLive = SeedersFreshness.IsFresh(i.updateTime),
                     seedersUnknown = SeedersFreshness.TrackerHidesSeeders(i.trackerName)
                 }

@@ -192,6 +192,8 @@ namespace JacBlack.Configuration
 
         public ScrapeSettings scrape = new ScrapeSettings();
 
+        public TmdbSettings tmdb = new TmdbSettings();
+
         public TlsSettings tls = new TlsSettings();
 
         public FlareSolverrSettings flaresolverr = new FlareSolverrSettings();
