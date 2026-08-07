@@ -207,6 +207,11 @@ namespace JacBlack.Infrastructure.Persistence
             if (string.IsNullOrWhiteSpace(imdb) || string.IsNullOrWhiteSpace(name))
                 return;
 
+            // Пополнять словарь, не прочитав его, нельзя: обход стартует раньше
+            // загрузки, добавляет коды в ПУСТОЙ словарь, и следующее сохранение
+            // записывает их поверх накопленного. Load идемпотентен.
+            Load();
+
             var title = new ImdbTitle { Name = name, OriginalName = originalname, Year = year };
 
             if (_titles.TryAdd(imdb, title))
