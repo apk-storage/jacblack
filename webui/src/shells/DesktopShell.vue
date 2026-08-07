@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import Icon from '@/components/Icon.vue'
+import { useAdmin } from '@/composables/useAdmin'
 
 /**
  * Оболочка большого экрана: шапка и экран под ней.
@@ -14,13 +15,18 @@ const SearchDesktop = defineAsyncComponent(() => import('@/screens/SearchDesktop
 const StatsDesktop = defineAsyncComponent(() => import('@/screens/StatsDesktop.vue'))
 
 const route = useRoute()
+const { isAdmin } = useAdmin()
 
-const screen = computed(() => (route.name === 'stats' ? StatsDesktop : SearchDesktop))
+// Статистика — админская операционка, публике не показываем. Без ключа
+// маршрут /stats просто отдаёт поиск, а вкладки в шапке нет.
+const screen = computed(() =>
+  route.name === 'stats' && isAdmin.value ? StatsDesktop : SearchDesktop,
+)
 
-const nav = [
+const nav = computed(() => [
   { to: '/', name: 'search', label: 'Поиск', icon: 'search' },
-  { to: '/stats', name: 'stats', label: 'Статистика', icon: 'chart' },
-]
+  ...(isAdmin.value ? [{ to: '/stats', name: 'stats', label: 'Статистика', icon: 'chart' }] : []),
+])
 </script>
 
 <template>

@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import Icon from '@/components/Icon.vue'
+import { useAdmin } from '@/composables/useAdmin'
 
 /**
  * Оболочка телефона: узкая шапка сверху, переходы снизу.
@@ -14,12 +15,17 @@ const SearchMobile = defineAsyncComponent(() => import('@/screens/SearchMobile.v
 const StatsMobile = defineAsyncComponent(() => import('@/screens/StatsMobile.vue'))
 
 const route = useRoute()
-const screen = computed(() => (route.name === 'stats' ? StatsMobile : SearchMobile))
+const { isAdmin } = useAdmin()
 
-const nav = [
+// Статистика — админская, публике не показываем (см. useAdmin).
+const screen = computed(() =>
+  route.name === 'stats' && isAdmin.value ? StatsMobile : SearchMobile,
+)
+
+const nav = computed(() => [
   { to: '/', name: 'search', label: 'Поиск', icon: 'search' },
-  { to: '/stats', name: 'stats', label: 'Статистика', icon: 'chart' },
-]
+  ...(isAdmin.value ? [{ to: '/stats', name: 'stats', label: 'Статистика', icon: 'chart' }] : []),
+])
 </script>
 
 <template>
