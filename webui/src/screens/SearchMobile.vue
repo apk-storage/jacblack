@@ -3,9 +3,28 @@ import { computed, onMounted, ref } from 'vue'
 import FilterSheet from '@/components/FilterSheet.vue'
 import Icon from '@/components/Icon.vue'
 import SeedCount from '@/components/SeedCount.vue'
+import TorrServerDialog from '@/components/TorrServerDialog.vue'
 import { useSearch } from '@/composables/useSearch'
-import { formatQualityLabel, torrentKey, type SortValue, type TorrentItem } from '@/lib/torrents'
-import { isSafeMagnetUrl } from '@/lib/magnets'
+import { useToast } from '@/composables/useToast'
+import {
+  formatQualityLabel,
+  formatDate,
+  isSafeHttpUrl,
+  torrentKey,
+  type SortValue,
+  type TorrentItem,
+} from '@/lib/torrents'
+import { isSafeMagnetUrl, sendToTorrServer, TorrServerError, type TorrServerErrorCode } from '@/lib/magnets'
+import { getItem, StorageKeys } from '@/lib/storage'
+
+/** Человеческие ответы на отказы TorrServer. */
+const TORR_ERRORS: Record<TorrServerErrorCode, string> = {
+  invalidMagnet: 'Ссылка раздачи не подошла',
+  missingUrl: 'Сначала укажите адрес TorrServer',
+  unauthorized: 'TorrServer не принял логин или пароль',
+  cors: 'TorrServer отказал в запросе',
+  request: 'TorrServer не ответил — проверьте адрес и что он запущен',
+}
 
 /**
  * Поиск на телефоне: строки вместо карточек.
@@ -20,9 +39,12 @@ import { isSafeMagnetUrl } from '@/lib/magnets'
  * обычный список с ними справляется.
  */
 const s = useSearch()
+const toast = useToast()
 
 const sheetOpen = ref(false)
 const sheetTab = ref<'filters' | 'sort'>('filters')
+const torrDialog = ref(false)
+const pending = ref<TorrentItem | null>(null)
 
 const facets = computed(() => ({
   quality: s.facets.quality.value,
@@ -33,13 +55,6 @@ const facets = computed(() => ({
   size: s.facets.size.value,
 }))
 
-function meta(item: TorrentItem): string {
-  const q = formatQualityLabel(item.quality)
-  const hdr = String(item.videotype || '').toLowerCase() === 'hdr' ? 'HDR' : ''
-  return [item.tracker, [q, hdr].filter(Boolean).join(' '), item.sizeName, item.relased]
-    .filter(Boolean)
-    .join(' · ')
-}
 
 function openSheet(tab: 'filters' | 'sort') {
   sheetTab.value = tab
@@ -52,8 +67,65 @@ function onSubmit(e: Event) {
   ;(document.activeElement as HTMLElement | null)?.blur()
 }
 
-function onPick(item: TorrentItem) {
-  if (isSafeMagnetUrl(item.magnet)) window.location.href = item.magnet!
+function seasonLabel(item: TorrentItem): string {
+  const s = (item.seasons ?? []).map(String).filter(Boolean)
+  if (!s.length) return ''
+  return s.length === 1 ? `Сезон ${s[0]}` : `Сезоны ${s.join(', ')}`
+}
+
+function chips(item: TorrentItem): string[] {
+  const q = formatQualityLabel(item.quality)
+  const hdr = String(item.videotype || '').toLowerCase() === 'hdr' ? 'HDR' : ''
+  const quality = [q, hdr].filter(Boolean).join(' ')
+  return [
+    item.tracker,
+    quality,
+    seasonLabel(item),
+    item.sizeName,
+    item.relased || formatDate(item.createTime),
+  ].filter(Boolean) as string[]
+}
+
+function pageUrl(item: TorrentItem): string {
+  return isSafeHttpUrl(item.url) ? item.url! : ''
+}
+function magnetOf(item: TorrentItem): string {
+  return isSafeMagnetUrl(item.magnet) ? item.magnet! : ''
+}
+
+async function sendPending(item: TorrentItem) {
+  const magnet = (item.magnet || '').trim()
+  if (!magnet) {
+    toast.error('У этой раздачи нет magnet-ссылки')
+    return
+  }
+  try {
+    await sendToTorrServer(magnet, {
+      baseUrl: getItem(StorageKeys.torrServerUrl) ?? '',
+      login: getItem(StorageKeys.torrServerLogin) ?? '',
+      password: getItem(StorageKeys.torrServerPassword) ?? '',
+    })
+    toast.success('Раздача добавлена в TorrServer')
+  } catch (e) {
+    const code = e instanceof TorrServerError ? e.code : 'request'
+    toast.error(TORR_ERRORS[code] ?? TORR_ERRORS.request)
+  }
+}
+
+function openTorrServer(item: TorrentItem) {
+  if (!(getItem(StorageKeys.torrServerUrl) ?? '').trim()) {
+    pending.value = item
+    torrDialog.value = true
+    return
+  }
+  void sendPending(item)
+}
+
+function onTorrSaved() {
+  torrDialog.value = false
+  const item = pending.value
+  pending.value = null
+  if (item) void sendPending(item)
 }
 
 onMounted(() => s.boot())
@@ -66,21 +138,31 @@ onMounted(() => s.boot())
       style="top: var(--jb-header)"
       @submit="onSubmit"
     >
-      <div class="relative">
-        <Icon
-          name="search"
-          :size="15"
-          class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-g500"
-        />
-        <input
-          v-model="s.query.value"
-          type="search"
-          enterkeyhint="search"
-          autocomplete="off"
-          placeholder="Название"
-          aria-label="Поисковый запрос"
-          class="h-10 w-full rounded-[9px] bg-g75 pr-3 pl-9 text-[15px] outline-none placeholder:text-g500"
-        />
+      <div class="flex items-center gap-2">
+        <div class="relative min-w-0 flex-1">
+          <Icon
+            name="search"
+            :size="15"
+            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-g500"
+          />
+          <input
+            v-model="s.query.value"
+            type="search"
+            enterkeyhint="search"
+            autocomplete="off"
+            placeholder="Название"
+            aria-label="Поисковый запрос"
+            class="h-10 w-full rounded-[9px] bg-g75 pr-3 pl-9 text-[15px] outline-none placeholder:text-g500"
+          />
+        </div>
+        <button
+          type="button"
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] bg-g75 text-g500"
+          aria-label="Настройки TorrServer"
+          @click="torrDialog = true"
+        >
+          <Icon name="server" :size="17" />
+        </button>
       </div>
 
       <div v-if="s.activeQuery.value" class="flex gap-1.5 overflow-x-auto">
@@ -147,23 +229,57 @@ onMounted(() => s.boot())
     </div>
 
     <ul v-else class="flex flex-col">
-      <li v-for="item in s.items.value" :key="torrentKey(item)">
-        <button
-          type="button"
-          class="flex w-full flex-col gap-1.5 border-b border-g150 px-4 py-3 text-left"
-          @click="onPick(item)"
-        >
-          <span class="text-[14px] leading-snug font-medium tracking-tight">
-            {{ item.name || item.title }}
+      <li
+        v-for="item in s.items.value"
+        :key="torrentKey(item)"
+        class="flex flex-col gap-1.5 border-b border-g150 px-4 py-3"
+      >
+        <p class="text-[14px] leading-snug font-medium tracking-tight">
+          {{ item.name || item.title }}
+        </p>
+
+        <div class="jb-num flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-g500">
+          <span v-for="(c, i) in chips(item)" :key="i">
+            <span v-if="i" class="mr-2 text-g300">·</span>{{ c }}
           </span>
-          <span class="flex items-center justify-between gap-3">
-            <span class="jb-num truncate text-[11.5px] text-g500">{{ meta(item) }}</span>
-            <SeedCount :value="item.sid" :verified="item.seedersLive ?? undefined" :unknown="!!item.seedersUnknown" />
-          </span>
-          <span v-if="item.voices?.length" class="truncate text-[11.5px] text-g700">
-            {{ item.voices.join(', ') }}
-          </span>
-        </button>
+        </div>
+
+        <p v-if="item.voices?.length" class="text-[11.5px] leading-snug text-g700">
+          {{ item.voices.join(', ') }}
+        </p>
+
+        <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
+          <SeedCount
+            :value="item.sid"
+            :verified="item.seedersLive ?? undefined"
+            :unknown="!!item.seedersUnknown"
+          />
+          <span class="flex-1"></span>
+          <a
+            v-if="pageUrl(item)"
+            :href="pageUrl(item)"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
+          >
+            <Icon name="external" :size="13" /> Трекер
+          </a>
+          <button
+            v-if="magnetOf(item)"
+            type="button"
+            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700"
+            @click="openTorrServer(item)"
+          >
+            <Icon name="server" :size="13" /> TorrServer
+          </button>
+          <a
+            v-if="magnetOf(item)"
+            :href="magnetOf(item)"
+            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
+          >
+            <Icon name="magnet" :size="13" /> Открыть
+          </a>
+        </div>
       </li>
     </ul>
 
@@ -181,6 +297,12 @@ onMounted(() => s.boot())
       @flag="s.setFlag"
       @sort="(v: SortValue) => s.setSort(v)"
       @reset="s.reset"
+    />
+
+    <TorrServerDialog
+      :open="torrDialog"
+      @close="torrDialog = false; pending = null"
+      @saved="onTorrSaved"
     />
   </section>
 </template>

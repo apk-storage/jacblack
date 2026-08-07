@@ -74,49 +74,27 @@ export async function sendToTorrServer(
   const baseUrl = creds.baseUrl.trim()
   if (!baseUrl) throw new TorrServerError('missingUrl')
 
-  let torUrl = `${baseUrl.replace(/\/$/, '')}/torrents`
-  let authHeader: string | null = null
-
-  try {
-    const urlObj = new URL(baseUrl)
-    if (urlObj.username || urlObj.password) {
-      authHeader = `Basic ${btoa(
-        `${decodeURIComponent(urlObj.username || '')}:${decodeURIComponent(urlObj.password || '')}`,
-      )}`
-      const path =
-        urlObj.pathname === '/' ? '' : urlObj.pathname.replace(/\/$/, '')
-      torUrl = `${urlObj.origin.replace(/\/$/, '')}${path}/torrents`
-    }
-  } catch {
-    /* keep torUrl as-is */
-  }
-
-  if (!authHeader && creds.login && creds.password) {
-    authHeader = `Basic ${btoa(`${creds.login}:${creds.password}`)}`
-  }
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-  if (authHeader) headers.Authorization = authHeader
-
-  const res = await fetch(torUrl, {
+  // Отправляем через бэкенд jac.black (same-origin, HTTPS), а не напрямую в
+  // TorrServer. Прямой запрос из браузера в HTTP-TorrServer блокируется как
+  // mixed content ещё до отправки — сервер жив, а «не ответил». Сервер такой
+  // проблемы не имеет: awg → TorrServer идёт сервер-к-серверу.
+  const res = await fetch('/torrserver/add', {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      action: 'add',
-      link: magnet,
-      save_to_db: true,
+      baseUrl,
+      login: creds.login ?? '',
+      password: creds.password ?? '',
+      magnet,
     }),
-  })
+  }).catch(() => null)
 
-  if (res.ok) return
+  if (!res) throw new TorrServerError('request')
 
-  if (res.status === 401) {
-    throw new TorrServerError('unauthorized', res.status)
-  }
-  if (res.status === 403) {
-    throw new TorrServerError('cors', res.status)
-  }
-  throw new TorrServerError('request', res.status)
+  const data = (await res.json().catch(() => null)) as
+    | { ok?: boolean; code?: TorrServerErrorCode; status?: number }
+    | null
+
+  if (data?.ok) return
+  throw new TorrServerError(data?.code ?? 'request', data?.status)
 }
