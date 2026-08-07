@@ -303,7 +303,9 @@ namespace JacBlack.Infrastructure.Indexers
             {
                 Tracker = i.trackerName,
                 Details = i.url != null && i.url.StartsWith("http") ? Application.Search.TrackerUrlHygiene.Canonical(i.url) : null,
-                Title = i.title,
+                // Лампа ищет DV буквальными словами, поэтому сокращённой подписи
+                // («DV Profile 10.1») дописываем полное написание.
+                Title = Parsing.DolbyVisionTag.Normalize(i.title),
                 Size = i.size,
                 PublishDate = i.createTime,
                 Category = cats,

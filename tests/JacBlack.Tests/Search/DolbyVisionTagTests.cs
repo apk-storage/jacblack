@@ -88,6 +88,46 @@ public class DolbyVisionTagTests
         Assert.Equal(kept, DolbyVisionTag.Preserve(kept, "Фильм (2022) Dolby Vision TV"));
     }
 
+    [Theory]
+    [InlineData("Пацаны / The Boys (2022) UHD WEB-DLRip [AV1/2160p] [4K, HDR10, DV Profile 10.1, 10-bit]")]
+    [InlineData("Пацаны / The Boys (2026) WEB-DL [H.265/2160p] [4K, HDR10+, DV 8.1, 10-bit]")]
+    [InlineData("Что-то там (2024) 2160p DoVi HDR10")]
+    public void Сокращённой_подписи_дописываем_полное_написание(string title)
+    {
+        // Лампа ищет буквальные слова: check('dolby vision'). Раздача,
+        // подписанная «DV Profile 10.1», не попадала ни в один её фильтр —
+        // из трёх DV-раздач «Пацанов» в Лампе было видно две.
+        string got = DolbyVisionTag.Normalize(title);
+
+        Assert.Contains("dolby vision", got.ToLowerInvariant());
+        // Сокращение остаётся: оно несёт профиль, полезный человеку.
+        Assert.StartsWith(title, got);
+    }
+
+    [Fact]
+    public void Полному_написанию_ничего_не_дописываем()
+    {
+        string title = "Пацаны / The Boys [S03] (2022) 2160p | 4K | HDR | Dolby Vision Profile 8";
+
+        Assert.Equal(title, DolbyVisionTag.Normalize(title));
+    }
+
+    [Fact]
+    public void Сокращению_DV_TV_дописываем_именно_TV()
+    {
+        string got = DolbyVisionTag.Normalize("Фильм (2022) 2160p DV TV");
+
+        Assert.Contains("dolby vision tv", got.ToLowerInvariant());
+    }
+
+    [Fact]
+    public void Раздачу_без_DV_не_трогаем()
+    {
+        string title = "Пацаны (3 сезон) / The Boys / 2022 / 4K, HEVC, HDR, HDR10+ / WEB-DL (2160p)";
+
+        Assert.Equal(title, DolbyVisionTag.Normalize(title));
+    }
+
     [Fact]
     public void Ничего_не_дописываем_если_у_поглощённой_копии_признака_нет()
     {
