@@ -84,6 +84,8 @@ namespace JacBlack.Infrastructure.Persistence
 
         static readonly TimeSpan MinSaveInterval = TimeSpan.FromMinutes(5);
 
+        static readonly IndexWriteGuard _guard = new IndexWriteGuard("словарь кодов IMDB");
+
         public static int Count => _titles.Count;
 
         /// <summary>
@@ -136,7 +138,10 @@ namespace JacBlack.Infrastructure.Persistence
             try
             {
                 if (!File.Exists(Path))
+                {
+                    _guard.FileMissing();
                     return;
+                }
 
                 // Потоком, а не через ReadAllText: файл вырос до 45 МБ, и целая
                 // строка такого размера уходит в кучу больших объектов, откуда
@@ -147,7 +152,11 @@ namespace JacBlack.Infrastructure.Persistence
                     data = new JsonSerializer().Deserialize<Dictionary<string, ImdbTitle>>(json);
 
                 if (data == null)
+                {
+                    // Файл есть, а содержимого нет — поломка, не пустой словарь.
+                    _guard.LoadFailed("файл прочитан как пустой");
                     return;
+                }
 
                 foreach (var kv in data)
                 {
@@ -169,10 +178,13 @@ namespace JacBlack.Infrastructure.Persistence
                     }
                 }
 
+                _guard.LoadSucceeded(_titles.Count);
+
                 JacBlackLog.Information(JacBlackLogCategories.Fdb, $"словарь кодов IMDB загружен: {_titles.Count}");
             }
             catch (Exception ex)
             {
+                _guard.LoadFailed(ex.Message);
                 JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "словарь кодов IMDB не загрузился", ex);
             }
         }
@@ -360,6 +372,13 @@ namespace JacBlack.Infrastructure.Persistence
             {
                 var snapshot = new Dictionary<string, ImdbTitle>(_titles, StringComparer.OrdinalIgnoreCase);
 
+                if (!_guard.MayWrite(snapshot.Count))
+                {
+                    // Отметку не гасим: наполнится словарь — сохранение состоится.
+                    Interlocked.Exchange(ref _dirty, 1);
+                    return;
+                }
+
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path));
 
                 // Обычным JSON, а не сжатым: его полезно уметь открыть глазами.
@@ -373,6 +392,7 @@ namespace JacBlack.Infrastructure.Persistence
                     new JsonSerializer().Serialize(writer, snapshot);
 
                 File.Move(temp, Path, overwrite: true);
+                _guard.WriteSucceeded(snapshot.Count);
             }
             catch (Exception ex)
             {
