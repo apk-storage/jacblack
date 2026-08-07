@@ -204,8 +204,13 @@ namespace JacBlack.Application.Search
             // Сиды из базы могут быть годовалой давности. Опрашиваем трекеры
             // и подменяем на живые — раньше это делалось только для выдачи
             // индексаторов, а Лампа ходит сюда.
+            // Набор проверенных живым опросом url: без него seedersLive ниже видел
+            // бы только проверку закрытых трекеров, и всё, что подтвердил анонс,
+            // показывалось бы серым (замер 04.08.2026: 158 из 493 при живом опросе,
+            // отвечающем про все за десятые доли секунды).
+            var liveVerified = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             if (_liveSeeders != null)
-                deduped = await _liveSeeders.ApplyAsync(deduped);
+                deduped = await _liveSeeders.ApplyAsync(deduped, liveVerified);
 
             // Закрытые трекеры анонсом не опрашиваются, у них свои пути —
             // общий слой знает какие. До 02.08.2026 он висел только на выдаче
@@ -253,7 +258,7 @@ namespace JacBlack.Application.Search
                     // снимок неизвестной давности, и прошлогодние 96 раздающих
                     // не должны стоять над сегодняшними 44.
                     query = query
-                        .OrderByDescending(i => verified.Contains(i.url))
+                        .OrderByDescending(i => verified.Contains(i.url) || liveVerified.Contains(i.url))
                         .ThenByDescending(i => i.sid);
                     break;
                 case "pir":
@@ -321,6 +326,7 @@ namespace JacBlack.Application.Search
                 // либо свежим обходом. Ложь означает снимок из базы, который
                 // может быть сделан хоть полгода назад.
                 seedersLive = verified.Contains(i.url)
+                    || liveVerified.Contains(i.url)
                     || Infrastructure.Indexers.SeedersFreshness.IsFresh(i.updateTime),
                 // Трекер не сообщает числа вовсе: у lostfilm счётчиков нет,
                 // и единица в записи проставлена разбором, а не данными.
