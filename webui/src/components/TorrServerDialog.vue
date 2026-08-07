@@ -20,6 +20,10 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 const url = ref('')
 const login = ref('')
 const password = ref('')
+const test = ref<{ state: 'idle' | 'checking' | 'ok' | 'fail'; text: string }>({
+  state: 'idle',
+  text: '',
+})
 
 watch(
   () => props.open,
@@ -28,9 +32,34 @@ watch(
     url.value = getItem(StorageKeys.torrServerUrl) ?? ''
     login.value = getItem(StorageKeys.torrServerLogin) ?? ''
     password.value = getItem(StorageKeys.torrServerPassword) ?? ''
+    test.value = { state: 'idle', text: '' }
   },
   { immediate: true },
 )
+
+// Проверка связи через бэкенд jac.black (сервер→TorrServer), а не из браузера:
+// прямой запрос в HTTP-TorrServer браузер режет (mixed content), и «проверить»
+// из веба всегда падало бы не по делу.
+async function check() {
+  const value = url.value.trim()
+  if (!value) return
+  test.value = { state: 'checking', text: 'Проверяю…' }
+  try {
+    const res = await fetch(`/torrserver/check?baseUrl=${encodeURIComponent(value)}`)
+    const data = (await res.json().catch(() => null)) as
+      | { ok?: boolean; version?: string; status?: number }
+      | null
+    if (data?.ok) {
+      test.value = { state: 'ok', text: `На связи${data.version ? ` — ${data.version}` : ''}` }
+    } else if (data?.status === 401) {
+      test.value = { state: 'ok', text: 'Отвечает, но требует логин/пароль' }
+    } else {
+      test.value = { state: 'fail', text: 'Не отвечает — проверьте адрес и что сервер запущен' }
+    }
+  } catch {
+    test.value = { state: 'fail', text: 'Не удалось проверить' }
+  }
+}
 
 function save() {
   const value = url.value.trim()
@@ -68,12 +97,13 @@ function save() {
         только в этом браузере.
       </p>
 
-      <form class="flex flex-col gap-2" @submit.prevent="save">
+      <form class="flex flex-col gap-2" autocomplete="off" @submit.prevent="save">
         <input
           v-model="url"
           type="url"
           required
-          placeholder="http://192.168.1.10:8090"
+          autocomplete="off"
+          placeholder="http://91.186.219.250:8043"
           aria-label="Адрес TorrServer"
           class="h-9 rounded-lg border border-g150 bg-page px-2.5 text-[13px] text-ink outline-none focus:border-g300"
         />
@@ -81,6 +111,7 @@ function save() {
           <input
             v-model="login"
             type="text"
+            autocomplete="off"
             placeholder="Логин, если нужен"
             aria-label="Логин TorrServer"
             class="h-9 min-w-0 flex-1 rounded-lg border border-g150 bg-page px-2.5 text-[13px] text-ink outline-none focus:border-g300"
@@ -88,19 +119,38 @@ function save() {
           <input
             v-model="password"
             type="password"
+            autocomplete="new-password"
             placeholder="Пароль"
             aria-label="Пароль TorrServer"
             class="h-9 min-w-0 flex-1 rounded-lg border border-g150 bg-page px-2.5 text-[13px] text-ink outline-none focus:border-g300"
           />
         </div>
 
-        <button
-          type="submit"
-          class="mt-1 h-9 rounded-lg bg-ink text-[13px] text-paper disabled:opacity-50"
-          :disabled="!url.trim()"
+        <p
+          v-if="test.text"
+          class="text-[12px]"
+          :class="test.state === 'ok' ? 'text-g700' : test.state === 'fail' ? 'text-red-500' : 'text-g500'"
         >
-          Сохранить и отправить
-        </button>
+          {{ test.text }}
+        </p>
+
+        <div class="mt-1 flex gap-2">
+          <button
+            type="button"
+            class="h-9 flex-1 rounded-lg border border-g150 text-[13px] text-ink disabled:opacity-50"
+            :disabled="!url.trim() || test.state === 'checking'"
+            @click="check"
+          >
+            Проверить
+          </button>
+          <button
+            type="submit"
+            class="h-9 flex-1 rounded-lg bg-ink text-[13px] text-paper disabled:opacity-50"
+            :disabled="!url.trim()"
+          >
+            Сохранить
+          </button>
+        </div>
       </form>
     </div>
   </div>
