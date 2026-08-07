@@ -72,6 +72,39 @@ namespace JacBlack.Infrastructure.Parsing
         };
 
         /// <summary>
+        /// Дописывает полное написание «Dolby Vision» тем, кто подписан сокращённо.
+        ///
+        /// Лампа ищет в названии буквальные слова — в её разборе стоит
+        /// `check('dolby vision')` и `check('dolby vision tv')`. Поэтому раздача,
+        /// подписанная «DV Profile 10.1» или «DV 8.1», не попадает НИ В ОДИН из
+        /// двух её фильтров: слов там нет. Замер 07.08.2026 по «Пацанам» 3 сезона:
+        /// в Лампе видно две DV-раздачи из трёх, пропадала как раз nnmclub на
+        /// 13.30 ГБ с «DV Profile 10.1».
+        ///
+        /// Сокращение при этом не трогаем — оно несёт профиль, который человеку
+        /// полезен. Просто дописываем слова, которые ищет клиент.
+        ///
+        /// Чего этим НЕ исправить: «Dolby Vision TV» содержит внутри себя
+        /// «dolby vision», поэтому фильтр «Dolby Vision» забирает и TV-раздачи.
+        /// Это устройство самой Лампы, подстрокой, и со стороны сервера не
+        /// лечится: убрать слова — сломается её же фильтр «Dolby Vision TV».
+        /// </summary>
+        public static string Normalize(string title)
+        {
+            var kind = Detect(title);
+            if (kind == DolbyVisionKind.None || string.IsNullOrWhiteSpace(title))
+                return title;
+
+            string needed = Label(kind);
+
+            // Уже написано словами — дописывать нечего.
+            if (title.IndexOf(needed, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return title;
+
+            return title + " | " + needed;
+        }
+
+        /// <summary>
         /// Сохраняет упоминание Dolby Vision при склейке копий одной раздачи.
         ///
         /// Склейка идёт по инфохешу — то есть объединяются копии ОДНОГО файла

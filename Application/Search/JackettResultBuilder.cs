@@ -276,7 +276,10 @@ namespace JacBlack.Application.Search
                 {
                     Tracker = i.trackerName,
                     Details = i.url != null && i.url.StartsWith("http") ? TrackerUrlHygiene.Canonical(i.url) : null,
-                    Title = i.title,
+                    // Лампа ищет DV буквальными словами («check('dolby vision')»),
+                    // поэтому раздаче, подписанной «DV Profile 10.1», дописываем
+                    // полное написание — иначе она не попадёт ни в один её фильтр.
+                    Title = Infrastructure.Parsing.DolbyVisionTag.Normalize(i.title),
                     Size = i.size,
                     PublishDate = i.createTime,
                     Category = GetCategoryIds(i, out string categoryDesc),
