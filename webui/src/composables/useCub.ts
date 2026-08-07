@@ -75,7 +75,12 @@ export function useCub() {
    * Порядок как у Лампы: сначала активируем терминал присланным кодом, следом
    * шлём eval с открытием карточки и добавлением magnet.
    */
-  function launch(device: CubDevice, release: LampaLaunch): void {
+  // Устройство остаётся в параметрах намеренно: человек выбирает его
+  // в диалоге, и вызывающая сторона передаёт именно его. Само попадание
+  // идёт по коду терминала — он и определяет, какой экран ответит, —
+  // поэтому в теле параметр не нужен. Подчёркивание сообщает об этом
+  // сборщику, у которого включён noUnusedParameters.
+  function launch(_device: CubDevice, release: LampaLaunch): void {
     if (!socket || !socket.connected) throw new Error('Нет связи с CUB — войдите в аккаунт')
     if (!terminalCode.value) throw new Error('Не задан код терминала (его нужно включить в Лампе на ТВ)')
 
