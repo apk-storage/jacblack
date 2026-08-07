@@ -90,22 +90,33 @@ namespace JacBlack.Application.Search
                 string _n = StringConvert.SearchName(title);
                 string _o = StringConvert.SearchName(title_original);
 
+                // Ключи по каждому названию собираем ОТДЕЛЬНО, чтобы потолок
+                // ниже резал их честно.
+                //
+                // Раньше оба набора сваливались в один HashSet и обрезались
+                // одним `Take(maxreadfile)`. Порядок обхода HashSet не
+                // определён, поэтому обрезка выкидывала произвольный кусок —
+                // и в первую очередь редкую сторону. Замер 07.08.2026 на
+                // карточке «Дюна / Dune» 2021: по русскому названию 117 раздач,
+                // по оригинальному 125 (из них 8 зарубежных), а вместе — 60
+                // и ни одной зарубежной. Объединение множеств меньше каждого
+                // из них быть не может; это и был след обрезки.
+                List<string> KeysFor(string k) =>
+                    k != null && fastdb.TryGetValue(k, out List<string> _keys) ? _keys : null;
+
+                var byName = KeysFor(_n);
+                var byOriginal = KeysFor(_o);
+
                 HashSet<string> keys = new HashSet<string>(20);
-
-                void updateKeys(string k)
-                {
-                    if (k != null && fastdb.TryGetValue(k, out List<string> _keys))
-                    {
-                        foreach (string val in _keys)
-                            keys.Add(val);
-                    }
-                }
-
-                updateKeys(_n);
-                updateKeys(_o);
+                if (byName != null)
+                    foreach (string val in byName)
+                        keys.Add(val);
+                if (byOriginal != null)
+                    foreach (string val in byOriginal)
+                        keys.Add(val);
 
                 if ((!AppInit.conf.evercache.enable || AppInit.conf.evercache.validHour > 0) && keys.Count > AppInit.conf.maxreadfile)
-                    keys = keys.Take(AppInit.conf.maxreadfile).ToHashSet();
+                    keys = CardKeyBudget.Split(byName, byOriginal, AppInit.conf.maxreadfile);
 
                 foreach (string key in keys)
                 {
