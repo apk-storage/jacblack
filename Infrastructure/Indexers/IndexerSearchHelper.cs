@@ -207,7 +207,7 @@ namespace JacBlack.Infrastructure.Indexers
         /// обязана называться так же — совпадать с начала, а не упоминать
         /// название где-то внутри.
         /// </summary>
-        static List<Result> FilterByCardTitle(List<Result> results, IndexerSearchRequest req, bool originalGiven, bool titleGiven)
+        internal static List<Result> FilterByCardTitle(List<Result> results, IndexerSearchRequest req, bool originalGiven, bool titleGiven)
         {
             if (results == null || results.Count == 0)
                 return results;
@@ -359,23 +359,46 @@ namespace JacBlack.Infrastructure.Indexers
                 }
             }
 
+            // Для сериалов заслон по коду смягчаем. Сезоны и эпизоды сериала
+            // имеют СВОИ коды IMDB, отличные от кода сериала: у «The Boys»
+            // сериал — tt1190634, а 3 сезон — tt22298582. Строгое «код не
+            // совпал — чужое» выкидывало ровно такие раздачи (DV-релизы
+            // 3 сезона несут код сезона), хотя это тот же сериал.
+            //
+            // Разделитель — подтверждённость. Настоящий сезон несёт свой код
+            // на МНОГИХ раздачах, а мистег чужого фильма — на одной. Собираем
+            // коды, встречающиеся у карточных раздач (совпали по названию,
+            // типу и году) не меньше двух раз, — их считаем роднёй карточки и
+            // по ним раздачу не отвергаем. У фильмов такого не бывает (у фильма
+            // один код), поэтому для них правило остаётся строгим.
+            var serialImdbFamily = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var serialKpFamily = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (req.IsSerial == 2)
+            {
+                CollectCorroboratedCodes(results, en, ru, req, r => r.info?.imdb, serialImdbFamily);
+                CollectCorroboratedCodes(results, en, ru, req, r => r.info?.kinopoisk, serialKpFamily);
+            }
+
             var kept = new List<Result>(results.Count);
 
             foreach (var r in results)
             {
                 // Код есть у обоих и он разный — это заведомо чужая раздача,
-                // сколько бы ни совпадали названия.
+                // сколько бы ни совпадали названия. Для сериала делаем
+                // исключение подтверждённой семье кодов (сезоны/эпизоды).
                 string imdb = r.info?.imdb;
                 if (!string.IsNullOrEmpty(cardImdb) && !string.IsNullOrEmpty(imdb)
-                    && !string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase))
+                    && !string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase)
+                    && !(req.IsSerial == 2 && serialImdbFamily.Contains(imdb)))
                     continue;
 
                 // То же правило по коду Кинопоиска. Записи без кода не трогаем:
                 // он известен у малой части базы, и строгость по нему выкосила
-                // бы почти всё верное.
+                // бы почти всё верное. Семье сезонов сериала — та же поблажка.
                 string kinopoisk = r.info?.kinopoisk;
                 if (!string.IsNullOrEmpty(cardKinopoisk) && !string.IsNullOrEmpty(kinopoisk)
-                    && !string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase))
+                    && !string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase)
+                    && !(req.IsSerial == 2 && serialKpFamily.Contains(kinopoisk)))
                     continue;
 
                 if (!TypeFits(r, req.IsSerial))
@@ -436,10 +459,12 @@ namespace JacBlack.Infrastructure.Indexers
                 bool byRussian = Hits(name, original, ru, req.Title)
                     && (string.IsNullOrEmpty(cardImdb)
                         || string.IsNullOrEmpty(imdb)
-                        || string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase))
+                        || string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase)
+                        || (req.IsSerial == 2 && serialImdbFamily.Contains(imdb)))
                     && (string.IsNullOrEmpty(cardKinopoisk)
                         || string.IsNullOrEmpty(kinopoisk)
-                        || string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase));
+                        || string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase)
+                        || (req.IsSerial == 2 && serialKpFamily.Contains(kinopoisk)));
 
                 // Правило «или» держится на годе: он и разводит тёзок. А в
                 // режимах поиска БЕЗ года («Оригинал», «Русский», «Оба
@@ -667,6 +692,46 @@ namespace JacBlack.Infrastructure.Indexers
             }
 
             return best;
+        }
+
+        /// <summary>
+        /// Коды, встречающиеся не меньше двух раз у раздач, совпавших с
+        /// карточкой по названию, типу и году, — «подтверждённая семья».
+        /// Для сериала сюда попадают коды сезонов и эпизодов (у каждого много
+        /// раздач); одиночный мистег чужого фильма — нет. Порог в две раздачи
+        /// и есть заслон от тёзки: случайному коду в семью не пробиться.
+        /// </summary>
+        static void CollectCorroboratedCodes(
+            List<Result> results, string en, string ru, IndexerSearchRequest req,
+            Func<Result, string> pick, HashSet<string> family)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var r in results)
+            {
+                string code = pick(r);
+                if (string.IsNullOrEmpty(code))
+                    continue;
+
+                if (!TypeFits(r, req.IsSerial))
+                    continue;
+
+                if (!YearFits(r, req.Year, req.IsSerial))
+                    continue;
+
+                bool hit = (!string.IsNullOrEmpty(en) && Hits(r.info?.name, r.info?.originalname, en, req.TitleOriginal))
+                    || (!string.IsNullOrEmpty(ru) && Hits(r.info?.name, r.info?.originalname, ru, req.Title));
+
+                if (!hit)
+                    continue;
+
+                counts.TryGetValue(code, out int n);
+                counts[code] = n + 1;
+            }
+
+            foreach (var pair in counts)
+                if (pair.Value >= 2)
+                    family.Add(pair.Key);
         }
 
         /// <summary>Встречается ли код карточки хоть у одной раздачи в выдаче.</summary>
