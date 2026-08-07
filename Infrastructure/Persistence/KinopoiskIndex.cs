@@ -129,6 +129,12 @@ namespace JacBlack.Infrastructure.Persistence
             if (string.IsNullOrWhiteSpace(kinopoisk) || string.IsNullOrWhiteSpace(name))
                 return;
 
+            // Пополнять словарь, не прочитав его, нельзя: обход стартует раньше
+            // загрузки, добавляет десяток кодов в ПУСТОЙ словарь, и следующее
+            // сохранение записывает эти десять поверх сотен. Так терялось
+            // дважды за день. Load идемпотентен — лишним вызов не будет.
+            Load();
+
             var title = new KinopoiskTitle { Name = name, OriginalName = originalname, Year = year };
 
             if (_titles.TryAdd(kinopoisk, title))

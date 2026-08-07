@@ -68,6 +68,20 @@ namespace JacBlack.Infrastructure.Persistence
             }
 
             int onDisk = Volatile.Read(ref _diskCount);
+
+            // Загрузки не было вовсе — значит мы не знаем, что лежит на диске,
+            // и «неизвестно» обязано означать «не пиши». Именно здесь заслон
+            // и протекал: словарь начинал пополняться раньше загрузки, снимок
+            // выходил крошечным, а проверка «меньше, чем на диске» пропускала
+            // его, потому что на диске значилось -1. Так словарь Кинопоиска
+            // потерял 475 записей уже ПОСЛЕ того, как заслон был поставлен.
+            if (onDisk < 0)
+            {
+                JacBlackLog.Warning(JacBlackLogCategories.Fdb,
+                    $"{_name}: сохранение пропущено — словарь ещё не загружался, что на диске неизвестно");
+                return false;
+            }
+
             if (onDisk > snapshotCount)
             {
                 JacBlackLog.Warning(JacBlackLogCategories.Fdb,
