@@ -186,7 +186,18 @@ namespace JacBlack.Infrastructure.Indexers
             }
 
             var (limit, offset) = IndexerRequestParams.LimitOffsetFromQuery(query);
-            return IndexerResultFilters.Paginate(results, limit, offset);
+            var page = IndexerResultFilters.Paginate(results, limit, offset);
+
+            // Приводим запись сезона в заголовке к форме «N сезон» — иначе Лампа
+            // не раскладывает по сезонам раздачи, где номер стоит в хвосте
+            // («…(сезон 3, серии 1-8)»), и они пропадают из её списка, хотя
+            // выдаём мы их исправно. Перестановка идемпотентна.
+            if (page != null)
+                foreach (var r in page)
+                    if (r != null)
+                        r.Title = SeasonTitleNormalizer.Normalize(r.Title);
+
+            return page;
         }
 
         /// <summary>
