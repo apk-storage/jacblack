@@ -10,8 +10,10 @@ import { formatQualityLabel } from '@/lib/torrents'
  * Закреплена и прокручивается сама: список выдачи длинный, и возвращаться
  * к его началу, чтобы снять фильтр, — работа, которой быть не должно.
  *
- * Порядок групп не случаен: качество первым, потому что выбирают прежде
- * всего по нему. Дальше дорожки, размер, трекер, год.
+ * Порядок групп не случаен: сезон первым — у сериала это главный способ сузить
+ * выдачу, «Пацаны» отдают под полтысячи раздач всех пяти сезонов разом. Дальше
+ * качество, потому что выбирают прежде всего по нему, затем дорожки, размер,
+ * трекер, год.
  *
  * Значения, под которые ничего не попадает, гаснут, но остаются на месте:
  * так видно, что фильтр существует и он пуст, а не что он куда-то исчез.
@@ -40,10 +42,12 @@ const expanded = ref<Partial<Record<FacetKey, boolean>>>({})
 function label(key: FacetKey, value: string): string {
   if (key === 'quality') return formatQualityLabel(value) || value
   if (key === 'size') return SIZE_BUCKETS.find((b) => b.key === value)?.label ?? value
+  if (key === 'season') return `${value} сезон`
   return value
 }
 
 const groups = [
+  { key: 'season' as const, title: 'Сезон' },
   { key: 'quality' as const, title: 'Качество' },
   { key: 'voice' as const, title: 'Дорожки · студия' },
   { key: 'size' as const, title: 'Размер' },
@@ -57,7 +61,16 @@ function rows(key: FacetKey): FacetCount[] {
   return expanded.value[key] ? all : all.slice(0, LIMIT)
 }
 
-const groupActive = computed(() => groups.map((g) => props.filters[g.key].length > 0))
+/**
+ * У фильма сезонов нет вовсе, и группа осталась бы заголовком без строк.
+ * Прячем именно её: у остальных групп пустота — это «ничего не подошло», и
+ * показать её надо, а внутри «Качества» живёт ещё и галка HDR.
+ */
+const visibleGroups = computed(() =>
+  groups.filter((g) => g.key !== 'season' || props.facets.season.length > 0),
+)
+
+const groupActive = computed(() => visibleGroups.value.map((g) => props.filters[g.key].length > 0))
 </script>
 
 <template>
@@ -133,7 +146,7 @@ const groupActive = computed(() => groups.map((g) => props.filters[g.key].length
         <span class="jb-num ml-auto text-[11.5px] text-g500">{{ alive }}</span>
       </label>
 
-      <div v-for="g in groups" :key="g.key" class="flex flex-col gap-1.5">
+      <div v-for="g in visibleGroups" :key="g.key" class="flex flex-col gap-1.5">
         <span class="jb-label">{{ g.title }}</span>
 
         <!-- HDR — свойство картинки, поэтому живёт внутри качества -->

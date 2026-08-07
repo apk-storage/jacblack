@@ -57,6 +57,12 @@ export type ClientFilters = {
   voice: string[]
   type: string[]
   size: string[]
+  /**
+   * Номера сезонов. У сериала это главный способ сузить выдачу: «Пацаны»
+   * отдают под полтысячи раздач всех пяти сезонов разом, и без сезона
+   * выбирать не из чего.
+   */
+  season: string[]
   hdr: boolean
   aliveOnly: boolean
   refine: string
@@ -70,6 +76,7 @@ export const EMPTY_CLIENT_FILTERS: ClientFilters = {
   voice: [],
   type: [],
   size: [],
+  season: [],
   hdr: false,
   aliveOnly: false,
   refine: '',
@@ -84,13 +91,14 @@ export const FILTER_URL_KEYS = [
   'voice',
   'type',
   'size',
+  'season',
   'hdr',
   'alive',
   'refine',
   'exclude',
 ] as const
 
-export type FacetKey = 'quality' | 'tracker' | 'year' | 'voice' | 'type' | 'size'
+export type FacetKey = 'quality' | 'tracker' | 'year' | 'voice' | 'type' | 'size' | 'season'
 
 /** Пусто значит «не ограничиваем», а не «ничего не подходит». */
 function passesList(values: string[], value: string): boolean {
@@ -113,6 +121,13 @@ function itemValues(item: TorrentItem, key: FacetKey): string[] {
       const k = sizeBucketKey(item.size)
       return k ? [k] : []
     }
+    case 'season':
+      // Сборник несёт несколько сезонов сразу («1-3 сезоны»), и подходит под
+      // выбор любого из них. Нулевой сезон — спецвыпуски, к выбору сезона он
+      // отношения не имеет и в список не идёт.
+      return (item.seasons ?? [])
+        .map((s) => String(s))
+        .filter((s) => s !== '' && s !== '0')
   }
 }
 
@@ -125,7 +140,7 @@ export function matches(
   f: ClientFilters,
   skip?: FacetKey,
 ): boolean {
-  const groups: FacetKey[] = ['quality', 'tracker', 'year', 'voice', 'type', 'size']
+  const groups: FacetKey[] = ['quality', 'tracker', 'year', 'voice', 'type', 'size', 'season']
 
   for (const key of groups) {
     if (key === skip) continue
@@ -191,12 +206,18 @@ export function countFacet(
     return list.sort((a, b) => Number(b.value) - Number(a.value))
   }
 
+  // Сезоны — по возрастанию, как их считает человек: первый, второй, третий.
+  // По убыванию счётчика вышел бы бессмысленный порядок вроде «5, 1, 3».
+  if (key === 'season') {
+    return list.sort((a, b) => Number(a.value) - Number(b.value))
+  }
+
   return list.sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
 }
 
 export function countActive(f: ClientFilters): number {
   let n = 0
-  for (const key of ['quality', 'tracker', 'year', 'voice', 'type', 'size'] as const) {
+  for (const key of ['quality', 'tracker', 'year', 'voice', 'type', 'size', 'season'] as const) {
     if (f[key].length) n += 1
   }
   if (f.hdr) n += 1

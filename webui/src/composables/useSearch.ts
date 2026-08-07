@@ -87,6 +87,7 @@ export function useSearch() {
     voice: computed(() => countFacet(allItems.value, filters.value, 'voice')),
     type: computed(() => countFacet(allItems.value, filters.value, 'type')),
     size: computed(() => countFacet(allItems.value, filters.value, 'size')),
+    season: computed(() => countFacet(allItems.value, filters.value, 'season')),
   }
 
   function syncUrl() {
@@ -95,7 +96,7 @@ export function useSearch() {
     if (sort.value !== 'sid') q.sort = sort.value
 
     const f = filters.value
-    for (const key of ['quality', 'tracker', 'year', 'voice', 'type', 'size'] as const) {
+    for (const key of ['quality', 'tracker', 'year', 'voice', 'type', 'size', 'season'] as const) {
       if (f[key].length) q[key] = f[key].join(',')
     }
     if (f.hdr) q.hdr = '1'
@@ -118,6 +119,7 @@ export function useSearch() {
       voice: list(q.voice),
       type: list(q.type),
       size: list(q.size),
+      season: list(q.season),
       hdr: str(q.hdr) === '1',
       aliveOnly: str(q.alive) === '1',
       refine: str(q.refine),
