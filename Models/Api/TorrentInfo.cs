@@ -8,6 +8,18 @@ namespace JacBlack.Models.Api
 
         public string videotype { get; set; }
 
+        /// <summary>
+        /// Dolby Vision: «dv», «dvtv» или пусто. Отдельно от videotype, потому
+        /// что тот знает только «sdr» и «hdr» — DV-раздача в нём неотличима от
+        /// обычной, а разница решает, покажет ли устройство верные цвета:
+        /// восьмой профиль совместим с HDR10 и играет везде, чистый DV на
+        /// неподдерживающем экране даёт вылинявшую картинку.
+        ///
+        /// Два значения, ровно как различает Лампа: помечено источником «TV» —
+        /// dvtv, всё прочее (Profile 8, 8.1, 10.1, просто Dolby Vision) — dv.
+        /// </summary>
+        public string dv { get; set; }
+
         public HashSet<string> voices { get; set; }
 
         public HashSet<int> seasons { get; set; }
