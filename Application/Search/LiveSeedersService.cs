@@ -24,7 +24,7 @@ namespace JacBlack.Application.Search
         /// из 280 общих раздач **67 расходились**, база показывала 89 сидов
         /// там, где живых ноль.
         /// </summary>
-        Task<List<TorrentDetails>> ApplyAsync(List<TorrentDetails> torrents, CancellationToken cancellationToken = default);
+        Task<List<TorrentDetails>> ApplyAsync(List<TorrentDetails> torrents, HashSet<string> verifiedUrls = null, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -62,11 +62,23 @@ namespace JacBlack.Application.Search
                 r => r.Seeders,
                 cancellationToken);
 
-        public Task<List<TorrentDetails>> ApplyAsync(List<TorrentDetails> torrents, CancellationToken cancellationToken = default)
+        public Task<List<TorrentDetails>> ApplyAsync(List<TorrentDetails> torrents, HashSet<string> verifiedUrls = null, CancellationToken cancellationToken = default)
             => ApplyCoreAsync(
                 torrents,
                 t => t.magnet,
-                (t, counts) => { t.sid = counts.Seeders; t.pir = counts.Leechers; },
+                (t, counts) =>
+                {
+                    t.sid = counts.Seeders;
+                    t.pir = counts.Leechers;
+
+                    // Помечаем url как проверенный живым опросом. Без этого JSON-выдача
+                    // (TorrentQueryService: seedersLive = verified.Contains(url)) видела
+                    // только проверку закрытых трекеров, а честно опрошенные анонсом
+                    // раздачи показывала серыми — «проверяем при каждом поиске, а серых
+                    // всё равно много». Ключ — сырой url, как и в наборе закрытых трекеров.
+                    if (verifiedUrls != null && t.url != null)
+                        verifiedUrls.Add(t.url);
+                },
                 t => t.sid,
                 cancellationToken);
 
@@ -131,8 +143,33 @@ namespace JacBlack.Application.Search
 
             if (pending.Count > 0)
             {
-                await ScrapePendingAsync(conf, pending, announcesByHash, known, sw, cancellationToken);
-                FillCacheInBackground(conf, pending, known, announcesByHash);
+                // Синхронный бюджет тратим на ВЕРХ выдачи (по заявленным сидам) — то,
+                // что человек видит сразу. Раньше он размазывался по сотням раздач и
+                // видимый верх оставался серым.
+                List<string> syncPending = pending;
+                if (conf.topVerify > 0 && byHash.Count > conf.topVerify)
+                {
+                    var topHashes = new HashSet<string>(
+                        results.OrderByDescending(seedersOf)
+                               .Select(r => HashOf(magnetOf(r)))
+                               .Where(h => h != null)
+                               .Distinct(StringComparer.OrdinalIgnoreCase)
+                               .Take(conf.topVerify),
+                        StringComparer.OrdinalIgnoreCase);
+                    syncPending = pending.Where(topHashes.Contains).ToList();
+                }
+
+                if (syncPending.Count > 0)
+                    await ScrapePendingAsync(conf, syncPending, announcesByHash, known, sw, cancellationToken);
+
+                // А в ФОНЕ догреваем ВСЁ, что синхронно не подтвердилось — включая низ.
+                // Именно там прячется случай «в базе 1 сид, а живьём 200»: сам он в топ
+                // по базе не попадёт, но фон запишет правду в кеш, и следующий поиск
+                // той же карточки (Лампа спрашивает не раз) поднимет его наверх. Ответ
+                // уже ушёл — посетителю догрев ничего не стоит.
+                var bgPending = pending.Where(h => !known.ContainsKey(h)).ToList();
+                if (bgPending.Count > 0)
+                    FillCacheInBackground(conf, bgPending, known, announcesByHash);
             }
 
             foreach (var pair in known)
@@ -294,16 +331,27 @@ namespace JacBlack.Application.Search
 
             foreach (var (announce, hashes) in order)
             {
-                var batch = hashes.Distinct(StringComparer.OrdinalIgnoreCase)
-                                  .Take(Math.Max(1, conf.maxHashesPerRequest))
-                                  .Select(FromHex)
-                                  .Where(b => b != null)
-                                  .ToList();
+                var distinct = hashes.Distinct(StringComparer.OrdinalIgnoreCase)
+                                     .Select(FromHex)
+                                     .Where(b => b != null)
+                                     .ToList();
 
-                if (batch.Count == 0)
+                if (distinct.Count == 0)
                     continue;
 
-                tasks.Add(TrackerScrapeClient.ScrapeAsync(announce, batch, conf.trackerTimeoutMs, budget.Token));
+                // Раньше здесь стоял .Take(maxHashesPerRequest) — трекеру уходили
+                // только первые 70 хешей. А жадный выбор (SelectCoveringTrackers)
+                // уже пометил ВСЕ его раздачи покрытыми и вычеркнул из uncovered,
+                // так что остальные ~130 не спрашивались ни у кого и оставались
+                // серыми. Замер 04.08.2026: open.stealth.si отвечает про 200 хешей
+                // за 0.1с, но видели мы 70 из них. Бьём на пачки по 70 и шлём ВСЕ —
+                // они уходят параллельно и укладываются в тот же бюджет.
+                int per = Math.Max(1, conf.maxHashesPerRequest);
+                for (int i = 0; i < distinct.Count; i += per)
+                {
+                    var batch = distinct.GetRange(i, Math.Min(per, distinct.Count - i));
+                    tasks.Add(TrackerScrapeClient.ScrapeAsync(announce, batch, conf.trackerTimeoutMs, budget.Token));
+                }
             }
 
             if (tasks.Count == 0)
