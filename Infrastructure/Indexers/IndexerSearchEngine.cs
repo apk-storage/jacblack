@@ -324,6 +324,14 @@ namespace JacBlack.Infrastructure.Indexers
                     // sdr и hdr, и DV-раздача в нём неотличима от обычной.
                     dv = Parsing.DolbyVisionTag.Value(i.title),
                     sizeName = i.sizeName,
+                    // Качество и видеотип живой поиск не переносил вовсе, и
+                    // раздачи приходили с quality=0. Пока путь из базы отдавал
+                    // почти всё, это было незаметно; стоило карточке пойти
+                    // живым поиском («Обсессия»: год карточки 2026, у раздач
+                    // 2025), и из 42 раздач 41 оказалась без качества — фильтр
+                    // 4К не находил ничего.
+                    quality = i.quality,
+                    videotype = i.videotype,
                     voices = i.voices,
                     seasons = i.seasons,
                     types = i.types,

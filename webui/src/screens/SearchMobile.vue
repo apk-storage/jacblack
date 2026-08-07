@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import FilterSheet from '@/components/FilterSheet.vue'
 import Icon from '@/components/Icon.vue'
+import LampaDialog from '@/components/LampaDialog.vue'
 import SeedCount from '@/components/SeedCount.vue'
 import TorrServerDialog from '@/components/TorrServerDialog.vue'
 import { useSearch } from '@/composables/useSearch'
@@ -111,6 +112,26 @@ async function sendPending(item: TorrentItem) {
     const code = e instanceof TorrServerError ? e.code : 'request'
     toast.error(TORR_ERRORS[code] ?? TORR_ERRORS.request)
   }
+}
+
+/**
+ * «В Лампе» — запустить раздачу на устройстве Лампы через CUB. Диалог проводит
+ * по шагам: вход в cub.rip → код терминала → выбор устройства.
+ * Протокол и обоснование — lampac/JACBLACK-V-LAMPE.md.
+ *
+ * На телефоне это нужнее, чем на большом экране: раздачу ищут с телефона, а
+ * смотрят на телевизоре, и до сих пор кнопка была только в десктопной вёрстке.
+ */
+const lampaOpen = ref(false)
+const lampaItem = ref<TorrentItem | null>(null)
+
+function openLampa(item: TorrentItem) {
+  if (!magnetOf(item)) {
+    toast.info('У этой раздачи нет magnet-ссылки')
+    return
+  }
+  lampaItem.value = item
+  lampaOpen.value = true
 }
 
 function openTorrServer(item: TorrentItem) {
@@ -273,6 +294,14 @@ onMounted(() => s.boot())
           >
             <Icon name="server" :size="13" /> TorrServer
           </button>
+          <button
+            v-if="magnetOf(item)"
+            type="button"
+            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700"
+            @click="openLampa(item)"
+          >
+            <Icon name="play" :size="13" /> В Лампе
+          </button>
           <a
             v-if="magnetOf(item)"
             :href="magnetOf(item)"
@@ -304,6 +333,12 @@ onMounted(() => s.boot())
       :open="torrDialog"
       @close="torrDialog = false; pending = null"
       @saved="onTorrSaved"
+    />
+
+    <LampaDialog
+      :open="lampaOpen"
+      :item="lampaItem"
+      @close="lampaOpen = false"
     />
   </section>
 </template>
