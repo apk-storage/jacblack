@@ -298,6 +298,16 @@ namespace JacBlack.Infrastructure.Indexers
                     if (!Hits(r.info?.name, r.info?.originalname, en, req.TitleOriginal))
                         continue;
 
+                    // Голосовать может только раздача, чей год подходит
+                    // карточке. Иначе побеждает более многочисленный ТЁЗКА:
+                    // у карточки «Дюна» 2021 раздач второй части (2024) вдвое
+                    // больше, и они объявляют своим чужой код — после чего
+                    // верные раздачи с настоящим кодом вылетают как «чужие».
+                    // Замер 07.08.2026: выдача падала со 125 раздач до 22,
+                    // и все 22 были записями вообще без кода.
+                    if (!YearFits(r, req.Year, req.IsSerial))
+                        continue;
+
                     votes.TryGetValue(code, out int n);
                     votes[code] = n + 1;
                 }
@@ -353,6 +363,12 @@ namespace JacBlack.Infrastructure.Indexers
                         || (!string.IsNullOrEmpty(ru) && Hits(r.info?.name, r.info?.originalname, ru, req.Title));
 
                     if (!hit)
+                        continue;
+
+                    // Год — то же условие, что и для голосования по IMDB:
+                    // без него побеждает более многочисленный тёзка соседних
+                    // лет, и его код выкашивает верные раздачи.
+                    if (!YearFits(r, req.Year, req.IsSerial))
                         continue;
 
                     votes.TryGetValue(code, out int n);
@@ -695,6 +711,11 @@ namespace JacBlack.Infrastructure.Indexers
                 string original = r.info?.originalname;
 
                 if (!Hits(name, original, en, req.TitleOriginal) || !Hits(name, original, ru, req.Title))
+                    continue;
+
+                // Год обязателен и здесь: совпадение по обоим названиям ещё не
+                // делает раздачу своей, если это продолжение соседнего года.
+                if (!YearFits(r, req.Year, req.IsSerial))
                     continue;
 
                 votes.TryGetValue(code, out int n);
