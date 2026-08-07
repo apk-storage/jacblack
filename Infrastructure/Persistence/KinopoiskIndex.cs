@@ -66,6 +66,8 @@ namespace JacBlack.Infrastructure.Persistence
 
         static readonly TimeSpan MinSaveInterval = TimeSpan.FromMinutes(5);
 
+        static readonly IndexWriteGuard _guard = new IndexWriteGuard("словарь кодов Кинопоиска");
+
         public static int Count => _titles.Count;
 
         public static void Load()
@@ -76,7 +78,10 @@ namespace JacBlack.Infrastructure.Persistence
             try
             {
                 if (!File.Exists(Path))
+                {
+                    _guard.FileMissing();
                     return;
+                }
 
                 // Потоком, а не через ReadAllText: словарь IMDB на этом обжёгся,
                 // когда дорос до 45 МБ и целиком уходил в кучу больших объектов.
@@ -86,7 +91,12 @@ namespace JacBlack.Infrastructure.Persistence
                     data = new JsonSerializer().Deserialize<Dictionary<string, KinopoiskTitle>>(json);
 
                 if (data == null)
+                {
+                    // Файл есть, а содержимого нет — это поломка, а не пустой
+                    // словарь. Писать поверх нельзя.
+                    _guard.LoadFailed("файл прочитан как пустой");
                     return;
+                }
 
                 foreach (var kv in data)
                 {
@@ -98,11 +108,14 @@ namespace JacBlack.Infrastructure.Persistence
                     RememberTitleKey(kv.Key, kv.Value.Name, kv.Value.Year);
                 }
 
+                _guard.LoadSucceeded(_titles.Count);
+
                 JacBlackLog.Information(JacBlackLogCategories.Fdb,
                     $"словарь кодов Кинопоиска загружен: {_titles.Count}");
             }
             catch (Exception ex)
             {
+                _guard.LoadFailed(ex.Message);
                 JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, "словарь кодов Кинопоиска не загрузился", ex);
             }
         }
@@ -198,6 +211,14 @@ namespace JacBlack.Infrastructure.Persistence
             {
                 var snapshot = new Dictionary<string, KinopoiskTitle>(_titles, StringComparer.OrdinalIgnoreCase);
 
+                if (!_guard.MayWrite(snapshot.Count))
+                {
+                    // Отметку не гасим: как только словарь снова наполнится,
+                    // сохранение должно состояться.
+                    Interlocked.Exchange(ref _dirty, 1);
+                    return;
+                }
+
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path));
 
                 // Через временный файл, чтобы обрыв на середине не оставил
@@ -208,6 +229,7 @@ namespace JacBlack.Infrastructure.Persistence
                     new JsonSerializer().Serialize(writer, snapshot);
 
                 File.Move(temp, Path, overwrite: true);
+                _guard.WriteSucceeded(snapshot.Count);
             }
             catch (Exception ex)
             {
