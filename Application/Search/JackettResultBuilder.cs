@@ -102,6 +102,15 @@ namespace JacBlack.Application.Search
                         if (!t.torrent.trackerName.Contains(torrent.trackerName))
                             t.torrent.trackerName += $", {torrent.trackerName}";
 
+                        // Название выживает одно (предпочитается кинозаловское),
+                        // а описывают трекеры по-разному. У раздачи 3 сезона
+                        // «The Boys» с инфохешем 59165c9b… rutor пишет «Dolby
+                        // Vision Profile 8», а кинозал — только «HDR, HDR10+».
+                        // Файл один и тот же, но в Лампе он выглядел обычным
+                        // HDR, и DV-раздач было видно одну вместо трёх.
+                        t.torrent.title = Infrastructure.Parsing.DolbyVisionTag.Preserve(
+                            t.torrent.title, torrent.title);
+
                         #region UpdateMagnet
                         void UpdateMagnet()
                         {
@@ -145,7 +154,14 @@ namespace JacBlack.Application.Search
                             if (string.IsNullOrWhiteSpace(t.title))
                                 return;
 
-                            string title = t.title;
+                            // Название пересобирается из кинозаловского, и всё,
+                            // что было в накопленном, теряется — в том числе
+                            // Dolby Vision, упомянутый другим трекером. Поэтому
+                            // переносим пометку из текущего названия в новое.
+                            // Идемпотентно: если она уже есть, ничего не
+                            // дописывается.
+                            string title = Infrastructure.Parsing.DolbyVisionTag.Preserve(
+                                t.title, t.torrent.title);
 
                             if (t.torrent.voices != null && t.torrent.voices.Count > 0)
                                 title += $" | {string.Join(" | ", t.torrent.voices)}";
@@ -277,6 +293,10 @@ namespace JacBlack.Application.Search
                         sizeName = i.sizeName,
                         relased = i.relased,
                         videotype = i.videotype,
+                        // Считаем из названия, а не из базы: признак нужен и
+                        // старым записям, а перебирать миллион раздач миграцией
+                        // ради поля, которое выводится за микросекунды, незачем.
+                        dv = Infrastructure.Parsing.DolbyVisionTag.Value(i.title),
                         quality = i.quality,
                         voices = i.voices,
                         seasons = i.seasons != null && i.seasons.Count > 0 ? i.seasons : null,

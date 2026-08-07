@@ -318,6 +318,9 @@ namespace JacBlack.Infrastructure.Indexers
                     name = i.name,
                     originalname = i.originalname,
                     relased = i.relased,
+                    // Dolby Vision выводим из названия: videotype знает только
+                    // sdr и hdr, и DV-раздача в нём неотличима от обычной.
+                    dv = Parsing.DolbyVisionTag.Value(i.title),
                     sizeName = i.sizeName,
                     voices = i.voices,
                     seasons = i.seasons,
