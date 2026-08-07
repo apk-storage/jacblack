@@ -442,7 +442,27 @@ namespace JacBlack.Infrastructure.Indexers
                 if (!TypeFits(r, req.IsSerial))
                     continue;
 
-                if (!YearFits(r, req.Year, req.IsSerial))
+                // Код сильнее года.
+                //
+                // Год — признак слабый: карточка берёт его у TMDB, а трекеры
+                // пишут свой, и они расходятся сплошь и рядом. У «Обсессии»
+                // Лампа шлёт 2026, а все 44 раздачи в базе помечены 2025 —
+                // строгий год оставлял ОДНУ раздачу из сорока четырёх, причём
+                // у выброшенных стоял тот же код IMDB, что у выжившей. То есть
+                // мы точно знали, что это тот же фильм, и всё равно теряли его.
+                //
+                // Код опознаёт вещь однозначно, поэтому: совпал код с карточкой —
+                // год не спрашиваем вовсе. Лишнего это не пропустит: выше стоит
+                // заслон «код есть у обоих и он разный — чужое», так что сюда
+                // доходит либо совпадение, либо отсутствие кода. Год остаётся
+                // условием ровно там, где подтвердить нечем.
+                bool codeConfirms =
+                    (!string.IsNullOrEmpty(cardImdb) && !string.IsNullOrEmpty(imdb)
+                        && string.Equals(imdb, cardImdb, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(cardKinopoisk) && !string.IsNullOrEmpty(kinopoisk)
+                        && string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase));
+
+                if (!codeConfirms && !YearFits(r, req.Year, req.IsSerial))
                     continue;
 
                 string name = r.info?.name;
@@ -654,6 +674,16 @@ namespace JacBlack.Infrastructure.Indexers
         /// </summary>
         static string ResolveCardImdb(IndexerSearchRequest req, string en, string ru)
         {
+            // Словарь спрашиваем ТОЧНЫМ годом, без допуска.
+            //
+            // Допуск в год здесь пробовали 07.08.2026 и откатили: «Obsession» —
+            // название частое, и по соседнему году словарь отдавал ЧУЖОЙ фильм.
+            // Дальше заслон «код не совпал — чужое» объявлял чужими все верные
+            // раздачи, и карточка отдавала ноль вместо сорока двух.
+            //
+            // Расхождение года карточки и года трекеров лечится не здесь, а
+            // ниже: код выводится голосованием по самой выдаче, а раздача
+            // с совпавшим кодом проходит независимо от года.
             string byEn = null, byRu = null;
 
             if (!string.IsNullOrWhiteSpace(req.TitleOriginal))
