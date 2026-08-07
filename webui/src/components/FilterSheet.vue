@@ -32,17 +32,24 @@ const emit = defineEmits<{
   'update:tab': ['filters' | 'sort']
 }>()
 
-const groups = computed(() => [
-  { key: 'quality' as const, title: 'Качество' },
-  { key: 'voice' as const, title: 'Дорожки · студия' },
-  { key: 'size' as const, title: 'Размер' },
-  { key: 'tracker' as const, title: 'Трекер' },
-  { key: 'year' as const, title: 'Год' },
-])
+// Сезон первым: у сериала это главный способ сузить выдачу. У фильма сезонов
+// нет вовсе, и тогда группу не показываем — на телефоне место дороже всего,
+// пустой заголовок отнял бы целый ряд.
+const groups = computed(() =>
+  [
+    { key: 'season' as const, title: 'Сезон' },
+    { key: 'quality' as const, title: 'Качество' },
+    { key: 'voice' as const, title: 'Дорожки · студия' },
+    { key: 'size' as const, title: 'Размер' },
+    { key: 'tracker' as const, title: 'Трекер' },
+    { key: 'year' as const, title: 'Год' },
+  ].filter((g) => g.key !== 'season' || props.facets.season.length > 0),
+)
 
 function label(key: FacetKey, value: string): string {
   if (key === 'quality') return formatQualityLabel(value) || value
   if (key === 'size') return SIZE_BUCKETS.find((b) => b.key === value)?.label ?? value
+  if (key === 'season') return `${value} сезон`
   return value
 }
 

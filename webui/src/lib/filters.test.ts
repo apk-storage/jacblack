@@ -166,3 +166,47 @@ describe('сводные числа', () => {
     expect(applyFilters(list, f({ quality: ['1080'] }))).toHaveLength(1)
   })
 })
+
+describe('сезоны', () => {
+  it('раздача подходит под выбранный сезон', () => {
+    expect(matches(t({ seasons: [3] }), f({ season: ['3'] }))).toBe(true)
+    expect(matches(t({ seasons: [2] }), f({ season: ['3'] }))).toBe(false)
+  })
+
+  it('сборник сезонов подходит под любой из своих', () => {
+    // «Пацаны (1-3 сезоны)» — одна раздача, три сезона.
+    const пакет = t({ seasons: [1, 2, 3] })
+
+    expect(matches(пакет, f({ season: ['1'] }))).toBe(true)
+    expect(matches(пакет, f({ season: ['3'] }))).toBe(true)
+    expect(matches(пакет, f({ season: ['4'] }))).toBe(false)
+  })
+
+  it('фильм под явный выбор сезона не подходит', () => {
+    expect(matches(t({ seasons: [] }), f({ season: ['1'] }))).toBe(false)
+    expect(matches(t({ seasons: null }), f({ season: ['1'] }))).toBe(false)
+  })
+
+  it('без выбора сезона ничего не отсекается', () => {
+    expect(matches(t({ seasons: [] }), f())).toBe(true)
+    expect(matches(t({ seasons: [5] }), f())).toBe(true)
+  })
+
+  it('нулевой сезон спецвыпусков в список не идёт', () => {
+    const facets = countFacet([t({ seasons: [0, 2] })], f(), 'season')
+
+    expect(facets.map((x) => x.value)).toEqual(['2'])
+  })
+
+  it('сезоны идут по возрастанию, а не по числу раздач', () => {
+    const items = [
+      t({ seasons: [5] }),
+      t({ seasons: [5] }),
+      t({ seasons: [5] }),
+      t({ seasons: [1] }),
+      t({ seasons: [3] }),
+    ]
+
+    expect(countFacet(items, f(), 'season').map((x) => x.value)).toEqual(['1', '3', '5'])
+  })
+})

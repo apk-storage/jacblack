@@ -53,6 +53,7 @@ const facets = computed(() => ({
   voice: s.facets.voice.value,
   type: s.facets.type.value,
   size: s.facets.size.value,
+  season: s.facets.season.value,
 }))
 
 
