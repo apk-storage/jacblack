@@ -43,6 +43,13 @@ type Handlers = {
   onState?: (state: CubSocketState) => void
   onDevices?: (devices: CubDevice[]) => void
   onTerminalResult?: (result: unknown) => void
+  /**
+   * Любое пришедшее сообщение — для видимых техданных в диалоге.
+   *
+   * Без него пустой список устройств неотличим от «сервер вообще молчит», а
+   * лезть в консоль браузера с телефона неудобно.
+   */
+  onAny?: (method: string, size: number) => void
 }
 
 /**
@@ -160,6 +167,11 @@ export class CubSocket {
     } catch {
       return
     }
+
+    this.handlers.onAny?.(
+      String(result.method || '—'),
+      Array.isArray(result.data) ? result.data.length : 0,
+    )
 
     if (result.method === 'devices') {
       const list = Array.isArray(result.data) ? (result.data as CubDevice[]) : []
