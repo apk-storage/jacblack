@@ -18,6 +18,15 @@ const devices = ref<CubDevice[]>([])
 const socketState = ref<CubSocketState>('idle')
 let socket: CubSocket | null = null
 
+/**
+ * Техданные для диалога: сколько сообщений пришло от CUB и каким было
+ * последнее. Пустой список устройств сам по себе ничего не объясняет —
+ * молчит сервер или отвечает пустотой, — а лезть в консоль браузера
+ * с телефона неудобно.
+ */
+const received = ref(0)
+const lastMethod = ref('')
+
 /** Код терминала (`terminal_access`), заданный на ТВ. Хранится локально. */
 const TERMINAL_KEY = 'jb_cub_terminal'
 const terminalCode = ref<string>(readTerminal())
@@ -53,6 +62,10 @@ export function useCub() {
     socket = new CubSocket(account.value, {
       onState: (s) => { socketState.value = s },
       onDevices: (list) => { devices.value = list },
+      onAny: (method, size) => {
+        received.value += 1
+        lastMethod.value = size ? `${method} (${size})` : method
+      },
     })
     socket.connect()
   }
@@ -99,6 +112,8 @@ export function useCub() {
     account,
     devices,
     socketState,
+    received,
+    lastMethod,
     terminalCode,
     authorized,
     login,
