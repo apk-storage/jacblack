@@ -10,7 +10,10 @@ import { useToast } from '@/composables/useToast'
 import {
   formatQualityLabel,
   formatDate,
+  formatDvLabel,
+  imdbUrl,
   isSafeHttpUrl,
+  mediaTokens,
   torrentKey,
   type SortValue,
   type TorrentItem,
@@ -78,7 +81,9 @@ function seasonLabel(item: TorrentItem): string {
 function chips(item: TorrentItem): string[] {
   const q = formatQualityLabel(item.quality)
   const hdr = String(item.videotype || '').toLowerCase() === 'hdr' ? 'HDR' : ''
-  const quality = [q, hdr].filter(Boolean).join(' ')
+  // Dolby Vision рядом с качеством, а не отдельной строкой: человек выбирает
+  // картинку целиком, и «4K HDR DV» читается одним взглядом.
+  const quality = [q, hdr, formatDvLabel(item.dv)].filter(Boolean).join(' ')
   return [
     item.tracker,
     quality,
@@ -270,6 +275,22 @@ onMounted(() => s.boot())
           {{ item.voices.join(', ') }}
         </p>
 
+        <!--
+          Дорожки. На большом экране они расписаны по одной, здесь — короткий
+          список плашками: строка выдачи узкая. Пустых не показываем вовсе —
+          у большинства раздач разбора ffprobe нет, и прочерки заняли бы место,
+          ничего не сообщая.
+        -->
+        <div
+          v-if="mediaTokens(item.media).length"
+          class="flex flex-wrap items-baseline gap-1"
+        >
+          <span v-for="t in mediaTokens(item.media)" :key="t" class="jb-token">{{ t }}</span>
+          <span v-if="item.media?.subtitles?.length" class="text-[11px] text-g500">
+            суб: {{ item.media.subtitles.join(', ') }}
+          </span>
+        </div>
+
         <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
           <SeedCount
             :value="item.sid"
@@ -285,6 +306,16 @@ onMounted(() => s.boot())
             class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
           >
             <Icon name="external" :size="13" /> Трекер
+          </a>
+          <a
+            v-if="imdbUrl(item.imdb)"
+            :href="imdbUrl(item.imdb)"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
+            :title="`Карточка ${item.imdb} на IMDb`"
+          >
+            <Icon name="external" :size="13" /> IMDb
           </a>
           <button
             v-if="magnetOf(item)"

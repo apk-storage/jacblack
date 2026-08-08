@@ -2,7 +2,14 @@
 import { computed, ref } from 'vue'
 import Icon from '@/components/Icon.vue'
 import SeedCount from '@/components/SeedCount.vue'
-import { formatQualityLabel, formatDate, isSafeHttpUrl, type TorrentItem } from '@/lib/torrents'
+import {
+  formatQualityLabel,
+  formatDate,
+  formatDvLabel,
+  imdbUrl as buildImdbUrl,
+  isSafeHttpUrl,
+  type TorrentItem,
+} from '@/lib/torrents'
 import { isSafeMagnetUrl } from '@/lib/magnets'
 
 const props = defineProps<{ item: TorrentItem }>()
@@ -33,7 +40,10 @@ const showRaw = computed(() => raw.value && raw.value !== name.value)
 const quality = computed(() => {
   const q = formatQualityLabel(props.item.quality)
   const hdr = String(props.item.videotype || '').toLowerCase() === 'hdr'
-  return [q, hdr ? 'HDR' : ''].filter(Boolean).join(' ')
+  // Dolby Vision здесь же: videotype знает только sdr и hdr, и без этой подписи
+  // DV-раздача выглядела обычным HDR — при том что от профиля зависит, покажет
+  // ли устройство верные цвета.
+  return [q, hdr ? 'HDR' : '', formatDvLabel(props.item.dv)].filter(Boolean).join(' ')
 })
 
 const voices = computed(() => props.item.voices?.filter(Boolean) ?? [])
@@ -41,16 +51,8 @@ const voices = computed(() => props.item.voices?.filter(Boolean) ?? [])
 /** Сводка приходит с сервера; пустую он не присылает вовсе. */
 const media = computed(() => props.item.media ?? null)
 
-/**
- * Ссылка на IMDb — только если код похож на настоящий.
- *
- * Проверяем форму, а не доверяем полю: код приходит из разбора страниц
- * трекеров, и подставить в адрес что угодно нельзя.
- */
-const imdbUrl = computed(() => {
-  const code = String(props.item.imdb || '').trim()
-  return /^tt\d{6,}$/i.test(code) ? `https://www.imdb.com/title/${code}/` : null
-})
+/** Ссылка на IMDb; проверку формы кода делает общий помощник. */
+const imdbUrl = computed(() => buildImdbUrl(props.item.imdb) || null)
 
 /**
  * Каналы показываем привычной записью: 6 → 5.1, 8 → 7.1, 2 → 2.0.

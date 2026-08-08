@@ -311,6 +311,12 @@ namespace JacBlack.Application.Search
                 i.originalname,
                 i.relased,
                 i.videotype,
+                // Dolby Vision отдельным полем: videotype знает только «sdr» и
+                // «hdr», и DV-раздача в нём неотличима от обычной — хотя именно
+                // от профиля зависит, покажет ли устройство верные цвета.
+                // Выводим из заголовка, а не храним: признак нужен и старым
+                // записям, а считается он за микросекунды.
+                dv = Infrastructure.Parsing.DolbyVisionTag.Value(i.title),
                 i.quality,
                 i.voices,
                 i.seasons,

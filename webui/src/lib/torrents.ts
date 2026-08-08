@@ -14,6 +14,8 @@ export type TorrentItem = {
   originalname?: string | null
   relased?: number | string | null
   videotype?: string | null
+  /** Dolby Vision: «dv», «dvtv» или пусто. Отдельно от videotype — тот знает только sdr/hdr. */
+  dv?: string | null
   quality?: number | string | null
   voices?: string[] | null
   seasons?: Array<number | string> | null
@@ -142,6 +144,58 @@ export function formatQualityLabel(q: number | string | null | undefined): strin
   if (n === 2160) return '4K'
   if (n === 1440) return '1440p'
   return `${n}p`
+}
+
+/**
+ * Подпись Dolby Vision. Сервер присылает «dv» или «dvtv» — ровно два значения,
+ * столько же различает Лампа.
+ *
+ * Отдельно от качества намеренно: `videotype` знает только «sdr» и «hdr», и
+ * DV-раздача в нём неотличима от обычной, хотя разница решает, покажет ли
+ * устройство верные цвета.
+ */
+export function formatDvLabel(dv: string | null | undefined): string {
+  const v = String(dv || '').toLowerCase()
+  if (v === 'dvtv') return 'DV TV'
+  return v === 'dv' ? 'DV' : ''
+}
+
+/**
+ * Плашки дорожек одной строкой — для узкой вёрстки телефона.
+ *
+ * Большой экран рисует дорожки подробнее, по одной; здесь нужен короткий
+ * список, который поместится в строку выдачи. Логика общая и живёт тут, а не
+ * в двух экранах сразу: одинаковый на вид код в разных местах со временем
+ * расходится, и расхождение потом ищется как ошибка.
+ */
+export function mediaTokens(media: MediaSummary | null | undefined): string[] {
+  if (!media) return []
+
+  const out: string[] = []
+  if (media.video) out.push(media.video)
+
+  // Подорожечно знаем только при разборе ffprobe; иначе — общий набор кодеков.
+  if (media.tracks?.length) {
+    for (const t of media.tracks) {
+      const token = [t.codec, t.language].filter(Boolean).join(' ')
+      if (token && !out.includes(token)) out.push(token)
+    }
+  } else if (media.audio?.length) {
+    for (const c of media.audio) if (c && !out.includes(c)) out.push(c)
+  }
+
+  return out
+}
+
+/**
+ * Ссылка на IMDb — только если код похож на настоящий.
+ *
+ * Проверяем форму, а не доверяем полю: код приходит из разбора страниц
+ * трекеров, и подставить в адрес что угодно нельзя.
+ */
+export function imdbUrl(code: string | null | undefined): string {
+  const c = String(code || '').trim()
+  return /^tt\d{6,}$/i.test(c) ? `https://www.imdb.com/title/${c}/` : ''
 }
 
 export type QualityTier = '4k' | '1440' | '1080' | '720' | 'sd' | 'default'

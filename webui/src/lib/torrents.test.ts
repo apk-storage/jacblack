@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   applyClientFilters,
   buildFacets,
+  formatDvLabel,
+  imdbUrl,
+  mediaTokens,
   sortItems,
   torrentKey,
   type TorrentItem,
@@ -45,5 +48,56 @@ describe('torrent collection helpers', () => {
     expect(buildFacets(items).tracker).toEqual(['one', 'two'])
     expect(buildFacets(items).quality).toEqual(['1080', '2160'])
     expect(torrentKey(items[0]!)).toContain('one')
+  })
+})
+
+describe('Dolby Vision в подписи', () => {
+  it('различает два значения, как Лампа', () => {
+    expect(formatDvLabel('dv')).toBe('DV')
+    expect(formatDvLabel('dvtv')).toBe('DV TV')
+    expect(formatDvLabel('DVTV')).toBe('DV TV')
+  })
+
+  it('пусто, когда DV нет', () => {
+    expect(formatDvLabel(null)).toBe('')
+    expect(formatDvLabel('')).toBe('')
+    expect(formatDvLabel('hdr')).toBe('')
+  })
+})
+
+describe('плашки дорожек', () => {
+  it('кодек видео идёт первым, дорожки не повторяются', () => {
+    expect(
+      mediaTokens({
+        video: 'x265',
+        tracks: [
+          { codec: 'eac3', language: 'rus' },
+          { codec: 'eac3', language: 'rus' },
+          { codec: 'aac', language: 'eng' },
+        ],
+      }),
+    ).toEqual(['x265', 'eac3 rus', 'aac eng'])
+  })
+
+  it('без разбора ffprobe показываем общий набор кодеков', () => {
+    expect(mediaTokens({ video: 'x264', audio: ['ac3', 'aac'] })).toEqual(['x264', 'ac3', 'aac'])
+  })
+
+  it('пусто, когда сводки нет', () => {
+    expect(mediaTokens(null)).toEqual([])
+    expect(mediaTokens({})).toEqual([])
+  })
+})
+
+describe('ссылка на IMDb', () => {
+  it('строится только по настоящему коду', () => {
+    expect(imdbUrl('tt1160419')).toBe('https://www.imdb.com/title/tt1160419/')
+    expect(imdbUrl(' tt1160419 ')).toBe('https://www.imdb.com/title/tt1160419/')
+  })
+
+  it('мусор в адрес не попадает', () => {
+    expect(imdbUrl('javascript:alert(1)')).toBe('')
+    expect(imdbUrl('tt12')).toBe('')
+    expect(imdbUrl(null)).toBe('')
   })
 })
