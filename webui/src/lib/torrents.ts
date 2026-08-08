@@ -187,17 +187,6 @@ export function mediaTokens(media: MediaSummary | null | undefined): string[] {
   return out
 }
 
-/**
- * Ссылка на IMDb — только если код похож на настоящий.
- *
- * Проверяем форму, а не доверяем полю: код приходит из разбора страниц
- * трекеров, и подставить в адрес что угодно нельзя.
- */
-export function imdbUrl(code: string | null | undefined): string {
-  const c = String(code || '').trim()
-  return /^tt\d{6,}$/i.test(c) ? `https://www.imdb.com/title/${c}/` : ''
-}
-
 export type QualityTier = '4k' | '1440' | '1080' | '720' | 'sd' | 'default'
 
 export function qualityTier(q: number | string | null | undefined): QualityTier {
