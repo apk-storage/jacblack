@@ -132,8 +132,14 @@ export class CubSocket {
   // ── внутреннее ──────────────────────────────────────────────────────────
 
   private open(): void {
+    // Зеркало НЕ переключаем на каждом открытии — только после неудачи.
+    //
+    // Раньше счётчик рос при каждом open(), и стоило соединению несколько раз
+    // упасть (а из-за CSP оно падало постоянно), как клиент навсегда уезжал
+    // с cub.rip на соседнее зеркало. Устройства при этом не встречаются:
+    // телевизор сидит на cub.rip, а мы спрашиваем совсем другой сервер, и
+    // список законно приходит пустым.
     const host = SOCKET_MIRRORS[this.mirror % SOCKET_MIRRORS.length]
-    this.mirror++
     const url = `wss://${host}:${SOCKET_PORT}`
 
     this.handlers.onState?.('connecting')
@@ -145,6 +151,9 @@ export class CubSocket {
     }
 
     this.ws.addEventListener('open', () => {
+      // Зеркало сработало — возвращаемся к первому, чтобы следующая же
+      // случайная потеря связи не увела нас с cub.rip навсегда.
+      this.mirror = 0
       this.handlers.onState?.('open')
       this.startPing()
 
@@ -193,7 +202,10 @@ export class CubSocket {
     )
 
     if (result.method === 'devices') {
-      const list = Array.isArray(result.data) ? (result.data as CubDevice[]) : []
+      // Сервер шлёт список широко, поэтому отсеиваем себя и служебную запись
+      // «CUB» — ровно как это делает Лампа в окне трансляции.
+      const list = (Array.isArray(result.data) ? (result.data as CubDevice[]) : [])
+        .filter((d) => d && d.name !== 'CUB' && d.device_id !== this.uid)
       this.handlers.onDevices?.(list)
     } else if (result.method === 'terminal_result') {
       this.handlers.onTerminalResult?.(result.data)
@@ -256,7 +268,9 @@ export class CubSocket {
 
   private scheduleReconnect(): void {
     this.handlers.onState?.('closed')
-    // Небольшая пауза и следующее зеркало — как перебор soc_mirrors у Лампы.
+    // Не сработало — вот теперь пробуем следующее зеркало, как перебор
+    // soc_mirrors у Лампы.
+    this.mirror++
     setTimeout(() => { if (!this.closedByUs) this.open() }, 2000)
   }
 }
