@@ -115,8 +115,26 @@ function run(device: CubDevice) {
           <button class="ml-2 underline opacity-70 hover:opacity-100" @click="cub.refreshDevices()">обновить устройства</button>
         </div>
 
-        <div v-if="cub.devices.value.length === 0" class="rounded-lg bg-black/20 px-3 py-4 text-center text-sm opacity-60">
-          Устройств не видно. Убедитесь, что ТВ включён и залогинен в тот же аккаунт CUB.
+        <!--
+          Два разных случая, а выглядели они одинаково: сокет не открылся вовсе
+          — или открылся, но никто не ответил. Первое лечится на нашей стороне,
+          второе настройками телевизора, поэтому разводим их прямо в подсказке.
+        -->
+        <div
+          v-if="cub.devices.value.length === 0"
+          class="rounded-lg bg-black/20 px-3 py-4 text-sm opacity-70"
+        >
+          <template v-if="cub.socketState.value !== 'open'">
+            Нет связи с CUB — соединение не открылось. Телевизор тут ни при чём:
+            либо браузер не пускает соединение, либо CUB не отвечает.
+          </template>
+          <template v-else>
+            Связь с CUB есть, но ни одно устройство не отозвалось. Чаще всего
+            это значит, что <b>телевизор не вошёл в тот же аккаунт CUB</b> —
+            одного кода терминала для этого мало. В Лампе на телевизоре:
+            Настройки → Аккаунт, войти под тем же аккаунтом, и отдельно
+            Настройки → Терминал.
+          </template>
         </div>
         <ul v-else class="space-y-2">
           <li v-for="d in cub.devices.value" :key="d.uid">
