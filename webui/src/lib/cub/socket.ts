@@ -27,6 +27,9 @@ const SOCKET_MIRRORS = ['cub.rip', 'kurwa-bober.ninja', 'nackhui.com']
 const SOCKET_PORT = 8443
 const PING_INTERVAL_MS = 20_000
 
+/** Как часто переспрашивать список устройств. У Лампы в окне трансляции 3 секунды. */
+const DEVICE_SCAN_MS = 3_000
+
 /** Устройство аккаунта CUB, как приходит в method:'devices'. */
 export type CubDevice = {
   uid: string
@@ -74,6 +77,7 @@ export class CubSocket {
   private ws: WebSocket | null = null
   private mirror = 0
   private ping: ReturnType<typeof setInterval> | null = null
+  private scan: ReturnType<typeof setInterval> | null = null
   private closedByUs = false
   private readonly account: CubAccount
   private readonly handlers: Handlers
@@ -96,6 +100,7 @@ export class CubSocket {
   close(): void {
     this.closedByUs = true
     this.stopPing()
+    this.stopDeviceScan()
     try { this.ws?.close() } catch { /* ignore */ }
     this.ws = null
     this.handlers.onState?.('closed')
@@ -142,13 +147,27 @@ export class CubSocket {
     this.ws.addEventListener('open', () => {
       this.handlers.onState?.('open')
       this.startPing()
+
+      // Первым делом — check_token, как делает Лампа: у неё это подписано
+      // на событие открытия сокета (`Socket.listener.follow('open',
+      // checkAccountValidity)`, внутри `permit.token && send('check_token')`).
+      // Похоже, именно им сервер признаёт соединение своим и заводит его
+      // в группу аккаунта; без него список устройств приходил пустым.
+      this.send('check_token', {})
+
       this.requestDevices()
+
+      // И повторяем запрос, как Лампа: у неё в окне трансляции стоит
+      // setInterval на 3 секунды. Устройство могло ещё не подключиться
+      // к моменту нашего первого запроса.
+      this.startDeviceScan()
     })
 
     this.ws.addEventListener('message', (ev) => this.onMessage(ev))
 
     this.ws.addEventListener('close', () => {
       this.stopPing()
+      this.stopDeviceScan()
       if (!this.closedByUs) this.scheduleReconnect()
     })
 
@@ -217,6 +236,22 @@ export class CubSocket {
   private stopPing(): void {
     if (this.ping) { clearInterval(this.ping); this.ping = null }
     this.ping = null
+  }
+
+  /**
+   * Периодический опрос устройств — ровно как у Лампы в окне трансляции
+   * (setInterval на 3 секунды). Список составляет сервер из тех, кто сейчас
+   * на связи, и телевизор мог подключиться позже нашего первого запроса.
+   */
+  private startDeviceScan(): void {
+    this.stopDeviceScan()
+    this.scan = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) this.requestDevices()
+    }, DEVICE_SCAN_MS)
+  }
+
+  private stopDeviceScan(): void {
+    if (this.scan) { clearInterval(this.scan); this.scan = null }
   }
 
   private scheduleReconnect(): void {
