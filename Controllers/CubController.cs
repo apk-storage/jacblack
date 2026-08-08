@@ -57,7 +57,22 @@ namespace JacBlack.Controllers
                 string text = await resp.Content.ReadAsStringAsync();
 
                 if (!resp.IsSuccessStatusCode)
+                {
+                    // CUB на НЕВЕРНЫЙ код отвечает пятисоткой, а настоящую
+                    // причину кладёт внутрь: {"error":true,"code":200,...}.
+                    // Сама Лампа так его и читает: errorCode == 200 у неё
+                    // означает «неверный код», а не сбой. Разводим их и мы,
+                    // иначе просроченный код выглядит как поломка сервера.
+                    if (CubErrorCode(text) == 200)
+                        return StatusCode(400, new
+                        {
+                            ok = false,
+                            code = "badCode",
+                            message = "Код не подошёл. Возьмите свежий на cub.rip/add — он одноразовый и живёт недолго"
+                        });
+
                     return StatusCode(502, new { ok = false, code = "cubError", status = (int)resp.StatusCode, message = CubMessage(text) });
+                }
 
                 // Ответ CUB — JSON аккаунта. Отдаём как есть, чтобы клиент положил
                 // его в localStorage и использовал в сокете без изменений.
@@ -84,6 +99,23 @@ namespace JacBlack.Controllers
         /// Разобрать не удалось — отдаём как было: пустое сообщение хуже
         /// некрасивого.
         /// </summary>
+        /// <summary>Внутренний код ошибки CUB, 0 — если его нет.</summary>
+        static int CubErrorCode(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+                return 0;
+
+            try
+            {
+                var o = Newtonsoft.Json.Linq.JObject.Parse(body);
+                return (int?)o["code"] ?? 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
         static string CubMessage(string body)
         {
             if (string.IsNullOrWhiteSpace(body))
