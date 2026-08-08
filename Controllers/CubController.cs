@@ -57,7 +57,7 @@ namespace JacBlack.Controllers
                 string text = await resp.Content.ReadAsStringAsync();
 
                 if (!resp.IsSuccessStatusCode)
-                    return StatusCode(502, new { ok = false, code = "cubError", status = (int)resp.StatusCode, message = text });
+                    return StatusCode(502, new { ok = false, code = "cubError", status = (int)resp.StatusCode, message = CubMessage(text) });
 
                 // Ответ CUB — JSON аккаунта. Отдаём как есть, чтобы клиент положил
                 // его в localStorage и использовал в сокете без изменений.
@@ -71,6 +71,37 @@ namespace JacBlack.Controllers
             {
                 return StatusCode(502, new { ok = false, code = "request", message = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Достаёт человеческую причину отказа из ответа CUB.
+        ///
+        /// Он отвечает объектом вида {"error":true,"code":200,"text":"Код не
+        /// найден"}, и раньше эта строка уходила на экран целиком, вместе со
+        /// скобками и служебными полями. Человек в диалоге видел бы JSON вместо
+        /// подсказки, что код неверный или просрочен.
+        ///
+        /// Разобрать не удалось — отдаём как было: пустое сообщение хуже
+        /// некрасивого.
+        /// </summary>
+        static string CubMessage(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+                return "CUB отказал без объяснения";
+
+            try
+            {
+                var o = Newtonsoft.Json.Linq.JObject.Parse(body);
+                string text = (string)o["text"] ?? (string)o["message"];
+                if (!string.IsNullOrWhiteSpace(text))
+                    return text;
+            }
+            catch
+            {
+                // не JSON — ниже отдадим как есть
+            }
+
+            return body.Length > 200 ? body.Substring(0, 200) : body;
         }
     }
 }
