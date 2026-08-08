@@ -11,7 +11,6 @@ import {
   formatQualityLabel,
   formatDate,
   formatDvLabel,
-  imdbUrl,
   isSafeHttpUrl,
   mediaTokens,
   torrentKey,
@@ -306,16 +305,6 @@ onMounted(() => s.boot())
             class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
           >
             <Icon name="external" :size="13" /> Трекер
-          </a>
-          <a
-            v-if="imdbUrl(item.imdb)"
-            :href="imdbUrl(item.imdb)"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
-            :title="`Карточка ${item.imdb} на IMDb`"
-          >
-            <Icon name="external" :size="13" /> IMDb
           </a>
           <button
             v-if="magnetOf(item)"
