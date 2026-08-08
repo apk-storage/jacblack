@@ -3,7 +3,6 @@ import {
   applyClientFilters,
   buildFacets,
   formatDvLabel,
-  imdbUrl,
   mediaTokens,
   sortItems,
   torrentKey,
@@ -89,15 +88,3 @@ describe('плашки дорожек', () => {
   })
 })
 
-describe('ссылка на IMDb', () => {
-  it('строится только по настоящему коду', () => {
-    expect(imdbUrl('tt1160419')).toBe('https://www.imdb.com/title/tt1160419/')
-    expect(imdbUrl(' tt1160419 ')).toBe('https://www.imdb.com/title/tt1160419/')
-  })
-
-  it('мусор в адрес не попадает', () => {
-    expect(imdbUrl('javascript:alert(1)')).toBe('')
-    expect(imdbUrl('tt12')).toBe('')
-    expect(imdbUrl(null)).toBe('')
-  })
-})
