@@ -6,7 +6,6 @@ import {
   formatQualityLabel,
   formatDate,
   formatDvLabel,
-  imdbUrl as buildImdbUrl,
   isSafeHttpUrl,
   type TorrentItem,
 } from '@/lib/torrents'
@@ -51,8 +50,6 @@ const voices = computed(() => props.item.voices?.filter(Boolean) ?? [])
 /** Сводка приходит с сервера; пустую он не присылает вовсе. */
 const media = computed(() => props.item.media ?? null)
 
-/** Ссылка на IMDb; проверку формы кода делает общий помощник. */
-const imdbUrl = computed(() => buildImdbUrl(props.item.imdb) || null)
 
 /**
  * Каналы показываем привычной записью: 6 → 5.1, 8 → 7.1, 2 → 2.0.
@@ -153,20 +150,6 @@ const magnet = computed(() => (isSafeMagnetUrl(props.item.magnet) ? props.item.m
       >
         <Icon name="external" :size="13" />
         На трекере
-      </a>
-      <!-- Код IMDB знаем у 40% базы, и он единственное, чем разводятся
-           тёзки. Показываем ссылкой: человеку это проверка, что найдена
-           именно та вещь, а не одноимённая. -->
-      <a
-        v-if="imdbUrl"
-        :href="imdbUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex h-7 items-center gap-1.5 rounded-lg bg-g75 px-2.5 text-[12.5px] text-g700 no-underline hover:text-ink"
-        :title="`Карточка ${item.imdb} на IMDb`"
-      >
-        <Icon name="external" :size="13" />
-        IMDb
       </a>
       <button
         v-if="magnet"

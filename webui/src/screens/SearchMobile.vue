@@ -275,59 +275,67 @@ onMounted(() => s.boot())
         </p>
 
         <!--
-          Дорожки. На большом экране они расписаны по одной, здесь — короткий
-          список плашками: строка выдачи узкая. Пустых не показываем вовсе —
-          у большинства раздач разбора ffprobe нет, и прочерки заняли бы место,
-          ничего не сообщая.
+          Раздающие и дорожки одной строкой.
+          Число раздающих — главное, по чему выбирают, поэтому оно идёт первым
+          и выше кнопок: глаз находит его сразу, не спускаясь к низу строки.
+          Дорожки рядом плашками; пустых не показываем вовсе — у большинства
+          раздач разбора ffprobe нет, и прочерки заняли бы место, ничего
+          не сообщая.
         -->
-        <div
-          v-if="mediaTokens(item.media).length"
-          class="flex flex-wrap items-baseline gap-1"
-        >
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <SeedCount
+            :value="item.sid"
+            :verified="item.seedersLive ?? undefined"
+            :unknown="!!item.seedersUnknown"
+          />
           <span v-for="t in mediaTokens(item.media)" :key="t" class="jb-token">{{ t }}</span>
           <span v-if="item.media?.subtitles?.length" class="text-[11px] text-g500">
             суб: {{ item.media.subtitles.join(', ') }}
           </span>
         </div>
 
-        <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
-          <SeedCount
-            :value="item.sid"
-            :verified="item.seedersLive ?? undefined"
-            :unknown="!!item.seedersUnknown"
-          />
-          <span class="flex-1"></span>
+        <!--
+          Кнопки одним рядом и во всю ширину: на телефоне они попадают под
+          большой палец, и перенос второй строкой сбивал прицел. Каждая делит
+          ширину поровну, подпись при нехватке места обрезается, а значок
+          остаётся — по нему кнопка и опознаётся.
+        -->
+        <div class="mt-0.5 flex items-center gap-1.5">
           <a
             v-if="pageUrl(item)"
             :href="pageUrl(item)"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
+            class="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg bg-g75 px-2 text-[12px] text-g700 no-underline"
           >
-            <Icon name="external" :size="13" /> Трекер
+            <Icon name="external" :size="13" class="shrink-0" />
+            <span class="truncate">Трекер</span>
           </a>
           <button
             v-if="magnetOf(item)"
             type="button"
-            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700"
+            class="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg bg-g75 px-2 text-[12px] text-g700"
             @click="openTorrServer(item)"
           >
-            <Icon name="server" :size="13" /> TorrServer
+            <Icon name="server" :size="13" class="shrink-0" />
+            <span class="truncate">TorrServer</span>
           </button>
           <button
             v-if="magnetOf(item)"
             type="button"
-            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700"
+            class="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg bg-g75 px-2 text-[12px] text-g700"
             @click="openLampa(item)"
           >
-            <Icon name="play" :size="13" /> В Лампе
+            <Icon name="play" :size="13" class="shrink-0" />
+            <span class="truncate">В Лампе</span>
           </button>
           <a
             v-if="magnetOf(item)"
             :href="magnetOf(item)"
-            class="inline-flex h-8 items-center gap-1 rounded-lg bg-g75 px-2.5 text-[12px] text-g700 no-underline"
+            class="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg bg-g75 px-2 text-[12px] text-g700 no-underline"
           >
-            <Icon name="magnet" :size="13" /> Открыть
+            <Icon name="magnet" :size="13" class="shrink-0" />
+            <span class="truncate">Открыть</span>
           </a>
         </div>
       </li>
