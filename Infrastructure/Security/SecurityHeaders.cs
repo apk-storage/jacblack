@@ -28,7 +28,13 @@ namespace JacBlack.Infrastructure.Security
                 "style-src 'self' 'unsafe-inline'; " +
                 "font-src 'self'; " +
                 "img-src 'self' data:; " +
-                "connect-src 'self' https: http:; " +
+                // wss: и ws: нужны явно. WebSocket проверяется по connect-src,
+                // а схема https: покрывает wss: не во всех браузерах — Chrome
+                // по CSP3 пропускает, другие требуют схему буквально. Из-за
+                // этого функция «В Лампе» не могла подключиться к сокету CUB
+                // (wss://cub.rip:8443): соединение резалось ещё до отправки,
+                // и в диалоге это выглядело как «CUB не отвечает».
+                "connect-src 'self' https: http: wss: ws:; " +
                 "manifest-src 'self'; " +
                 "worker-src 'self'";
         }
