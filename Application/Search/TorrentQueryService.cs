@@ -250,31 +250,11 @@ namespace JacBlack.Application.Search
             IEnumerable<TorrentDetails> query = deduped
                 .Where(t => !ClosedTrackerSeeders.IsDead(t.trackerName, t.url));
 
-            #region sort
-            switch (sort ?? string.Empty)
-            {
-                case "sid":
-                    // Проверенные числа выше непроверенных: непроверенное —
-                    // снимок неизвестной давности, и прошлогодние 96 раздающих
-                    // не должны стоять над сегодняшними 44.
-                    query = query
-                        .OrderByDescending(i => verified.Contains(i.url) || liveVerified.Contains(i.url))
-                        .ThenByDescending(i => i.sid);
-                    break;
-                case "pir":
-                    query = query.OrderByDescending(i => i.pir);
-                    break;
-                case "size":
-                    query = query.OrderByDescending(i => i.size);
-                    break;
-                case "create":
-                    query = query.OrderByDescending(i => i.createTime);
-                    break;
-                case "update":
-                    query = query.OrderByDescending(i => i.updateTime);
-                    break;
-            }
-            #endregion
+            // Сортировка перенесена ниже, за склейку копий: до неё порядок
+            // относился бы к отдельным копиям одного файла, а человеку нужен
+            // порядок файлов. Правило «проверенные числа выше непроверенных»
+            // сохранено — непроверенное это снимок неизвестной давности, и
+            // прошлогодние 96 раздающих не должны стоять над сегодняшними 44.
 
             if (!string.IsNullOrWhiteSpace(tracker))
                 query = query.Where(i => i.trackerName == tracker);
@@ -295,7 +275,37 @@ namespace JacBlack.Application.Search
                 query = query.Where(i => i.seasons.Contains((int)season));
             #endregion
 
-            return (query.Take(2_000).Select(i => new
+            // Копии одного файла на разных трекерах — в одну строку.
+            //
+            // Склейка идёт ПОСЛЕ фильтров: у склеенной записи имя трекера
+            // составное («rutracker, kinozal»), и фильтр по трекеру перестал
+            // бы совпадать. И ПОСЛЕ живого опроса — иначе максимум считался
+            // бы по снимкам из базы, а не по свежим числам.
+            //
+            // Сортировка ниже пересобирается заново: до склейки её порядок
+            // относился к отдельным копиям, а после — к файлам.
+            var mergedItems = DuplicateFilter.MergeAcrossTrackers(query);
+
+            // Проверенным считаем файл, у которого проверена ХОТЬ ОДНА копия:
+            // раздающих мы показываем по ней же, максимумом.
+            bool Проверен(DuplicateFilter.Merged m) =>
+                m.Sources.Any(u => verified.Contains(u) || liveVerified.Contains(u));
+
+            IEnumerable<DuplicateFilter.Merged> merged = mergedItems;
+
+            merged = (sort ?? string.Empty) switch
+            {
+                "sid" => merged.OrderByDescending(Проверен).ThenByDescending(m => m.Item.sid),
+                "pir" => merged.OrderByDescending(m => m.Item.pir),
+                "size" => merged.OrderByDescending(m => m.Item.size),
+                "create" => merged.OrderByDescending(m => m.Item.createTime),
+                "update" => merged.OrderByDescending(m => m.Item.updateTime),
+                _ => merged
+            };
+
+            var sourcesOf = mergedItems.ToDictionary(m => m.Item, m => m.Sources);
+
+            return (merged.Select(m => m.Item).Take(2_000).Select(i => new
             {
                 tracker = i.trackerName,
                 url = i.url != null && i.url.StartsWith("http") ? TrackerUrlHygiene.Canonical(i.url) : null,
@@ -331,12 +341,24 @@ namespace JacBlack.Application.Search
                 // Проверено ли число раздающих прямо сейчас — живым опросом
                 // либо свежим обходом. Ложь означает снимок из базы, который
                 // может быть сделан хоть полгода назад.
-                seedersLive = verified.Contains(i.url)
-                    || liveVerified.Contains(i.url)
+                //
+                // У склеенной записи достаточно одной проверенной копии:
+                // именно её число мы и показываем, максимумом.
+                seedersLive = sourcesOf[i].Any(u => verified.Contains(u) || liveVerified.Contains(u))
                     || Infrastructure.Indexers.SeedersFreshness.IsFresh(i.updateTime),
                 // Трекер не сообщает числа вовсе: у lostfilm счётчиков нет,
                 // и единица в записи проставлена разбором, а не данными.
-                seedersUnknown = Infrastructure.Indexers.SeedersFreshness.TrackerHidesSeeders(i.trackerName)
+                // У склейки берём по всем копиям: если хоть один трекер числа
+                // публикует, показанное число настоящее.
+                seedersUnknown = sourcesOf[i].Count == 1
+                    && Infrastructure.Indexers.SeedersFreshness.TrackerHidesSeeders(i.trackerName),
+                // Адреса всех копий этого файла. Раньше сайт показывал каждую
+                // отдельной строкой (по «Дому дракона» 289 строк на 149
+                // файлов), теперь копии свёрнуты, а ссылки остались — можно
+                // выбрать трекер, с которого качать.
+                sources = sourcesOf[i].Count > 1
+                    ? sourcesOf[i].Select(u => u != null && u.StartsWith("http") ? TrackerUrlHygiene.Canonical(u) : u).ToList()
+                    : null
             }));
         }
         /// <summary>Пустую сводку не отдаём: пустые плашки на карточке лишние.</summary>

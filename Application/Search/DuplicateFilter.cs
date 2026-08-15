@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using JacBlack.Models.Details;
 
@@ -34,6 +35,90 @@ namespace JacBlack.Application.Search
         /// </summary>
         public static List<Models.Api.Result> RemoveSameTrackerDuplicates(IEnumerable<Models.Api.Result> items)
             => Remove(items, r => r.Tracker, r => r.MagnetUri, r => r.Seeders, r => r.PublishDate);
+
+        /// <summary>Склеенная раздача: одна запись и адреса всех её копий.</summary>
+        public sealed class Merged
+        {
+            public TorrentDetails Item { get; init; }
+
+            /// <summary>Адреса всех копий, начиная с основной.</summary>
+            public List<string> Sources { get; init; }
+        }
+
+        /// <summary>
+        /// Схлопывает копии ОДНОГО файла, найденные на РАЗНЫХ трекерах.
+        ///
+        /// Зачем. Инфохеш — это отпечаток самого файла: совпал значит файл тот
+        /// же, и качаться он будет один. Замер 15.08.2026 по «Дому дракона»:
+        /// на сайте 289 строк, а уникальных файлов среди них 149 — то есть
+        /// 140 строк повторы, и один файл показывался восемь раз.
+        ///
+        /// Раздающих берём МАКСИМУМ по копиям, а не сумму. Сумма была бы
+        /// враньём: один человек раздаёт один файл и виден всем трекерам
+        /// сразу, поэтому сложение посчитало бы его столько раз, на скольких
+        /// трекерах лежит копия. Максимум же ничего не выдумывает — это
+        /// показание того трекера, который видит раздачу лучше остальных.
+        /// На живом примере это и есть разница между «54» и «2»: кинозал мы
+        /// опрашиваем в момент поиска, а у остальных копий в базе снимок,
+        /// сделанный неизвестно когда.
+        ///
+        /// Название выживает одно, поэтому метку Dolby Vision переносим со
+        /// всех копий: файл один, а описывают трекеры по-разному, и раздача
+        /// с DV легко выглядела обычной HDR.
+        /// </summary>
+        public static List<Merged> MergeAcrossTrackers(IEnumerable<TorrentDetails> items)
+        {
+            var merged = new Dictionary<string, Merged>(StringComparer.OrdinalIgnoreCase);
+            var result = new List<Merged>();
+
+            foreach (var t in items ?? Array.Empty<TorrentDetails>())
+            {
+                string hash = HashOf(t?.magnet);
+
+                if (t == null || hash == null)
+                {
+                    // Без хеша сравнивать нечего — оставляем как есть.
+                    if (t != null)
+                        result.Add(new Merged { Item = t, Sources = new List<string> { t.url } });
+                    continue;
+                }
+
+                if (!merged.TryGetValue(hash, out var had))
+                {
+                    merged[hash] = new Merged { Item = t, Sources = new List<string> { t.url } };
+                    continue;
+                }
+
+                var main = had.Item;
+
+                if (!string.IsNullOrEmpty(t.trackerName)
+                    && (main.trackerName == null || !main.trackerName.Contains(t.trackerName, StringComparison.OrdinalIgnoreCase)))
+                    main.trackerName += ", " + t.trackerName;
+
+                if (t.sid > main.sid)
+                    main.sid = t.sid;
+
+                if (t.pir > main.pir)
+                    main.pir = t.pir;
+
+                main.title = Infrastructure.Parsing.DolbyVisionTag.Preserve(main.title, t.title);
+
+                if (!string.IsNullOrEmpty(t.url) && !had.Sources.Contains(t.url, StringComparer.OrdinalIgnoreCase))
+                    had.Sources.Add(t.url);
+            }
+
+            result.AddRange(merged.Values);
+            return result;
+        }
+
+        static string HashOf(string magnet)
+        {
+            if (string.IsNullOrEmpty(magnet))
+                return null;
+
+            var m = RxHash.Match(magnet);
+            return m.Success ? m.Groups[1].Value.ToLowerInvariant() : null;
+        }
 
         static List<T> Remove<T>(
             IEnumerable<T> items,
