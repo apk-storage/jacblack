@@ -280,6 +280,15 @@ namespace JacBlack.Infrastructure.Persistence
                 if (!IsWantedContent(torrent.types))
                     continue;
 
+                // Отбор по типу книги и софт не ловит: у nnmclub раздел назван
+                // словами, книжные мы не опознаём, и работает правило
+                // «неопознанное считаем кино» — раздача приходит как movie.
+                // Поэтому судим ещё и по самой раздаче, по формату файла в её
+                // названии. Замер 15.08.2026: так в базу попало 32 435 записей
+                // (1.65%), почти все из nnmclub.
+                if (Parsing.NonVideoContent.IsNotVideo(torrent.title))
+                    continue;
+
                 string key = keyDb(torrent.name, torrent.originalname);
                 if (!temp.ContainsKey(key))
                     temp.Add(key, new List<T>());
