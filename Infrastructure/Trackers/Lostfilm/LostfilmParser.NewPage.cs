@@ -72,18 +72,29 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
                 result.Add((title, dateStr, relased, $"{host?.TrimEnd('/')}/{urlPath}", "episode_links"));
             }
 
-            var newMovieRe = new Regex(@"<a\s+class=""new-movie""\s+href=""(?:https?://[^""]+)?(/series/[^""]+)""[^>]*title=""([^""]*)""[^>]*>([\s\S]*?)</a>", RegexOptions.IgnoreCase);
-            foreach (Match m in newMovieRe.Matches(html))
+            // Плитка «новинки»: <a class="new-movie" href title>, внутри
+            // <div class="title"> с номером серии и <div class="date">.
+            foreach (var anchor in document.QuerySelectorAll("a.new-movie"))
             {
-                string urlPath = m.Groups[1].Value.TrimStart('/');
-                string nameFromAttr = ShortenSeriesName(HttpUtility.HtmlDecode(m.Groups[2].Value.Trim()));
-                string block = m.Groups[3].Value;
+                // В href бывает и абсолютный адрес — берём путь от /series/.
+                var path = Regex.Match(Parsing.Html.Attr(anchor, "href"), @"(/series/.+)$");
+                if (!path.Success)
+                    continue;
+
+                string urlPath = path.Groups[1].Value.TrimStart('/');
                 if (string.IsNullOrEmpty(urlPath) || !urlPath.StartsWith("series/"))
                     continue;
-                string sinfo = Regex.Match(block, @"<div\s+class=""title""[^>]*>\s*([^<]+)\s*</div>", RegexOptions.IgnoreCase).Groups[1].Value;
-                sinfo = HttpUtility.HtmlDecode(Regex.Replace(sinfo, @"[\s]+", " ").Trim());
-                var newMovieDateMatches = Regex.Matches(block, @"<div\s+class=""date""[^>]*>(\d{2}\.\d{2}\.\d{4})</div>", RegexOptions.IgnoreCase);
-                string dateStr = newMovieDateMatches.Count > 0 ? newMovieDateMatches[newMovieDateMatches.Count - 1].Groups[1].Value : "";
+
+                string nameFromAttr = ShortenSeriesName(Parsing.Html.Attr(anchor, "title"));
+                string sinfo = Parsing.Html.Text(anchor.QuerySelector("div.title"));
+
+                // Дат внутри плитки бывает несколько; берём последнюю — так же,
+                // как делал прежний разбор.
+                var dates = anchor.QuerySelectorAll("div.date");
+                string dateStr = dates.Length > 0
+                    ? Regex.Match(Parsing.Html.Text(dates[dates.Length - 1]), @"\d{2}\.\d{2}\.\d{4}").Value
+                    : string.Empty;
+
                 DateTime createTime = tParse.ParseCreateTime(dateStr, "dd.MM.yyyy");
                 if (createTime == default)
                     createTime = DateTime.UtcNow;
@@ -99,13 +110,24 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
                     result.Add((title, dateStr, relased, fullUrl, "new-movie"));
             }
 
-            foreach (string row in html.Split(new[] { "class=\"hor-breaker dashed\"" }, StringSplitOptions.None).Skip(1).Where(row => !string.IsNullOrWhiteSpace(row)))
+            // Список серий. Прежний разбор резал страницу по строке
+            // class="hor-breaker dashed" и искал поля в остатке — а это пустой
+            // div-РАЗДЕЛИТЕЛЬ, стоящий ПЕРЕД карточкой. Поля брались первым
+            // совпадением по всему хвосту документа, то есть держались на том,
+            // что следующая карточка идёт дальше по тексту. Настоящий
+            // контейнер — div.row, по нему и идём.
+            foreach (var row in document.QuerySelectorAll("div.row"))
             {
-                string url = Regex.Match(row, @"href=""/([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string sinfo = Regex.Match(row, @"<div class=""left-part"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string name = Regex.Match(row, @"<div class=""name-ru"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string originalname = Regex.Match(row, @"<div class=""name-en"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string dateStr = Regex.Match(row, @"<div class=""right-part"">(\d{2}\.\d{2}\.\d{4})</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
+                // Только относительные ссылки, как и раньше: у карточки серии
+                // адрес всегда свой, вида /series/Name/season_1/episode_2/.
+                string href = Parsing.Html.Attr(row.QuerySelector("a[href]"), "href");
+                string url = href.StartsWith("/") ? href.Substring(1).Trim() : string.Empty;
+
+                string sinfo = Parsing.Html.Text(row.QuerySelector("div.left-part"));
+                string name = Parsing.Html.Text(row.QuerySelector("div.name-ru"));
+                string originalname = Parsing.Html.Text(row.QuerySelector("div.name-en"));
+                string dateStr = Regex.Match(Parsing.Html.Text(row.QuerySelector("div.right-part")), @"\d{2}\.\d{2}\.\d{4}").Value;
+
                 if (string.IsNullOrEmpty(url) || !url.StartsWith("series/") || string.IsNullOrEmpty(name) || string.IsNullOrEmpty(originalname) || string.IsNullOrEmpty(sinfo) || string.IsNullOrEmpty(dateStr))
                     continue;
                 DateTime createTime = tParse.ParseCreateTime(dateStr, "dd.MM.yyyy");
