@@ -47,6 +47,16 @@ const quality = computed(() => {
 
 const voices = computed(() => props.item.voices?.filter(Boolean) ?? [])
 
+/**
+ * Сколько трекеров раздают этот же файл.
+ *
+ * Копии сведены в одну строку по инфохешу: отпечаток совпал — значит файл
+ * тот же. Раздающих при этом показываем не суммой, а лучшим известным
+ * показанием: один человек виден всем трекерам сразу, и сложение посчитало
+ * бы его несколько раз.
+ */
+const copies = computed(() => props.item.sources?.length ?? 1)
+
 /** Сводка приходит с сервера; пустую он не присылает вовсе. */
 const media = computed(() => props.item.media ?? null)
 
@@ -81,8 +91,13 @@ const magnet = computed(() => (isSafeMagnetUrl(props.item.magnet) ? props.item.m
     </div>
 
     <div class="flex flex-wrap gap-x-5 gap-y-1.5">
+      <!-- Копии одного файла на разных трекерах свёрнуты в одну строку: файл
+           тот же самый, и качаться будет он же. Число копий показываем, чтобы
+           не выглядело, будто раздача найдена в одном месте. -->
       <div class="flex flex-col">
-        <span class="jb-label">Трекер</span>
+        <span class="jb-label">
+          Трекер<template v-if="copies > 1"> · копий {{ copies }}</template>
+        </span>
         <span class="jb-num text-[13px]">{{ item.tracker || '—' }}</span>
       </div>
       <div v-if="quality" class="flex flex-col">
