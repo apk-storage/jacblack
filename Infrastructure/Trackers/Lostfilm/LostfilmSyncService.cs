@@ -127,13 +127,12 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
                     string name = !string.IsNullOrWhiteSpace(russianName) ? russianName : originalname;
 
                     // Ссылки на полный сезон: /V/?c=...&s=N&e=999 (или e=999&s=N)
-                    var vLinkRe = new Regex(@"href=""(/V/\?[^""]+)""", RegexOptions.IgnoreCase);
                     var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     var list = new List<TorrentDetails>();
 
-                    foreach (Match m in vLinkRe.Matches(html))
+                    foreach (var link in Infrastructure.Parsing.Html.Parse(html).QuerySelectorAll("a[href^='/V/?']"))
                     {
-                        string vPath = m.Groups[1].Value;
+                        string vPath = Infrastructure.Parsing.Html.Attr(link, "href");
                         if (vPath.IndexOf("e=999", StringComparison.OrdinalIgnoreCase) < 0)
                             continue;
                         var sMatch = Regex.Match(vPath, @"[?&]s=(\d+)", RegexOptions.IgnoreCase);
@@ -553,19 +552,23 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (string row in html.Split(new[] { "class=\"hor-breaker dashed\"" }, StringSplitOptions.None).Skip(1))
+            // Карточка лежит в div.row; class="hor-breaker dashed" — пустой
+            // РАЗДЕЛИТЕЛЬ перед ней, и прежний разбор резал по нему страницу,
+            // добирая поля первым совпадением по хвосту документа.
+            var document = Infrastructure.Parsing.Html.Parse(html);
+
+            foreach (var row in document.QuerySelectorAll("div.row"))
             {
-                if (string.IsNullOrWhiteSpace(row))
-                    continue;
-                string url = Regex.Match(row, @"href=""/([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
+                string href = Infrastructure.Parsing.Html.Attr(row.QuerySelector("a[href]"), "href");
+                string url = href.StartsWith("/") ? href.Substring(1).Trim() : string.Empty;
                 if (string.IsNullOrEmpty(url) || !url.StartsWith("movies/"))
                     continue;
-                string leftPart = Regex.Match(row, @"<div class=""left-part"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
+                string leftPart = Infrastructure.Parsing.Html.Text(row.QuerySelector("div.left-part"));
                 if (leftPart.IndexOf("Фильм", StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
-                string name = Regex.Match(row, @"<div class=""name-ru"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string originalname = Regex.Match(row, @"<div class=""name-en"">([^<]+)</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
-                string dateStr = Regex.Match(row, @"<div class=""right-part"">(\d{2}\.\d{2}\.\d{4})</div>", RegexOptions.IgnoreCase).Groups[1].Value.Trim();
+                string name = Infrastructure.Parsing.Html.Text(row.QuerySelector("div.name-ru"));
+                string originalname = Infrastructure.Parsing.Html.Text(row.QuerySelector("div.name-en"));
+                string dateStr = Regex.Match(Infrastructure.Parsing.Html.Text(row.QuerySelector("div.right-part")), @"\d{2}\.\d{2}\.\d{4}").Value;
                 if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(originalname) || string.IsNullOrEmpty(dateStr))
                     continue;
 
@@ -621,6 +624,36 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
         }
 
         /// <summary>Со страницы фильма /movies/Slug извлекает ссылку на InSearch /V/?c=... (или редирект через v_search).</summary>
+        /// <summary>
+        /// Куда страница просит перейти: мета-обновление или location.replace().
+        ///
+        /// Оба способа lostfilm использует вперемешку, и раньше их искала одна
+        /// регулярка, стоявшая в двух местах двумя одинаковыми копиями. Теперь
+        /// мета-тег берётся деревом (порядок атрибутов и кавычки роли не
+        /// играют), а регулярка остаётся только для вызова в скрипте — там
+        /// разбирать нечего, это текст.
+        /// </summary>
+        static string FindRedirect(string html)
+        {
+            if (string.IsNullOrEmpty(html))
+                return null;
+
+            string content = Infrastructure.Parsing.Html.Attr(
+                Infrastructure.Parsing.Html.Parse(html).QuerySelector("meta[http-equiv='refresh' i]"), "content");
+
+            // Значение вида «0; url=/V/?c=...» — адрес после первой «url=».
+            var meta = Regex.Match(content ?? string.Empty, @"url\s*=\s*(.+)$", RegexOptions.IgnoreCase);
+            if (meta.Success)
+            {
+                string value = meta.Groups[1].Value.Trim().Trim('\'', '"');
+                if (!string.IsNullOrEmpty(value))
+                    return value;
+            }
+
+            var script = Regex.Match(html, @"location\.replace\s*\(\s*[""']([^""']+)");
+            return script.Success ? script.Groups[1].Value.Trim() : null;
+        }
+
         async Task<string> GetVUrlFromMoviePage(string host, string cookie, string moviePageUrl)
         {
             try
@@ -628,9 +661,10 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
                 string html = await HttpClient.Get(moviePageUrl, cookie: cookie, useproxy: AppInit.conf.Lostfilm.useproxy);
                 if (string.IsNullOrEmpty(html))
                     return null;
-                var vMatch = Regex.Match(html, @"href=""(/V/\?[^""]+)""", RegexOptions.IgnoreCase);
-                if (vMatch.Success)
-                    return vMatch.Groups[1].Value.StartsWith("http") ? vMatch.Groups[1].Value : host.TrimEnd('/') + vMatch.Groups[1].Value;
+                string vHref = Infrastructure.Parsing.Html.Attr(
+                    Infrastructure.Parsing.Html.Parse(html).QuerySelector("a[href^='/V/?']"), "href");
+                if (!string.IsNullOrEmpty(vHref))
+                    return vHref.StartsWith("http") ? vHref : host.TrimEnd('/') + vHref;
 
                 string id = LostfilmParser.TryExtractPlayMovieOrEpisodeId(html);
                 if (!string.IsNullOrEmpty(id))
@@ -638,12 +672,15 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
                     string searchHtml = await HttpClient.Get($"{host}/v_search.php?a={id}", cookie: cookie, useproxy: AppInit.conf.Lostfilm.useproxy);
                     if (string.IsNullOrEmpty(searchHtml))
                         return null;
-                    var mMeta = Regex.Match(searchHtml, @"(?:content=""[^""]*url\s*=\s*|location\.replace\s*\(\s*[""'])([^""]+)");
-                    if (mMeta.Success)
-                        return mMeta.Groups[1].Value.Trim().StartsWith("http") ? mMeta.Groups[1].Value.Trim() : host.TrimEnd('/') + mMeta.Groups[1].Value.Trim();
-                    var hRef = Regex.Match(searchHtml, @"href=""(/V/\?[^""]+)""");
-                    if (hRef.Success)
-                        return host.TrimEnd('/') + hRef.Groups[1].Value;
+
+                    string redirect = FindRedirect(searchHtml);
+                    if (!string.IsNullOrEmpty(redirect))
+                        return redirect.StartsWith("http") ? redirect : host.TrimEnd('/') + redirect;
+
+                    string hRef = Infrastructure.Parsing.Html.Attr(
+                        Infrastructure.Parsing.Html.Parse(searchHtml).QuerySelector("a[href^='/V/?']"), "href");
+                    if (!string.IsNullOrEmpty(hRef))
+                        return host.TrimEnd('/') + hRef;
                 }
                 return null;
             }
@@ -714,12 +751,10 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
 
             if (searchHtml.Contains("inner-box--link"))
                 return searchHtml;
-            string vPageUrl = null;
-            var mMeta = Regex.Match(searchHtml, @"(?:content=""[^""]*url\s*=\s*|location\.replace\s*\(\s*[""'])([^""]+)");
-            if (mMeta.Success)
-                vPageUrl = mMeta.Groups[1].Value.Trim();
+            string vPageUrl = FindRedirect(searchHtml);
             if (string.IsNullOrEmpty(vPageUrl))
-                vPageUrl = Regex.Match(searchHtml, @"href=""(/V/\?[^""]+)""").Groups[1].Value.Trim();
+                vPageUrl = Infrastructure.Parsing.Html.Attr(
+                    Infrastructure.Parsing.Html.Parse(searchHtml).QuerySelector("a[href^='/V/?']"), "href");
             if (string.IsNullOrEmpty(vPageUrl))
             {
                 if (!string.IsNullOrWhiteSpace(cookie))
