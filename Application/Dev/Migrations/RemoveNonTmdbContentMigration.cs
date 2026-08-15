@@ -16,6 +16,12 @@ namespace JacBlack.Application.Dev.Migrations
     /// Новые такие записи уже не попадают — отбор стоит на входе в базу
     /// (FileDB.IsWantedContent). Эта миграция чистит накопленное.
     ///
+    /// С 15.08.2026 чистит ещё и не-видео: книги, музыку, картинки, шаблоны и
+    /// софт. Отбор по типу их не ловил — у nnmclub раздел назван словами,
+    /// книжные разделы мы не опознаём, и работало правило «неопознанное
+    /// считаем кино», то есть книга приходила как movie. Замер: 32 435 таких
+    /// записей, 1.65% базы и 14% всего nnmclub.
+    ///
     /// Сначала запускать с dryRun=true — посчитает, ничего не трогая.
     /// </summary>
     public sealed class RemoveNonTmdbContentMigration : DevMigrationBase, IDevMigration
@@ -33,6 +39,7 @@ namespace JacBlack.Application.Dev.Migrations
             int scanned = 0, removed = 0, keysEmptied = 0;
             var byType = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var byTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var samples = new List<string>();
 
             foreach (var item in FileDB.masterDb.ToArray())
             {
@@ -57,8 +64,15 @@ namespace JacBlack.Application.Dev.Migrations
 
                         scanned++;
 
-                        // Тот же признак, что и на входе: без типа не трогаем.
-                        if (FileDB.IsWantedContent(t.types))
+                        // Те же два признака, что и на входе в базу.
+                        //
+                        // Первый — тип: спорт и прочее, чего нет в TMDB.
+                        // Второй — сама раздача: книги, музыка, картинки и
+                        // софт приходят с типом movie, потому что раздел у
+                        // nnmclub назван словами и книжные мы не опознаём.
+                        bool nonVideo = Infrastructure.Parsing.NonVideoContent.IsNotVideo(t.title);
+
+                        if (FileDB.IsWantedContent(t.types) && !nonVideo)
                             continue;
 
                         toRemove.Add(kv.Key);
@@ -66,8 +80,14 @@ namespace JacBlack.Application.Dev.Migrations
 
                         byTracker[t.trackerName ?? "?"] = byTracker.GetValueOrDefault(t.trackerName ?? "?") + 1;
 
+                        if (nonVideo)
+                            byType["не видео"] = byType.GetValueOrDefault("не видео") + 1;
+
                         foreach (string type in t.types ?? Array.Empty<string>())
                             byType[type] = byType.GetValueOrDefault(type) + 1;
+
+                        if (samples.Count < 20)
+                            samples.Add($"[{t.trackerName}] {(t.title ?? "").Substring(0, Math.Min(80, (t.title ?? "").Length))}");
                     }
 
                     if (toRemove.Count == 0 || dryRun)
@@ -105,7 +125,8 @@ namespace JacBlack.Application.Dev.Migrations
                 удалено = dryRun ? 0 : removed,
                 ключейОпустело = keysEmptied,
                 поТипам = byType,
-                поТрекерам = byTracker
+                поТрекерам = byTracker,
+                примеры = samples
             };
         }
     }
