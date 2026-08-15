@@ -428,42 +428,13 @@ namespace JacBlack.Application.Search
             }
         }
 
-        /// <summary>
-        /// Выбрасывает из выдачи раздачи, удалённые с трекера.
-        ///
-        /// Их всё равно не скачать: у rutracker торрент-файл лежит только на
-        /// самом трекере, а тема удалена вместе с ним. Оставлять такую запись
-        /// значит предлагать человеку заведомо мёртвую ссылку — и ещё с
-        /// прошлогодним числом раздающих.
-        /// </summary>
-        static List<Result> DropDeadReleases(List<Result> results)
-        {
-            if (results == null || results.Count == 0 || Infrastructure.Persistence.DeadReleases.Count == 0)
-                return results;
-
-            var kept = new List<Result>(results.Count);
-
-            foreach (var r in results)
-            {
-                if (FromTracker(r, "rutracker"))
-                {
-                    var m = Regex.Match(AllUrls(r), @"viewtopic\.php\?t=(\d+)");
-                    if (m.Success && Infrastructure.Persistence.DeadReleases.IsDead("rutracker", m.Groups[1].Value))
-                        continue;
-                }
-
-                if (FromTracker(r, "bitru"))
-                {
-                    var m = Regex.Match(AllUrls(r), @"details\.php\?id=(\d+)");
-                    if (m.Success && Infrastructure.Persistence.DeadReleases.IsDead("bitru", m.Groups[1].Value))
-                        continue;
-                }
-
-                kept.Add(r);
-            }
-
-            return kept;
-        }
+        // Здесь стоял DropDeadReleases — отсев удалённых раздач, знавший только
+        // rutracker и bitru. Его никто не вызывал: рабочий отсев живёт в
+        // ClosedTrackerSeeders.IsDead (строка 96 выше и TorrentQueryService),
+        // он покрывает все пять закрытых трекеров и, главное, не роняет
+        // склейку — раздача выбывает, только если мертвы ВСЕ опознанные копии.
+        // Метод-сирота удалён 15.08.2026: читая его, легко решить, что отсев
+        // работает лишь для двух трекеров, — я на этом и попался.
 
         static string AllUrls(Result r)
         {
