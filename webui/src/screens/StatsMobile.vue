@@ -51,6 +51,22 @@ const s = useStats()
         </div>
       </div>
 
+      <!-- Чему верить. Из всей сводки о качестве на телефон берём одну
+           величину — долю проверенных: у остальных записей число раздающих
+           это снимок неизвестной давности, и человеку важно знать, какая
+           часть выдачи такая. Разбор по способам опроса тут не читают. -->
+      <p
+        v-if="s.quality.value?.aliveSweep?.total"
+        class="mx-4 mb-4 rounded-xl bg-g75 px-3 py-2 text-[12px] text-g700"
+      >
+        <span class="text-g500">Проверку живости прошли</span>
+        <b class="text-ink"> {{ s.quality.value.aliveSweep.percent }}%</b> раздач.
+        <template v-if="s.quality.value.deadReleases">
+          Удалённых с трекера и убранных из выдачи:
+          <b class="text-ink">{{ s.quality.value.deadReleases }}</b>.
+        </template>
+      </p>
+
       <!-- На телефоне из всей сводки по обходам оставляем одно: что идёт
            прямо сейчас. Очереди и прошлые заходы там не читают. -->
       <p

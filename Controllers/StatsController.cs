@@ -231,6 +231,12 @@ namespace JacBlack.Controllers
                 // Сколько часов запись считается проверенной после обхода.
                 freshHours = Infrastructure.Indexers.SeedersFreshness.FreshHours,
 
+                // Скольких раздач вообще касалась проверка живости. Это
+                // главный ответ на вопрос «чему верить»: у непроверенной
+                // записи число раздающих — снимок неизвестной давности,
+                // и он бывает прошлогодним.
+                aliveSweep = ReadSweepSummary(),
+
                 // У кого числа берутся живым опросом, а не из базы.
                 liveSeeders = new
                 {
@@ -248,6 +254,53 @@ namespace JacBlack.Controllers
                     silent = new[] { "lostfilm" }
                 }
             });
+        }
+
+        /// <summary>
+        /// Итог проверки живости: сколько раздач в базе и скольких она уже
+        /// касалась.
+        ///
+        /// Считает не эта ручка — полный обход базы занимает минуты. Читаем
+        /// готовый отчёт, который оставляет за собой `/cron/sweep/stats`, и
+        /// отдаём дату расчёта вместе с числами: снимок недельной давности
+        /// лучше пустоты, но человек должен видеть, что он недельный.
+        /// Отчёта ещё нет — отдаём null, а не нули: ноль читался бы как
+        /// «ничего не проверено».
+        /// </summary>
+        static object ReadSweepSummary()
+        {
+            const string path = "Data/temp/sweep-stats.json";
+
+            try
+            {
+                if (!System.IO.File.Exists(path))
+                    return null;
+
+                var jo = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
+
+                int total = jo.Value<int?>("всегоРаздач") ?? 0;
+                int checkedEver = jo.Value<int?>("хотьРазПроверено") ?? 0;
+
+                if (total <= 0)
+                    return null;
+
+                return new
+                {
+                    total,
+                    checkedEver,
+                    percent = Math.Round(checkedEver * 100.0 / total, 1),
+                    deleteEnabled = jo.Value<bool?>("удалениеВключено") ?? false,
+                    calculatedAt = System.IO.File.GetLastWriteTimeUtc(path)
+                };
+            }
+            catch (Exception ex)
+            {
+                Infrastructure.Logging.JacBlackLog.Swallowed(
+                    Infrastructure.Logging.JacBlackLogCategories.Fdb,
+                    "сводка проверки живости не прочиталась", ex,
+                    Microsoft.Extensions.Logging.LogLevel.Debug);
+                return null;
+            }
         }
 
         [Route("/stats/meta")]

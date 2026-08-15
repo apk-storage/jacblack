@@ -4,6 +4,7 @@ import {
   formatDuration,
   formatSilence,
   formatStatNumberFull,
+  formatStatsUpdatedAt,
   getTrackerDisplayName,
   getTracksData,
 } from '@/lib/stats'
@@ -98,6 +99,22 @@ const s = useStats()
           <template v-if="s.quality.value.deadReleases">
             Раздач, опознанных удалёнными с трекера и убранных из выдачи:
             <b class="text-ink">{{ s.quality.value.deadReleases }}</b>.
+          </template>
+        </p>
+
+        <!-- Доля проверенных. Величина отвечает на тот же вопрос «чему
+             верить», но с другой стороны: у остальных записей число
+             раздающих — снимок неизвестной давности. Дату расчёта
+             показываем рядом, иначе непонятно, насколько она сама свежа. -->
+        <p v-if="s.quality.value.aliveSweep?.total" class="text-[12.5px] text-g500">
+          Проверку живости прошли
+          <b class="text-ink">{{ s.quality.value.aliveSweep.percent }}%</b>
+          раздач —
+          {{ formatStatNumberFull(s.quality.value.aliveSweep.checkedEver ?? 0) }}
+          из {{ formatStatNumberFull(s.quality.value.aliveSweep.total ?? 0) }}.
+          У остальных счётчик показан таким, каким его записал обход.
+          <template v-if="s.quality.value.aliveSweep.calculatedAt">
+            Посчитано {{ formatStatsUpdatedAt(s.quality.value.aliveSweep.calculatedAt) }}.
           </template>
         </p>
       </section>
