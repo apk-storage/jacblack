@@ -36,6 +36,21 @@ export type StatsQuality = {
   imdbCodes?: number
   /** Сколько часов запись считается проверенной после обхода. */
   freshHours?: number
+  /**
+   * Скольких раздач уже касалась проверка живости.
+   *
+   * Отвечает на тот самый вопрос «чему верить»: у непроверенной записи
+   * число раздающих — снимок неизвестной давности, иногда прошлогодний.
+   * Считается не на лету (полный обход базы — минуты), поэтому вместе с
+   * числами приходит дата расчёта.
+   */
+  aliveSweep?: {
+    total?: number
+    checkedEver?: number
+    percent?: number
+    deleteEnabled?: boolean
+    calculatedAt?: string
+  } | null
   liveSeeders?: {
     inline?: string[]
     background?: string[]
