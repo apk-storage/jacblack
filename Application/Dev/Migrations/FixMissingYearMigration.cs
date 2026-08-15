@@ -17,7 +17,10 @@ namespace JacBlack.Application.Dev.Migrations
     /// Замер до правки: у «Матрицы» 22 такие раздачи из 131, у «Игры
     /// престолов» — 58 из 552.
     ///
-    /// Год почти всегда стоит в самом заголовке — его и берём.
+    /// Год почти всегда стоит в самом заголовке — его и берём. А там, где его
+    /// нет вовсе (сценовые релизы вроде «King.and.Maxwell.S01E01.HDTV.x264-SM»),
+    /// берём из словаря по коду IMDB: 15.08.2026 таких записей было 165 411,
+    /// у 32 044 из них есть код, и для 28 679 год в словаре нашёлся.
     ///
     /// Осторожность с диапазонами. «The Matrix: Trilogy (1999-2003)» — это
     /// сборник РАЗНЫХ фильмов, и приписывать ему 1999-й значит вернуть его
@@ -47,9 +50,10 @@ namespace JacBlack.Application.Dev.Migrations
 
         object Execute(bool dryRun)
         {
-            long scanned = 0, hadYear = 0, fixedUp = 0, rangeSkipped = 0, notFound = 0;
+            long scanned = 0, hadYear = 0, fixedUp = 0, rangeSkipped = 0, notFound = 0, fromCode = 0;
             var byTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var samples = new List<string>();
+            var codeSamples = new List<string>();
 
             foreach (var item in FileDB.masterDb.ToArray())
             {
@@ -83,6 +87,36 @@ namespace JacBlack.Application.Dev.Migrations
                         var m = YearAny.Match(t.title ?? "");
                         if (!m.Success)
                         {
+                            // Года в заголовке нет — пробуем словарь по коду.
+                            //
+                            // Так живут сценовые релизы: «King.and.Maxwell.S01E01
+                            // .EXTENDED.HDTV.x264-SM» года не пишет вовсе, и
+                            // такие записи не попадали ни в одну карточку.
+                            // Замер 15.08.2026: без года 165 411 раздач, у
+                            // 32 044 из них есть код, и для 28 679 год лежит
+                            // в словаре.
+                            //
+                            // У сериала это год ПЕРВОГО выхода, а не сезона —
+                            // и это верно: карточка сериала в Лампе одна, с
+                            // годом начала, и запрос приходит именно с ним.
+                            if (!string.IsNullOrWhiteSpace(t.imdb)
+                                && ImdbIndex.TryGet(t.imdb, out var known)
+                                && known?.Year > 1900)
+                            {
+                                fromCode++;
+                                byTracker[t.trackerName ?? "?"] = byTracker.GetValueOrDefault(t.trackerName ?? "?") + 1;
+
+                                if (codeSamples.Count < 10)
+                                    codeSamples.Add($"{known.Year} ← {(t.title ?? "").Substring(0, Math.Min(80, (t.title ?? "").Length))}");
+
+                                if (!dryRun)
+                                {
+                                    t.relased = known.Year;
+                                    touched = true;
+                                }
+                                continue;
+                            }
+
                             notFound++;
                             continue;
                         }
@@ -135,11 +169,13 @@ namespace JacBlack.Application.Dev.Migrations
                 dryRun,
                 просмотрено = scanned,
                 годБыл = hadYear,
-                восстановлено = fixedUp,
+                восстановленоИзЗаголовка = fixedUp,
+                восстановленоПоКоду = fromCode,
                 пропущеноДиапазонов = rangeSkipped,
                 годаВЗаголовкеНет = notFound,
                 поТрекерам = byTracker,
-                примеры = samples
+                примеры = samples,
+                примерыПоКоду = codeSamples
             };
         }
     }
