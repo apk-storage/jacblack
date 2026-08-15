@@ -100,18 +100,28 @@ namespace JacBlack.Infrastructure.Trackers.Lostfilm
         {
             if (string.IsNullOrEmpty(html))
                 return (0, null);
-            var m = Regex.Match(html, @"itemprop=""dateCreated""\s+content=""(\d{4})-\d{2}-\d{2}""");
+
+            var document = Parsing.Html.Parse(html);
+
+            // Прежние шаблоны требовали строгого порядка атрибутов: сперва
+            // itemprop, ровно один пробел, потом content. Перестановка атрибутов
+            // на сайте — и год молча переставал находиться, а без года метод
+            // возвращает пусто целиком.
+            string created = Parsing.Html.Attr(document.QuerySelector("[itemprop='dateCreated']"), "content");
+            var m = Regex.Match(created, @"^(\d{4})-\d{2}-\d{2}");
             if (!m.Success || !int.TryParse(m.Groups[1].Value, out int year) || year <= 0)
                 return (0, null);
-            string russianName = null;
-            var og = Regex.Match(html, @"<meta\s+property=""og:title""\s+content=""([^""]+)""", RegexOptions.IgnoreCase);
-            if (og.Success)
-                russianName = HttpUtility.HtmlDecode(og.Groups[1].Value.Trim());
+
+            // HtmlDecode здесь больше не нужен: разбор дерева отдаёт значение
+            // атрибута уже расшифрованным.
+            string russianName = Parsing.Html.Attr(document.QuerySelector("meta[property='og:title']"), "content");
+
             if (string.IsNullOrWhiteSpace(russianName))
             {
-                var tit = Regex.Match(html, @"<title>([^<]+?)\.?\s*[–-]\s*LostFilm", RegexOptions.IgnoreCase);
+                var tit = Regex.Match(Parsing.Html.Text(document.QuerySelector("title")),
+                    @"^(.+?)\.?\s*[–-]\s*LostFilm", RegexOptions.IgnoreCase);
                 if (tit.Success)
-                    russianName = ShortenSeriesName(HttpUtility.HtmlDecode(tit.Groups[1].Value.Trim()));
+                    russianName = ShortenSeriesName(tit.Groups[1].Value.Trim());
             }
             else
                 russianName = ShortenSeriesName(russianName);
