@@ -1,3 +1,4 @@
+using JacBlack.Infrastructure.Parsing;
 using JacBlack.Infrastructure.Persistence;
 using JacBlack.Infrastructure.Tracks;
 using JacBlack.Infrastructure.Logging;
@@ -112,7 +113,14 @@ namespace JacBlack.Infrastructure.Stats
 
                     try
                     {
-                        AccumulateTracker(result, t, todayUtc);
+                        // Раздача, найденная на нескольких трекерах, хранит их
+                        // списком: «rutor, kinozal, bitru». Считать такую строку
+                        // отдельным источником нельзя — в статистике появлялось
+                        // больше сотни «источников» вида «Rutor, bitru» с
+                        // единичными раздачами, а настоящие трекеры недосчитывали
+                        // своё. Учитываем раздачу в КАЖДОМ её трекере.
+                        foreach (var имя in TrackerNames.Split(t.trackerName))
+                            AccumulateTracker(result, имя, t, todayUtc);
                         result.TorrentsScanned++;
 
                         if (t.ffprobe != null && t.ffprobe.Count > 0 && !string.IsNullOrEmpty(t.magnet))
@@ -137,12 +145,12 @@ namespace JacBlack.Infrastructure.Stats
             return result;
         }
 
-        static void AccumulateTracker(StatsFdbScanResult result, TorrentDetails t, DateTime todayUtc)
+        static void AccumulateTracker(StatsFdbScanResult result, string trackerName, TorrentDetails t, DateTime todayUtc)
         {
-            if (!result.Trackers.TryGetValue(t.trackerName, out var row))
+            if (!result.Trackers.TryGetValue(trackerName, out var row))
             {
                 row = new TrackerStatsRow { LastNewTor = t.createTime };
-                result.Trackers.Add(t.trackerName, row);
+                result.Trackers.Add(trackerName, row);
             }
 
             row.AllTorrents++;
