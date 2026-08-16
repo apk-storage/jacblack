@@ -110,7 +110,15 @@ function itemValues(item: TorrentItem, key: FacetKey): string[] {
     case 'quality':
       return item.quality == null || item.quality === '' ? [] : [String(item.quality)]
     case 'tracker':
-      return item.tracker ? [item.tracker] : []
+      // Одна и та же раздача лежит на нескольких трекерах, и после склейки
+      // копий поле приходит списком: «rutor, kinozal, bitru». Без разбора
+      // фильтр показывал такие связки отдельными пунктами — в списке набралось
+      // под полсотни строк вида «rutor, kinozal, nnmclub, bitru», а выбрать
+      // просто «rutor» и увидеть ВСЕ его раздачи было нельзя.
+      return (item.tracker ?? '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t !== '')
     case 'year':
       return item.relased == null || item.relased === '' ? [] : [String(item.relased)]
     case 'voice':

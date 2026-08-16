@@ -130,6 +130,30 @@ describe('счётчики фасетов', () => {
     ])
   })
 
+  it('склеенная раздача попадает в каждый свой трекер', () => {
+    // После склейки копий поле приходит списком: «rutor, kinozal, bitru».
+    // Раньше такая связка становилась отдельным пунктом фильтра, и выбрать
+    // просто «rutor» со всеми его раздачами было нельзя.
+    const склеенные = [
+      t({ tracker: 'rutor, kinozal, bitru', quality: 1080 }),
+      t({ tracker: 'rutor', quality: 1080 }),
+    ]
+    // Порядок — по убыванию счётчика, потом по алфавиту.
+    expect(countFacet(склеенные, f(), 'tracker')).toEqual([
+      { value: 'rutor', count: 2 },
+      { value: 'bitru', count: 1 },
+      { value: 'kinozal', count: 1 },
+    ])
+  })
+
+  it('выбор одного трекера находит и склеенные раздачи', () => {
+    const склеенные = [
+      t({ tracker: 'rutor, kinozal', quality: 1080 }),
+      t({ tracker: 'toloka', quality: 1080 }),
+    ]
+    expect(склеенные.filter((i) => matches(i, f({ tracker: ['kinozal'] })))).toHaveLength(1)
+  })
+
   it('чужие группы подсчёт сужают', () => {
     const counts = countFacet(items, f({ tracker: ['rutor'] }), 'quality')
     expect(counts).toEqual([
