@@ -124,8 +124,12 @@ namespace JacBlack.Application.Dev
                             continue;
                         }
 
+                        // Раньше сразу после пересчёта стояло
+                        // `torrent.Value.languages = null` — то есть обслуживание
+                        // базы стирало языки у всех записей подряд. Отсюда и
+                        // бралась пустота у трёх четвертей раздач, из-за которой
+                        // Лампа с фильтром «русский язык» их не показывала.
                         FileDB.updateFullDetails(torrent.Value);
-                        torrent.Value.languages = null;
                         processed++;
                     }
 

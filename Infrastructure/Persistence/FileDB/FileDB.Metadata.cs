@@ -109,6 +109,33 @@ namespace JacBlack.Infrastructure.Persistence
 
             if (!t.languages.Contains("rus") && rusVoices.Any(v => t.voices.Contains(v)))
                 t.languages.Add("rus");
+
+            // Дальше — два признака русской дорожки, без которых поле оставалось
+            // пустым у трёх четвертей базы, а Лампа с фильтром «русский язык»
+            // прятала эти раздачи целиком. Пустой language там не означал
+            // «русского нет» — он означал «мы не знаем», и фильтр читал это как
+            // «нет».
+            //
+            // Откуда пустота: `languages` заполнялся только из ffprobe (разбор
+            // самих файлов) и списка студий озвучки. Но ffprobe у нас есть у
+            // единиц записей, а студия указана далеко не всегда — зато почти
+            // всегда указан ВИД перевода: «Дубляж», «MVO», «Профессиональный
+            // многоголосый». Характерный случай: раздача kinozal с пометкой
+            // «ДБ, ПД, СТ» имела voices = [«Дубляж»], но «Дубляж» — это не
+            // студия, и в rusVoices его нет.
+            if (!t.languages.Contains("rus") && !t.languages.Contains("ukr")
+                && RxRusAudio.IsMatch(titlelower))
+                t.languages.Add("rus");
+
+            // Второй признак — сам трекер. На русскоязычных трекерах раздача с
+            // кириллицей в названии практически всегда идёт с русской дорожкой:
+            // это либо российское кино, либо зарубежное с переводом. Проверено
+            // на выборке в две с половиной тысячи записей — англоязычных среди
+            // добавленных не оказалось. Толока сюда не входит: она украинская,
+            // и её раздачи размечаются как ukr выше.
+            if (!t.languages.Contains("rus") && !t.languages.Contains("ukr")
+                && rusTrackers.Contains(t.trackerName) && RxCyrillic.IsMatch(t.title))
+                t.languages.Add("rus");
             #endregion
 
             #region seasons
@@ -232,6 +259,30 @@ namespace JacBlack.Infrastructure.Persistence
                      .ToArray();
 
         static readonly Regex RxDub = new Regex("( |x)(d|dub|дб|дуб|дубляж)(,| )", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Вид перевода в названии раздачи. Студию указывают не всегда, а вид —
+        /// почти всегда: «Дубляж», «Профессиональный многоголосый», «MVO».
+        /// Сокращения обрамлены границами слова: без них «avo» находилось внутри
+        /// «Avocado», а «dub» — внутри «Dublin».
+        /// </summary>
+        static readonly Regex RxRusAudio = new Regex(
+            @"(дубляж|дублированн|многоголос|двухголос|одноголос|закадров|\bmvo\b|\bdvo\b|\bavo\b|\bdub\b|проф\.?\s*перевод)",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>Есть ли в строке кириллица.</summary>
+        static readonly Regex RxCyrillic = new Regex("[А-Яа-яЁё]", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Трекеры, где раздача с русским названием почти наверняка идёт с
+        /// русской дорожкой. Толоки здесь нет намеренно — она украинская.
+        /// </summary>
+        static readonly HashSet<string> rusTrackers = new HashSet<string>
+        {
+            "kinozal", "rutor", "nnmclub", "bitru", "megapeer", "rutracker",
+            "torrentby", "anidub", "aniliberty", "animelayer", "selezen",
+            "lostfilm", "mazepa", "baibako", "animetosho"
+        };
 
         static HashSet<string> ukrVoices = new HashSet<string> { "QTV", "DniproFilm", "AdrianZP", "LeDoyen", "Цікава Ідея", "Cikava Ideya", "КiT", "Inter", "NLO", "Так Треба Продакшн", "ТакТребаПродакшн", "Новий Канал", "Новый Канал", "BambooUA", "ICTV", "Тоніс", "UA-DUB", "ТеТ", "СТБ", "Postmodern", "НЛО", "Колодій", "В одне рило", "SkiDUB", "Інтер", "DubLiCat", "AAA-Sound", "AAASound", "НеЗупиняйПродакшн", "НеЗупиняйПродакшн", "Ozz TV", "1+1", "Три Крапки", "3 крапки", "Tak Treba Production", "UAVoice", "Интер", "TET", "ПлюсПлюс", "Дніпрофільм", "ArtymKo", "Cinemaker", "sweet.tv", "MelodicVoiceStudio", "FanVoxUA", "UkraineFastDUB", "UFDUB", "CHAS.UA", "Струґачка", "StorieS man", "UATeam", "Гуртом", "UkrDub", "AniUA", "Сокира", "FlameStudio", "HATOSHI", "Sengoku" };
 
