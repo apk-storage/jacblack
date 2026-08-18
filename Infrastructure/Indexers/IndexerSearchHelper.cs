@@ -985,9 +985,29 @@ namespace JacBlack.Infrastructure.Indexers
             string t = title.Trim().ToLowerInvariant();
             string q = rawQuery.Trim().ToLowerInvariant();
 
-            return t.StartsWith(q + ":", StringComparison.Ordinal)
+            if (t.StartsWith(q + ":", StringComparison.Ordinal)
                 || t.StartsWith(q + " -", StringComparison.Ordinal)
-                || t.StartsWith(q + " —", StringComparison.Ordinal);
+                || t.StartsWith(q + " —", StringComparison.Ordinal))
+                return true;
+
+            // Карточка сериала приходит с номером сезона — «Tsue to Tsurugi no
+            // Wistoria S2», — а источники хранят имя СЕРИАЛА, без него. Из-за
+            // этого из карточки второго сезона выпадали почти все трекеры:
+            // по запросу с «S2» находился один animetosho (он берёт имя прямо
+            // из имени файла релиза, где номер есть), а nyaa, aniliberty,
+            // animelayer, rutor и остальные — нет. Замер: 4 раздачи против 38.
+            //
+            // Поэтому пробуем ещё раз, срезав номер сезона у ЗАПРОСА. У самой
+            // раздачи не срезаем: там номер — часть настоящего имени файла,
+            // и терять его незачем.
+            // Срезка сезона живёт одним методом на весь поиск: тем же он
+            // добавляет вариант запроса без номера. Две копии одного правила
+            // неминуемо разъедутся — так уже было с разбором размера.
+            string bare = IndexerRequestParams.StripTrailingSeason(q);
+            if (bare != null)
+                return Same(title, JacBlack.Infrastructure.Utils.StringConvert.SearchName(bare));
+
+            return false;
         }
     }
 }

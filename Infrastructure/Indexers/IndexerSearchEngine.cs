@@ -44,6 +44,25 @@ namespace JacBlack.Infrastructure.Indexers
             {
                 var card = jackettSearch.SearchResults(req.ApiKey, query, titleRu, titleEn, req.Year, category, isSerial, req.RqNum, cache);
                 batches.Add(card);
+
+                // Карточка сериала приходит с номером сезона, а трекеры хранят
+                // имя сериала без него. Ищем ВТОРЫМ заходом по имени без
+                // номера — и делаем это независимо от того, нашлось ли что-то
+                // первым: непустая выдача здесь не значит полную. По «Tsue to
+                // Tsurugi no Wistoria S2» находились четыре раздачи одного
+                // animetosho (он берёт имя из имени файла релиза), а nyaa,
+                // aniliberty, animelayer, rutor и прочие выпадали — всего
+                // 4 против 38.
+                string bareQuery = IndexerRequestParams.StripTrailingSeason(query);
+                string bareRu = IndexerRequestParams.StripTrailingSeason(titleRu);
+                string bareEn = IndexerRequestParams.StripTrailingSeason(titleEn);
+                if (bareQuery != null || bareRu != null || bareEn != null)
+                {
+                    batches.Add(jackettSearch.SearchResults(
+                        req.ApiKey, bareQuery ?? query, bareRu ?? titleRu, bareEn ?? titleEn,
+                        req.Year, category, isSerial, req.RqNum, cache));
+                }
+
                 if (card.Count == 0)
                 {
                     foreach (var variant in BuildQueryVariants(query, titleRu, titleEn, settings))
@@ -112,6 +131,21 @@ namespace JacBlack.Infrastructure.Indexers
             {
                 if (!string.IsNullOrWhiteSpace(term) && !variants.Contains(term))
                     variants.Add(term);
+            }
+
+            // Название без номера сезона. Лампа шлёт карточку как «Tsue to
+            // Tsurugi no Wistoria S2», а трекеры хранят имя сериала без номера,
+            // и поиск по индексу такую строку просто не находил: из всей
+            // выдачи уцелевал animetosho, который берёт имя из имени файла
+            // релиза. Замер на живой базе: 4 раздачи с номером против 38 без.
+            //
+            // Пробуем дополнительным вариантом, а не заменой: раздачи, где
+            // номер сезона в имени есть, по-прежнему находятся первым запросом.
+            foreach (var term in new[] { query, titleRu, titleEn })
+            {
+                var bare = IndexerRequestParams.StripTrailingSeason(term);
+                if (!string.IsNullOrWhiteSpace(bare) && !variants.Contains(bare))
+                    variants.Add(bare);
             }
 
             if (variants.Count == 0 && !string.IsNullOrWhiteSpace(query))
