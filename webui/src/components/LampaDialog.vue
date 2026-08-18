@@ -54,16 +54,26 @@ async function signIn() {
   }
 }
 
-function run(device: CubDevice) {
+async function run(device: CubDevice) {
   error.value = ''
   done.value = ''
   const data = launch.value
   if (!data) { error.value = 'У раздачи нет magnet-ссылки'; return }
+
+  // Ждём ответ устройства, а не просто отправляем в сокет. Раньше кнопка сразу
+  // писала «Отправлено», даже когда на телевизоре ничего не происходило, —
+  // и разобраться было нельзя. Теперь на экране либо ответ Лампы, либо
+  // объяснение, почему его нет.
+  busy.value = true
+  done.value = 'Отправляю…'
   try {
-    cub.launch(device, data)
-    done.value = `Отправлено на «${device.name}»`
+    const итог = await cub.launch(device, data)
+    done.value = `«${device.name}»: ${итог || 'команда принята'}`
   } catch (e) {
+    done.value = ''
     error.value = (e as Error).message || 'Не удалось отправить'
+  } finally {
+    busy.value = false
   }
 }
 </script>
