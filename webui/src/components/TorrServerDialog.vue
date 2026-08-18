@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import Icon from '@/components/Icon.vue'
 import { getItem, setItem, StorageKeys } from '@/lib/storage'
+import { isLocalTorrServer } from '@/lib/magnets'
 
 /**
  * Куда отправлять раздачу.
@@ -40,11 +41,30 @@ watch(
 // Проверка связи через бэкенд jac.black (сервер→TorrServer), а не из браузера:
 // прямой запрос в HTTP-TorrServer браузер режет (mixed content), и «проверить»
 // из веба всегда падало бы не по делу.
+/** Адрес без хвостового слэша: TorrServer не любит двойные слэши в пути. */
+function безСлэша(адрес: string): string {
+  return адрес.trim().replace(/[/]+$/, '')
+}
+
 async function check() {
   const value = url.value.trim()
   if (!value) return
   test.value = { state: 'checking', text: 'Проверяю…' }
   try {
+    // Локальный адрес наш сервер проверить не может — он в интернете,
+    // а TorrServer в домашней сети. Пробуем из браузера.
+    if (isLocalTorrServer(value)) {
+      try {
+        const прямо = await fetch(безСлэша(value) + '/echo')
+        test.value = прямо.ok || прямо.status === 401
+          ? { state: 'ok', text: 'На связи — локальный сервер' }
+          : { state: 'fail', text: 'Ответил, но ошибкой ' + прямо.status }
+      } catch {
+        test.value = { state: 'fail', text: 'Не достаётся. Если сервер на этом же компьютере — укажите 127.0.0.1, такой адрес браузер пропускает' }
+      }
+      return
+    }
+
     const res = await fetch(`/torrserver/check?baseUrl=${encodeURIComponent(value)}`)
     const data = (await res.json().catch(() => null)) as
       | { ok?: boolean; version?: string; status?: number }

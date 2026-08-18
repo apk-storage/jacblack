@@ -27,6 +27,9 @@ let socket: CubSocket | null = null
 const received = ref(0)
 const lastMethod = ref('')
 
+/** Куда приходит ответ устройства на текущую команду. */
+let ответ: ((d: unknown) => void) | null = null
+
 /** Код терминала (`terminal_access`), заданный на ТВ. Хранится локально. */
 const TERMINAL_KEY = 'jb_cub_terminal'
 const terminalCode = ref<string>(readTerminal())
@@ -62,6 +65,7 @@ export function useCub() {
     socket = new CubSocket(account.value, {
       onState: (s) => { socketState.value = s },
       onDevices: (list) => { devices.value = list },
+      onTerminalResult: (d) => ответ?.(d),
       onAny: (method, size) => {
         received.value += 1
         lastMethod.value = size ? `${method} (${size})` : method
@@ -82,27 +86,52 @@ export function useCub() {
   }
 
   /**
-   * Запустить раздачу на устройстве. Требует, чтобы на ТВ был задан код
-   * терминала и тот же код введён здесь (`setTerminalCode`).
+   * Отправка раздачи на устройство — с ожиданием отклика.
    *
-   * Порядок как у Лампы: сначала активируем терминал присланным кодом, следом
-   * шлём eval с открытием карточки и добавлением magnet.
+   * Раньше команда уходила «в никуда»: activate, через 300 мс eval, и всё —
+   * человек видел, что устройство в списке есть, а на телевизоре ничего не
+   * происходило, и понять почему было нельзя. Между тем Лампа отвечает:
+   * на успешную активацию шлёт `terminal_result` со словами «Terminal access
+   * activated», а после eval возвращает его результат — включая текст
+   * исключения, если код упал.
+   *
+   * Поэтому ждём отклик и возвращаем его наружу. Молчание тоже значимо: оно
+   * означает, что устройство не приняло код терминала или в его сборке Лампы
+   * выключена обработка команд сокета (`lampa_settings.socket_methods`) — без
+   * неё terminal_eval игнорируется целиком.
    */
-  // Устройство остаётся в параметрах намеренно: человек выбирает его
-  // в диалоге, и вызывающая сторона передаёт именно его. Само попадание
-  // идёт по коду терминала — он и определяет, какой экран ответит, —
-  // поэтому в теле параметр не нужен. Подчёркивание сообщает об этом
-  // сборщику, у которого включён noUnusedParameters.
-  function launch(_device: CubDevice, release: LampaLaunch): void {
+  async function launch(_device: CubDevice, release: LampaLaunch): Promise<string> {
     if (!socket || !socket.connected) throw new Error('Нет связи с CUB — войдите в аккаунт')
-    if (!terminalCode.value) throw new Error('Не задан код терминала (его нужно включить в Лампе на ТВ)')
+    if (!terminalCode.value)
+      throw new Error('Не задан код терминала — включите Терминал в Лампе на устройстве')
 
-    const js = buildLaunchEval(release)
+    const дождаться = (сколько: number) =>
+      new Promise<string | null>((готово) => {
+        const таймер = setTimeout(() => { ответ = null; готово(null) }, сколько)
+        ответ = (данные) => {
+          clearTimeout(таймер)
+          готово(typeof данные === 'string' ? данные : JSON.stringify(данные))
+        }
+      })
+
     socket.terminalActivate(terminalCode.value)
-    // Небольшая пауза, чтобы устройство успело активировать терминал до eval.
-    setTimeout(() => {
-      try { socket?.terminalEval(terminalCode.value, js) } catch { /* переподключение поднимет заново */ }
-    }, 300)
+    const активация = await дождаться(6000)
+    if (активация === null) {
+      throw new Error(
+        'Устройство не отозвалось на код терминала. Проверьте, что Лампа открыта, ' +
+        'а код в её настройках совпадает с указанным здесь.',
+      )
+    }
+
+    socket.terminalEval(terminalCode.value, buildLaunchEval(release))
+    const итог = await дождаться(12000)
+    if (итог === null) {
+      throw new Error(
+        'Терминал принял код, но команда осталась без ответа. Обычно так бывает, ' +
+        'когда в сборке Лампы выключена обработка команд сокета.',
+      )
+    }
+    return итог
   }
 
   // Автоподключение при наличии сохранённого аккаунта.

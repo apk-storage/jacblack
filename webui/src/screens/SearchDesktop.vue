@@ -19,6 +19,9 @@ const TORR_ERRORS: Record<TorrServerErrorCode, string> = {
   missingUrl: 'Сначала укажите адрес TorrServer',
   unauthorized: 'TorrServer не принял логин или пароль',
   cors: 'TorrServer отказал в запросе из браузера — проверьте адрес и доступ',
+  localBlocked:
+    'Локальный TorrServer не ответил. Проверьте, что он запущен. ' +
+    'Если он на другом устройстве сети, браузер блокирует запрос с HTTPS-страницы — скопируйте magnet и добавьте вручную.',
   request: 'TorrServer не ответил — проверьте, что он запущен и доступен',
 }
 
