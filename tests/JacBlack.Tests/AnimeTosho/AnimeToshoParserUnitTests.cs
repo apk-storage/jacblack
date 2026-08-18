@@ -190,4 +190,39 @@ public class AnimeToshoParserUnitTests
 
         Assert.Equal("https://animetosho.org/view/fallback", AnimeToshoParser.MapToTorrentDetails(item).url);
     }
+
+    [Fact]
+    public void Сценовый_заголовок_через_точки_разбирается_на_имя_год_и_сезон()
+    {
+        // Живой случай с nyaa: разделитель — точка, год и сезон без скобок.
+        // Прежние правила искали пробел перед меткой, поэтому не срабатывало
+        // ни одно, и именем становился весь заголовок целиком — такую строку
+        // сверка с карточкой не признаёт никогда, и раздача терялась в поиске
+        // из Лампы, хотя в вебе была видна.
+        var p = AnimeToshoParser.ParseTitle(
+            "Shingeki.Kyojin.Chuugakkou.2015.S01.MULTI.audio.sub.1080p.BDRip.CUSTOM.x264.PCM-KuroNeko");
+
+        Assert.Equal("Shingeki Kyojin Chuugakkou", p.Name);
+        Assert.Equal(2015, p.Year);
+        Assert.Equal(1, p.Season);
+    }
+
+    [Fact]
+    public void Точки_внутри_обычного_названия_не_ломают_разбор()
+    {
+        // Здесь точка — часть названия, а пробелы есть: трогать нельзя.
+        var p = AnimeToshoParser.ParseTitle("[Group] Dr. Stone - 05 [1080p]");
+
+        Assert.Equal("Dr. Stone", p.Name);
+        Assert.Equal(5, p.Episode);
+    }
+
+    [Fact]
+    public void Год_отдельным_словом_становится_границей_имени()
+    {
+        var p = AnimeToshoParser.ParseTitle("Kimetsu.no.Yaiba.2019.1080p.BluRay.x264");
+
+        Assert.Equal("Kimetsu no Yaiba", p.Name);
+        Assert.Equal(2019, p.Year);
+    }
 }
