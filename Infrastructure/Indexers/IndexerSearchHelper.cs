@@ -2,6 +2,7 @@ using System;
 using JacBlack.Models.Api;
 using Microsoft.AspNetCore.Http;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace JacBlack.Infrastructure.Indexers
 {
@@ -545,7 +546,14 @@ namespace JacBlack.Infrastructure.Indexers
                 bool ok;
 
                 bool обаПрисланы = !string.IsNullOrEmpty(en) && !string.IsNullOrEmpty(ru);
-                bool обаРазобраны = !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(original);
+                // У части источников название всего одно, и оно ложится в оба
+                // поля сразу — у nyaa это «One Piece» и там, и там. Требовать от
+                // такой записи совпадения ЕЩЁ И С РУССКИМ нечестно: русского
+                // у неё нет вовсе, а не «есть и не совпало». На этом вся nyaa
+                // исчезала из поиска Лампы: 894 позиции по одному оригиналу
+                // и ноль, как только карточка присылала и русское название.
+                bool обаРазобраны = !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(original)
+                    && !string.Equals(name.Trim(), original.Trim(), StringComparison.OrdinalIgnoreCase);
 
                 if (req.Year <= 0 && обаПрисланы && обаРазобраны)
                     ok = byOriginal && byRussian;
@@ -838,6 +846,12 @@ namespace JacBlack.Infrastructure.Indexers
             return false;
         }
 
+        // Признак серийной раздачи в названии: «S2», «Season 2», «- 04», «E04»,
+        // «сезон». Нужен там, где года нет и взять его неоткуда.
+        static readonly Regex RxSeriesMark = new Regex(
+            @"(\bS\d{1,2}\b|\bSeason\s*\d{1,2}\b|\bE\d{1,3}\b|\s-\s\d{1,3}(v\d)?\b|\bсезон\b)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         static bool YearFits(Result r, int cardYear, int cardIsSerial)
         {
             if (cardYear <= 0)
@@ -857,7 +871,24 @@ namespace JacBlack.Infrastructure.Indexers
             // работал всегда — там раздача без года в карточку с годом не
             // попадает вовсе; расходился только живой поиск.
             if (year <= 0)
-                return false;
+            {
+                // Исключение для сериальных карточек. У аниме-раздач года в
+                // названии не бывает вовсе — «[SubsPlease] Wistoria S2 - 04» —
+                // и взять его неоткуда: ни animetosho, ни nyaa года не отдают.
+                // Отвергая такие раздачи, мы теряли ВСЮ аниме-выдачу, стоило
+                // человеку искать из карточки с годом: по «Tsue to Tsurugi no
+                // Wistoria S2» с year=2024 не находилось ничего, хотя четыре
+                // раздачи лежали в базе.
+                //
+                // Для карточки ФИЛЬМА правило остаётся строгим: там год-ноль и
+                // тащил в «Одиссею» 2026 чужие сериалы 1968–1994. Здесь же
+                // карточка сама объявила себя сериалом, а раздача несёт номер
+                // сезона или серии — то есть это не фильм-тёзка.
+                bool serialCard = cardIsSerial == 2 || cardIsSerial == 3 || cardIsSerial == 5;
+                return serialCard
+                    && !string.IsNullOrEmpty(r.Title)
+                    && RxSeriesMark.IsMatch(r.Title);
+            }
 
             // Карточка сама говорит, фильм это или сериал, и её слову верим
             // больше, чем типу раздачи. Иначе к карточке фильма «Дюна» 2021

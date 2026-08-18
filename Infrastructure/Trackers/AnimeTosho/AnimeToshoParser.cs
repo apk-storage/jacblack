@@ -43,6 +43,48 @@ namespace JacBlack.Infrastructure.Trackers.AnimeTosho
             @"Multi[- ]?Sub|Sub(?:s|bed)?|Dub(?:bed)?|Raw|Batch|Uncensored|Remux|REPACK|AMZN|CR|FUNi|NF|HULU)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        // Сценовое именование: слова разделены точками, а не пробелами —
+        // «Shingeki.Kyojin.Chuugakkou.2015.S01.MULTI.audio.sub.1080p.BDRip».
+        // Все границы ниже ищут пробел перед меткой, поэтому по такому
+        // заголовку не срабатывало НИ ОДНО правило: именем становилась вся
+        // строка целиком, вместе с кодеком и группой. Для поиска по карточке
+        // это равно потере раздачи — сверка названий такую строку не признает
+        // никогда, и раздачи Nyaa не находились из Лампы вовсе.
+        static readonly Regex RxSceneDots = new Regex(@"^[^\s]+$", RegexOptions.Compiled);
+
+        // Год отдельным словом: после приведения точек к пробелам он больше не
+        // в скобках. Границей считаем только тот год, за которым идёт что-то
+        // техническое, — иначе отрезали бы название вроде «2012».
+        static readonly Regex RxYearWord = new Regex(@"\s((?:19|20)\d{2})(?=\s)", RegexOptions.Compiled);
+
+        // Сезон в середине строки: «... 2015 S01 MULTI ...».
+        static readonly Regex RxSeasonAnywhere = new Regex(@"\s+S(\d{1,2})(?=\s)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Приводит сценовый заголовок к обычному виду: точки между словами
+        /// становятся пробелами. Трогаем только явный случай — когда в строке
+        /// нет пробелов вовсе, — чтобы не сломать названия с точками внутри
+        /// («Dr. Stone», «Re:Zero kara Hajimeru Isekai Seikatsu 2nd Season»).
+        /// </summary>
+        static string NormalizeScene(string t)
+        {
+            if (string.IsNullOrWhiteSpace(t))
+                return t;
+
+            int пробелов = 0, точек = 0;
+            foreach (char c in t)
+            {
+                if (c == ' ') пробелов++;
+                else if (c == '.') точек++;
+            }
+
+            // Точек заметно больше, чем пробелов — значит разделитель именно
+            // точка. Порог с запасом: у обычных заголовков точек одна-две.
+            if (точек >= 3 && точек > пробелов)
+                return t.Replace('.', ' ');
+
+            return t;
+        }
         /// <summary>Результат разбора одного заголовка.</summary>
         public class ParsedTitle
         {
@@ -68,7 +110,7 @@ namespace JacBlack.Infrastructure.Trackers.AnimeTosho
 
             string t = HttpUtility.HtmlDecode(rawTitle).Trim();
             t = RxGroupPrefix.Replace(t, "");
-            t = t.Trim();
+            t = NormalizeScene(t.Trim());
 
             // Год — первое вхождение четырёхзначного числа в скобках.
             int yearIndex = -1;
@@ -96,6 +138,25 @@ namespace JacBlack.Infrastructure.Trackers.AnimeTosho
                 cut = Math.Min(cut, mSeason.Index);
                 if (result.Season == 0)
                     result.Season = ToInt(mSeason.Groups[1].Value);
+            }
+
+            // Год без скобок и сезон в середине — тоже границы имени.
+            // Они появляются после того, как точки стали пробелами: в сыром
+            // виде сценового заголовка их не видно ни одной регулярке.
+            var mYearWord = RxYearWord.Match(t);
+            if (mYearWord.Success)
+            {
+                cut = Math.Min(cut, mYearWord.Index);
+                if (result.Year == 0 && int.TryParse(mYearWord.Groups[1].Value, out int yw))
+                    result.Year = yw;
+            }
+
+            var mSeasonAny = RxSeasonAnywhere.Match(t);
+            if (mSeasonAny.Success)
+            {
+                cut = Math.Min(cut, mSeasonAny.Index);
+                if (result.Season == 0)
+                    result.Season = ToInt(mSeasonAny.Groups[1].Value);
             }
 
             var mEp = RxEpisodeOnly.Match(t);
