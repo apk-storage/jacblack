@@ -264,5 +264,27 @@ namespace JacBlack.Infrastructure.Indexers
             var m = Regex.Match(query.Trim(), @"^(.+?)\s+(19|20)\d{2}$");
             return m.Success ? m.Groups[1].Value.Trim() : null;
         }
+
+        /// <summary>
+        /// Название без хвостового номера сезона: «Wistoria S2» → «Wistoria».
+        /// Возвращает null, если хвоста нет.
+        ///
+        /// Лампа шлёт название карточки вместе с номером сезона, а трекеры
+        /// хранят имя СЕРИАЛА, без него. Поиск идёт по индексу подстрокой, и
+        /// запрос с «S2» не находил записи вовсе — уцелевал один animetosho,
+        /// который берёт имя прямо из имени файла релиза, где номер есть.
+        /// Замер на живой базе: 4 раздачи против 38, если номер убрать.
+        /// </summary>
+        public static string StripTrailingSeason(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return null;
+            var m = Regex.Match(
+                query.Trim(),
+                @"^(.+?)[\s:,-]+(?:s\s*\d{1,2}|season\s*\d{1,2}|\d{1,2}(?:st|nd|rd|th)\s*season|сезон\s*\d{1,2}|\d{1,2}\s*сезон)$",
+                RegexOptions.IgnoreCase);
+            if (!m.Success) return null;
+            string cut = m.Groups[1].Value.Trim();
+            return cut.Length > 0 ? cut : null;
+        }
     }
 }
