@@ -78,14 +78,19 @@ namespace JacBlack.Infrastructure.Indexers
                 // при японском названии первый заход часто пуст, и записи
                 // приходят из запасных вариантов — именно там и лежит ромадзи.
                 var aliases = PickAliases(batches, titleEn);
-                if (aliases.Count > 1)
-                {
+                if (aliases.Count > 0)
                     req.TitleAliases = aliases;
 
-                    // Второе и последующие написания ищем отдельно. У «Могилы
-                    // светлячков» это «Hotaru no Haka» и «Grave of the
-                    // Fireflies» — совершенно разные строки, и по одной из них
-                    // половина раздач не находится.
+                // Дополнительные заходы по вторым написаниям — только когда
+                // выдача бедная.
+                //
+                // Каждый заход стоит времени: на «Могиле светлячков» они дали
+                // +10 раздач, но растянули ответ с 1.5 до 3.9 секунды. Люди
+                // жалуются как раз на ожидание, а когда раздач и так под сотню,
+                // добирать нечего.
+                int найдено = batches.Sum(b => b?.Count() ?? 0);
+                if (aliases.Count > 1 && найдено < 40)
+                {
                     foreach (string alias in aliases.Skip(1).Take(2))
                     {
                         batches.Add(jackettSearch.SearchResults(
