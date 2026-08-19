@@ -63,6 +63,19 @@ namespace JacBlack.Infrastructure.Indexers
                         req.Year, category, isSerial, req.RqNum, cache));
                 }
 
+                // У аниме оригинальное название приходит иероглифами, а
+                // англоязычные трекеры подписывают раздачи ромадзи — общего
+                // в этих строках нет ни буквы. Ромадзи знают наши же русские
+                // аниме-трекеры: у них в записи лежат оба имени. Берём его из
+                // первой выдачи и ищем ещё раз.
+                string romaji = PickRomaji(card, titleEn);
+                if (romaji != null)
+                {
+                    req.TitleRomaji = romaji;
+                    batches.Add(jackettSearch.SearchResults(
+                        req.ApiKey, romaji, null, romaji, req.Year, category, isSerial, req.RqNum, cache));
+                }
+
                 if (card.Count == 0)
                 {
                     foreach (var variant in BuildQueryVariants(query, titleRu, titleEn, settings))
@@ -110,6 +123,75 @@ namespace JacBlack.Infrastructure.Indexers
         {
             if (req.IsSerial >= 0) return req.IsSerial;
             return req.IsSerial;
+        }
+
+        /// <summary>
+        /// Латинское имя, которым та же вещь подписана у англоязычных трекеров.
+        ///
+        /// Берётся из уже найденного: у русских аниме-трекеров в записи лежат
+        /// оба имени сразу — «Адский режим» и «Hell Mode: Yarikomizuki no
+        /// Gamer…». Возвращает null, если карточка и так пришла с латинским
+        /// названием или подтвердить имя нечем.
+        ///
+        /// Порог в две записи — заслон от случайности: одна раздача с чужим
+        /// именем в поле не должна утащить поиск в сторону.
+        /// </summary>
+        static string PickRomaji(List<Result> found, string titleEn)
+        {
+            if (found == null || found.Count == 0)
+                return null;
+
+            // Карточка пришла с латинским названием — искать нечего.
+            if (!string.IsNullOrWhiteSpace(titleEn) && !HasNonLatin(titleEn))
+                return null;
+
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var samples = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var r in found)
+            {
+                string original = r.info?.originalname;
+                if (string.IsNullOrWhiteSpace(original) || HasNonLatin(original))
+                    continue;
+
+                string key = StringConvert.SearchName(original);
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+
+                counts.TryGetValue(key, out int n);
+                counts[key] = n + 1;
+                samples[key] = original;
+            }
+
+            string best = null;
+            int bestCount = 1;                 // одной записи мало
+            foreach (var pair in counts)
+            {
+                if (pair.Value > bestCount)
+                {
+                    bestCount = pair.Value;
+                    best = pair.Key;
+                }
+            }
+
+            return best == null ? null : samples[best];
+        }
+
+        static bool HasNonLatin(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return false;
+
+            foreach (char c in s)
+            {
+                // Кириллица, японская кана и иероглифы — всё, что не подписывают
+                // латиницей англоязычные трекеры.
+                if (c >= 0x0400 && c <= 0x04FF) return true;
+                if (c >= 0x3040 && c <= 0x30FF) return true;
+                if (c >= 0x4E00 && c <= 0x9FFF) return true;
+            }
+
+            return false;
         }
 
         static List<string> BuildQueryVariants(string query, string titleRu, string titleEn, SearchSettings settings)

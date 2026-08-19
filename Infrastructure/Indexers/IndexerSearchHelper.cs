@@ -234,7 +234,13 @@ namespace JacBlack.Infrastructure.Indexers
             string en = originalGiven ? JacBlack.Infrastructure.Utils.StringConvert.SearchName(req.TitleOriginal) : null;
             string ru = titleGiven ? JacBlack.Infrastructure.Utils.StringConvert.SearchName(req.Title) : null;
 
-            if (string.IsNullOrEmpty(en) && string.IsNullOrEmpty(ru))
+            // Ромадзи, подхваченное из первой выдачи, когда карточка пришла с
+            // японским названием. Без него заслон выбрасывал бы ровно то, ради
+            // чего делался второй заход: у nyaa раздача подписана «Hell Mode…»,
+            // а карточка прислала «ヘルモード…» — совпасть им нечем.
+            string romaji = JacBlack.Infrastructure.Utils.StringConvert.SearchName(req.TitleRomaji);
+
+            if (string.IsNullOrEmpty(en) && string.IsNullOrEmpty(ru) && string.IsNullOrEmpty(romaji))
                 return results;
 
             // Код IMDB надёжнее любой строки: одноимённые вещи он разводит
@@ -504,7 +510,12 @@ namespace JacBlack.Infrastructure.Indexers
                 // от него — фильм «From Beyond» 1986 года, который по-русски
                 // тоже «Извне», — закрыт годом: карточка сериала говорит 2022,
                 // и восемьдесят шестой в окно не попадает.
-                bool byOriginal = Hits(name, original, en, req.TitleOriginal);
+                bool byOriginal = Hits(name, original, en, req.TitleOriginal)
+                    // …либо по ромадзи, если карточка пришла с японским
+                    // названием. Для nyaa и knaben это единственный способ
+                    // совпасть: «ヘルモード…» и «Hell Mode…» не имеют общего
+                    // ни в одной букве.
+                    || (!string.IsNullOrEmpty(romaji) && Hits(name, original, romaji, req.TitleRomaji));
 
                 // Совпадение по русскому названию принимаем осторожнее: оно
                 // возвращает своё, но и тёзок тоже. Пропускаем, только если
