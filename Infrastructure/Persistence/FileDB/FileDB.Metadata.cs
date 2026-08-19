@@ -68,10 +68,22 @@ namespace JacBlack.Infrastructure.Persistence
             // Раньше здесь на каждый торрент вызывался v.ToLower() для всех ~900
             // студий — то есть 900 аллокаций строк на запись. Список приведён
             // к нижнему регистру один раз при старте.
-            foreach (var (name, lower) in voicesLower)
+            // Список студий применяем ТОЛЬКО там, где русский перевод вообще
+            // возможен: либо в названии есть кириллица, либо трекер русский.
+            //
+            // Иначе получается мусор, и не единичный. Живые примеры с зарубежной
+            // выдачи: «Rumble» в «School Rumble», «DeMon» в «Demon King's»,
+            // «Inter» в «Winterfell», «Anika» в «Itsunomanika», «Macross» —
+            // само название аниме. Границы слова тут не спасают: «Rumble» и
+            // «Demon» — целые слова, просто обычные английские, совпавшие с
+            // названиями студий. Человек видел в Лампе озвучку, которой нет.
+            if (МожетБытьРусскийПеревод(titlelower, t.trackerName))
             {
-                if (titlelower.Contains(lower, StringComparison.Ordinal))
-                    t.voices.Add(name);
+                foreach (var (name, lower) in voicesLower)
+                {
+                    if (ContainsAsWord(titlelower, lower))
+                        t.voices.Add(name);
+                }
             }
 
             var streams = TracksDB.Get(t.magnet, t.types);
@@ -85,7 +97,7 @@ namespace JacBlack.Infrastructure.Persistence
 
                     foreach (var (name, lower) in voicesLower)
                     {
-                        if (streamTitle.Contains(lower, StringComparison.Ordinal))
+                        if (ContainsAsWord(streamTitle, lower))
                             t.voices.Add(name);
                     }
 
@@ -280,6 +292,72 @@ namespace JacBlack.Infrastructure.Persistence
                      .ToArray();
 
         static readonly Regex RxDub = new Regex("( |x)(d|dub|дб|дуб|дубляж)(,| )", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Вхождение названия студии ОТДЕЛЬНЫМ словом.
+        ///
+        /// Раньше список из ~900 студий искался обычной подстрокой, и это давало
+        /// мусор пачками — особенно на зарубежных названиях, где нет русских
+        /// пометок и совпасть может что угодно. Живые примеры, найденные
+        /// 19.08.2026: «Inter» внутри «Game of Thrones… Winterfell», «Anika»
+        /// внутри «Itsunomanika», «DeMon» внутри «Demon King's», «Rumble»
+        /// внутри «School Rumble», «Macross» — само название аниме.
+        ///
+        /// Человек видел в Лампе озвучку, которой нет, и доверял ей.
+        ///
+        /// Границей считается всё, кроме буквы и цифры: точки, скобки, дефисы
+        /// в названиях студий обычны («BaibaKo.tv», «LostFilm.TV»), и рвать по
+        /// ним нельзя.
+        /// </summary>
+        // Трекеры, где раздачи подписывают латиницей и русского перевода не
+        // бывает. Список студий озвучки к ним не применяется.
+        static readonly HashSet<string> ЗарубежныеТрекеры = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "piratebay", "eztv", "knaben", "yts", "nyaa", "animetosho"
+        };
+
+        /// <summary>
+        /// Есть ли смысл искать в названии русскую студию озвучки.
+        ///
+        /// На зарубежных трекерах — только если в названии есть кириллица или
+        /// прямая пометка русской дорожки: там встречаются редкие релизы с
+        /// русским звуком, и терять их из-за общего правила незачем.
+        /// </summary>
+        static bool МожетБытьРусскийПеревод(string titlelower, string trackerName)
+        {
+            if (string.IsNullOrEmpty(trackerName) || !ЗарубежныеТрекеры.Contains(trackerName))
+                return true;
+
+            foreach (char c in titlelower)
+            {
+                if (c >= 'а' && c <= 'я' || c == 'ё')
+                    return true;
+            }
+
+            return titlelower.Contains("rus", StringComparison.Ordinal)
+                || titlelower.Contains("russian", StringComparison.Ordinal);
+        }
+
+        static bool ContainsAsWord(string haystack, string needle)
+        {
+            if (string.IsNullOrEmpty(haystack) || string.IsNullOrEmpty(needle))
+                return false;
+
+            int i = 0;
+            while ((i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0)
+            {
+                bool слеваГраница = i == 0 || !char.IsLetterOrDigit(haystack[i - 1]);
+                int конец = i + needle.Length;
+                bool справаГраница = конец >= haystack.Length || !char.IsLetterOrDigit(haystack[конец]);
+
+                if (слеваГраница && справаГраница)
+                    return true;
+
+                i = конец;
+            }
+
+            return false;
+        }
 
         // Английские обозначения дорожек.
         //

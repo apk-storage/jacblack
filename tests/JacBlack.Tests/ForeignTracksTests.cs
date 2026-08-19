@@ -95,6 +95,30 @@ public class ForeignTracksTests
         Assert.Contains("rus", t.languages);
     }
 
+    [Theory]
+    [InlineData("Game of Thrones S02E08 The Prince of Winterfell 1080p BluRay x264")]   // «Inter» внутри Winterfell
+    [InlineData("[NanakoRaws] Otonari no Tenshi-sama ni Itsunomanika 1080p")]           // «Anika» внутри Itsunomanika
+    [InlineData("[HnY] Beyblade Burst DB 27 - The Joyful Demon King's Big Step")]       // «DeMon» внутри Demon
+    [InlineData("School Rumble (1080p)(AI Enhanced)")]                                  // «Rumble» — само название
+    public void Студия_не_находится_внутри_чужого_слова(string title)
+    {
+        // Список из ~900 студий искался обычной подстрокой, и человек видел в
+        // Лампе озвучку, которой нет. Все четыре примера — с живой выдачи.
+        var t = Разобрать(Раздача(title));
+
+        Assert.DoesNotContain(t.voices, v => v != "Две дорожки" && v != "Мультиязычная" && v != "Субтитры");
+    }
+
+    [Fact]
+    public void Настоящая_студия_по_прежнему_находится()
+    {
+        // Границы слова не должны мешать обычному случаю: у студий в названиях
+        // сплошь точки и дефисы.
+        var t = Разобрать(Раздача("Сериал / Series (2024) WEB-DL 1080p [LostFilm.TV]", "rutor"));
+
+        Assert.Contains("LostFilm", t.voices);
+    }
+
     [Fact]
     public void Пустое_название_ничего_не_выдумывает()
     {
