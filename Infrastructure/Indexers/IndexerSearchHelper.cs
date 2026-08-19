@@ -617,6 +617,48 @@ namespace JacBlack.Infrastructure.Indexers
                     kept.Add(r);
             }
 
+            // Другие названия той же карточки из TMDB — когда своих не хватило.
+            //
+            // Спрашиваем ТОЛЬКО при бедной выдаче и только имея код IMDB: набор
+            // привязан к карточке кодом, а не подобран по похожести строк, так
+            // что ошибиться им трудно. Но запрос стоит времени (таймаут 2.5 с,
+            // кеш на сутки), и дёргать его на каждый поиск незачем — люди
+            // жалуются как раз на ожидание.
+            //
+            // Для аниме это почти не работает: кода IMDB у них обычно нет ни в
+            // карточке, ни в нашем словаре. Там выручает подхват написаний из
+            // самой выдачи, сделанный выше.
+            if (kept.Count < 5 && !string.IsNullOrEmpty(cardImdb))
+            {
+                var чужиеИмена = JacBlack.Infrastructure.Metadata.TmdbAlternativeTitles.ByImdb(cardImdb);
+                if (чужиеИмена != null && чужиеИмена.Count > 0)
+                {
+                    foreach (var r in results)
+                    {
+                        if (kept.Contains(r))
+                            continue;
+
+                        string name = r.info?.name;
+                        string original = r.info?.originalname;
+                        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(original))
+                            continue;
+
+                        if (!TypeFits(r, req.IsSerial) || !YearFits(r, req.Year, req.IsSerial))
+                            continue;
+
+                        foreach (string имя in чужиеИмена)
+                        {
+                            string норма = JacBlack.Infrastructure.Utils.StringConvert.SearchName(имя);
+                            if (!string.IsNullOrEmpty(норма) && Hits(name, original, норма, имя))
+                            {
+                                kept.Add(r);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             // Строгое правило может выкосить карточку целиком, и это не
             // теория: у сериала «The Bear» карточка присылает русское название
             // «Медвежонок», а на трекерах он «Медведь» — 45 раздач, и все
