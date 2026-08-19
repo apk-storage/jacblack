@@ -26,5 +26,15 @@ namespace JacBlack.Controllers.Cron
         {
             return _syncService.ParseAsync(pages, cancellationToken);
         }
+
+        /// <summary>
+        /// Обход в глубину по HTML-листингу. Лента дальше сотой страницы не
+        /// пускает и сортировку игнорирует, а листинг её понимает: `old=true`
+        /// открывает другой конец выдачи — самые старые раздачи.
+        /// </summary>
+        public Task<string> Listing(int pages = 20, bool old = false, CancellationToken cancellationToken = default)
+        {
+            return _syncService.ParseListingAsync(pages, old, cancellationToken);
+        }
     }
 }

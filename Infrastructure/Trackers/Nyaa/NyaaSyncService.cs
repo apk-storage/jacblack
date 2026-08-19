@@ -117,5 +117,99 @@ namespace JacBlack.Infrastructure.Trackers.Nyaa
                 }
             });
         }
+
+        /// <summary>
+        /// Обход в глубину по HTML-листингу.
+        ///
+        /// Лента дальше сотой страницы не пускает и параметры сортировки
+        /// игнорирует — через неё доступны только свежие ~22 тысячи раздач.
+        /// Листинг сортировку понимает, поэтому идём с двух концов: сперва от
+        /// новых, потом от старых (`o=asc`). Это разные 7500 записей в каждом
+        /// разделе, то есть охват удваивается.
+        ///
+        /// oldestFirst — с какого конца идти. pages — сколько страниц брать
+        /// в каждом разделе (страница листинга это те же 75 записей).
+        /// </summary>
+        public async Task<string> ParseListingAsync(int pages = 20, bool oldestFirst = false, CancellationToken cancellationToken = default)
+        {
+            return await TrackerSyncHelpers.RunParseAsync(TrackerName, _parseLock, checkDisabled: true, async () =>
+            {
+                int take = pages < 1 ? 1 : (pages > MaxPages ? MaxPages : pages);
+                string order = oldestFirst ? "&s=id&o=asc" : string.Empty;
+
+                var sw = Stopwatch.StartNew();
+                ParserLog.Write(TrackerName, $"Listing start, разделов {Categories.Length}, страниц по {take}, порядок={(oldestFirst ? "старые" : "новые")}");
+
+                int fetched = 0, accepted = 0, requests = 0, stoppedOnRepeat = 0;
+
+                try
+                {
+                    foreach (string cat in Categories)
+                    {
+                        string previousFirst = null;
+
+                        for (int page = 1; page <= take; page++)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            string url = $"{Host}/?c={cat}{order}&p={page}";
+                            string html = await HttpClient.Get(url, timeoutSeconds: 25, useproxy: AppInit.conf.Nyaa.useproxy);
+                            requests++;
+
+                            if (string.IsNullOrWhiteSpace(html))
+                            {
+                                ParserLog.Write(TrackerName, $"Раздел {cat}, страница {page}: пустой ответ");
+                                break;
+                            }
+
+                            var items = NyaaListingParser.Parse(html, Host);
+                            if (items.Count == 0)
+                                break;                       // за пределом выдачи таблицы нет
+
+                            // Выйдя за предел, nyaa не отдаёт пустую страницу, а
+                            // ПОВТОРЯЕТ последнюю — проверено 19.08.2026 на поиске:
+                            // страницы 50, 100 и 150 возвращали одну и ту же. Без
+                            // этой проверки обход крутил бы одно и то же до конца
+                            // счётчика, записывая уже записанное.
+                            string first = items[0].ViewUrl;
+                            if (first != null && first == previousFirst)
+                            {
+                                stoppedOnRepeat++;
+                                ParserLog.Write(TrackerName, $"Раздел {cat}: страница {page} повторяет предыдущую — дальше не идём");
+                                break;
+                            }
+                            previousFirst = first;
+
+                            fetched += items.Count;
+
+                            var torrents = NyaaParser.ParseTorrents(items);
+                            if (torrents.Count > 0)
+                            {
+                                FileDB.AddOrUpdate(torrents);
+                                accepted += torrents.Count;
+                            }
+
+                            ParserLog.Write(TrackerName, $"Раздел {cat}, страница {page} | на странице {items.Count}, принято {torrents.Count}");
+
+                            await Task.Delay(RequestDelayMs, cancellationToken);
+                        }
+                    }
+
+                    string log = $"запросов={requests}, на страницах={fetched}, принято={accepted}, остановок по повтору={stoppedOnRepeat}";
+                    ParserLog.Write(TrackerName, $"Listing completed successfully (took {sw.Elapsed.TotalSeconds:F1}s) | {log}");
+                    return log;
+                }
+                catch (OperationCanceledException)
+                {
+                    ParserLog.Write(TrackerName, "Listing cancelled");
+                    return "cancelled";
+                }
+                catch (Exception ex)
+                {
+                    ParserLog.Write(TrackerName, $"Listing error: {ex.Message}");
+                    return $"error: {ex.Message}";
+                }
+            });
+        }
     }
 }
