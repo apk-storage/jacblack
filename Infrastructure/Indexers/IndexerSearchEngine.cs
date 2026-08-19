@@ -174,7 +174,31 @@ namespace JacBlack.Infrastructure.Indexers
                 }
             }
 
-            return best == null ? null : samples[best];
+            return best == null ? null : BaseTitle(samples[best]);
+        }
+
+        /// <summary>
+        /// Имя до подзаголовка: «Hell Mode: Yarikomizuki no Gamer…» → «Hell Mode».
+        ///
+        /// Русские аниме-трекеры пишут полное название с подзаголовком, а
+        /// англоязычные сокращают до основного: у nyaa те же раздачи подписаны
+        /// «Hell Mode S2» и «Hell Mode: Yarikomizuki…». Полным именем находились
+        /// три раздачи, базовым — сорок три, из них десять nyaa.
+        ///
+        /// Совсем короткие основы («Re», «One») не берём: по ним нашлось бы
+        /// пол-архива, а отсеивать это потом нечем.
+        /// </summary>
+        static string BaseTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return null;
+
+            int cut = title.IndexOf(':');
+            if (cut < 0)
+                return title;
+
+            string head = title.Substring(0, cut).Trim();
+            return head.Length >= 4 ? head : title;
         }
 
         static bool HasNonLatin(string s)
