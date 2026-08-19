@@ -20,7 +20,19 @@ namespace JacBlack.Infrastructure.Trackers.Nyaa
     {
         const string TrackerName = "nyaa";
         const int RequestDelayMs = 1500;
-        const int MaxPages = 20;
+
+        /// <summary>
+        /// Докуда имеет смысл идти вглубь ленты. Замерено 19.08.2026: страница
+        /// 100 ещё отдаёт полные 75 записей, а 120-я и дальше — уже пустая.
+        /// Значит потолок самой ленты около 22 тысяч раздач (100 страниц × 75
+        /// × 3 раздела), и упирается он в nyaa, а не в нас.
+        ///
+        /// Прежние 20 страниц ставились, когда nyaa был подспорьем к AnimeTosho.
+        /// Тот закрылся навсегда 09.05.2026, аниме держится на nyaa, и держать
+        /// низкий потолок стало нечем оправдать: полный проход занимает около
+        /// восьми минут (замер: 10 страниц — 51 секунда).
+        /// </summary>
+        const int MaxPages = 100;
 
         static readonly TrackerParseLock _parseLock = new TrackerParseLock();
 
