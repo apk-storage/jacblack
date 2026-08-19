@@ -48,5 +48,15 @@ namespace JacBlack.Infrastructure.Indexers
         /// ромадзи оттуда и ищем ещё раз — уже им.
         /// </summary>
         public string TitleRomaji { get; set; }
+
+        /// <summary>
+        /// Все латинские написания, подхваченные из выдачи.
+        ///
+        /// Одного мало: у «Могилы светлячков» релизы подписаны и «Hotaru no
+        /// Haka», и «Grave of the Fireflies» — это разные строки, не связанные
+        /// ни ромадзи, ни переводом. Беря только самое частое, мы теряли вторую
+        /// половину: из 22 раздач nyaa в карточку попадало 7.
+        /// </summary>
+        public List<string> TitleAliases { get; set; }
     }
 }
