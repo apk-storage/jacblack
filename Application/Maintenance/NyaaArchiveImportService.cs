@@ -176,24 +176,25 @@ namespace JacBlack.Application.Maintenance
             var hashes = batch.Where(b => b.hash != null).Select(b => b.hash).ToList();
             var counts = new Dictionary<string, TrackerScrapeClient.Counts>(StringComparer.OrdinalIgnoreCase);
 
-            if (hashes.Count > 0)
+            // Трекеры спрашиваем ПО ОЧЕРЕДИ и останавливаемся, как только пачка
+            // опознана целиком.
+            //
+            // Одновременный опрос всех четырёх пробовали 19.08.2026 и откатили:
+            // вместо ускорения вышло замедление в семь раз — 25 секунд на пачку
+            // против 3.7. Трекеры отвечают на залп хуже, чем на очередь, а
+            // выигрывать тут нечего: первый же анонс обычно знает почти всё.
+            foreach (string announce in NyaaParser.DefaultTrackers)
             {
-                // Трекеры спрашиваем ОДНОВРЕМЕННО. Последовательный опрос
-                // четырёх анонсов давал 560 записей за полминуты — на весь
-                // архив вышло бы тринадцать часов, притом что всё это время
-                // мы просто ждём ответа по сети.
-                var answers = await Task.WhenAll(NyaaParser.DefaultTrackers
-                    .Select(announce => TrackerScrapeClient.ScrapeAsync(announce, hashes, 4000, ct)));
+                if (hashes.Count == 0 || counts.Count >= hashes.Count)
+                    break;
 
-                foreach (var answer in answers)
+                var answer = await TrackerScrapeClient.ScrapeAsync(announce, hashes, 3000, ct);
+                foreach (var pair in answer)
                 {
-                    foreach (var pair in answer)
-                    {
-                        // Берём лучший ответ: разные трекеры знают разное, и ноль
-                        // у одного не отменяет живых сидов у другого.
-                        if (!counts.TryGetValue(pair.Key, out var было) || pair.Value.Seeders > было.Seeders)
-                            counts[pair.Key] = pair.Value;
-                    }
+                    // Берём лучший ответ: разные трекеры знают разное, и ноль у
+                    // одного не отменяет живых сидов у другого.
+                    if (!counts.TryGetValue(pair.Key, out var было) || pair.Value.Seeders > было.Seeders)
+                        counts[pair.Key] = pair.Value;
                 }
             }
 
