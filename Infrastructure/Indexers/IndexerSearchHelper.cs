@@ -491,6 +491,29 @@ namespace JacBlack.Infrastructure.Indexers
                     continue;
                 }
 
+                // Написаний может быть несколько. У «Могилы светлячков» релизы
+                // подписаны и «Hotaru no Haka», и «Grave of the Fireflies» —
+                // по одному имени в карточку попадала лишь треть раздач.
+                if (req.TitleAliases != null && TypeFits(r, req.IsSerial))
+                {
+                    bool совпало = false;
+                    foreach (string alias in req.TitleAliases)
+                    {
+                        string норма = JacBlack.Infrastructure.Utils.StringConvert.SearchName(alias);
+                        if (!string.IsNullOrEmpty(норма) && Hits(name, original, норма, alias))
+                        {
+                            совпало = true;
+                            break;
+                        }
+                    }
+
+                    if (совпало)
+                    {
+                        kept.Add(r);
+                        continue;
+                    }
+                }
+
                 if (!codeConfirms && !YearFits(r, req.Year, req.IsSerial))
                     continue;
 

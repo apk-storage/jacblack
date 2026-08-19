@@ -77,7 +77,23 @@ namespace JacBlack.Infrastructure.Indexers
                 // Ищем его по ВСЕМУ уже найденному, а не по первому заходу:
                 // при японском названии первый заход часто пуст, и записи
                 // приходят из запасных вариантов — именно там и лежит ромадзи.
-                string romaji = PickRomaji(batches, titleEn);
+                var aliases = PickAliases(batches, titleEn);
+                if (aliases.Count > 1)
+                {
+                    req.TitleAliases = aliases;
+
+                    // Второе и последующие написания ищем отдельно. У «Могилы
+                    // светлячков» это «Hotaru no Haka» и «Grave of the
+                    // Fireflies» — совершенно разные строки, и по одной из них
+                    // половина раздач не находится.
+                    foreach (string alias in aliases.Skip(1).Take(2))
+                    {
+                        batches.Add(jackettSearch.SearchResults(
+                            req.ApiKey, alias, null, alias, 0, category, isSerial, req.RqNum, cache));
+                    }
+                }
+
+                string romaji = aliases.FirstOrDefault();
                 if (romaji != null)
                 {
                     req.TitleRomaji = romaji;
@@ -146,10 +162,11 @@ namespace JacBlack.Infrastructure.Indexers
         /// Порог в две записи — заслон от случайности: одна раздача с чужим
         /// именем в поле не должна утащить поиск в сторону.
         /// </summary>
-        static string PickRomaji(List<IEnumerable<Result>> batches, string titleEn)
+        static List<string> PickAliases(List<IEnumerable<Result>> batches, string titleEn)
         {
+            var пусто = new List<string>();
             if (batches == null || batches.Count == 0)
-                return null;
+                return пусто;
 
             var found = new List<Result>();
             foreach (var batch in batches)
@@ -160,11 +177,11 @@ namespace JacBlack.Infrastructure.Indexers
             }
 
             if (found.Count == 0)
-                return null;
+                return пусто;
 
             // Карточка пришла с латинским названием — искать нечего.
             if (!string.IsNullOrWhiteSpace(titleEn) && !HasNonLatin(titleEn))
-                return null;
+                return пусто;
 
             var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var samples = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -184,18 +201,29 @@ namespace JacBlack.Infrastructure.Indexers
                 samples[key] = original;
             }
 
-            string best = null;
-            int bestCount = 1;                 // одной записи мало
-            foreach (var pair in counts)
+            // Берём ВСЕ написания, подтверждённые хотя бы двумя записями, самые
+            // частые первыми. Одного мало: у «Могилы светлячков» релизы
+            // подписаны и «Hotaru no Haka», и «Grave of the Fireflies» —
+            // это разные строки, и по одной из них половина раздач не
+            // находится. Порог в две записи отсекает случайный мусор в поле.
+            var результат = new List<string>();
+            foreach (var pair in counts.OrderByDescending(p => p.Value))
             {
-                if (pair.Value > bestCount)
+                if (pair.Value < 2)
+                    break;
+
+                string имя = BaseTitle(samples[pair.Key]);
+                if (!string.IsNullOrWhiteSpace(имя)
+                    && !результат.Any(x => string.Equals(x, имя, StringComparison.OrdinalIgnoreCase)))
                 {
-                    bestCount = pair.Value;
-                    best = pair.Key;
+                    результат.Add(имя);
                 }
+
+                if (результат.Count >= 3)      // больше трёх заходов не окупается
+                    break;
             }
 
-            return best == null ? null : BaseTitle(samples[best]);
+            return результат;
         }
 
         /// <summary>
