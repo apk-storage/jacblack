@@ -117,6 +117,7 @@ namespace JacBlack
 
             builder.Services.AddSingleton<ILiveSeeders, LiveSeedersService>();
             builder.Services.AddSingleton<AliveSweepService>();
+            builder.Services.AddSingleton<NyaaArchiveImportService>();
             builder.Services.AddScoped<IJackettSearchService, JackettSearchService>();
             builder.Services.AddScoped<ITorrentQueryService, TorrentQueryService>();
             builder.Services.AddScoped<IDevMaintenanceService, DevMaintenanceService>();

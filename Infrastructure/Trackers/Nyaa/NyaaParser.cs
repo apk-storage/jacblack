@@ -30,7 +30,7 @@ namespace JacBlack.Infrastructure.Trackers.Nyaa
         /// Без них magnet живёт только на DHT — так уже было с kinozal
         /// и nnmclub, у которых 262 тысячи ссылок остались без анонсов.
         /// </summary>
-        static readonly string[] DefaultTrackers =
+        internal static readonly string[] DefaultTrackers =
         {
             "http://nyaa.tracker.wf:7777/announce",
             "udp://open.stealth.si:80/announce",
