@@ -176,18 +176,24 @@ namespace JacBlack.Application.Maintenance
             var hashes = batch.Where(b => b.hash != null).Select(b => b.hash).ToList();
             var counts = new Dictionary<string, TrackerScrapeClient.Counts>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (string announce in NyaaParser.DefaultTrackers)
+            if (hashes.Count > 0)
             {
-                if (hashes.Count == 0)
-                    break;
+                // Трекеры спрашиваем ОДНОВРЕМЕННО. Последовательный опрос
+                // четырёх анонсов давал 560 записей за полминуты — на весь
+                // архив вышло бы тринадцать часов, притом что всё это время
+                // мы просто ждём ответа по сети.
+                var answers = await Task.WhenAll(NyaaParser.DefaultTrackers
+                    .Select(announce => TrackerScrapeClient.ScrapeAsync(announce, hashes, 4000, ct)));
 
-                var answer = await TrackerScrapeClient.ScrapeAsync(announce, hashes, 4000, ct);
-                foreach (var pair in answer)
+                foreach (var answer in answers)
                 {
-                    // Берём лучший ответ: разные трекеры знают разное, и ноль у
-                    // одного не отменяет живых сидов у другого.
-                    if (!counts.TryGetValue(pair.Key, out var было) || pair.Value.Seeders > было.Seeders)
-                        counts[pair.Key] = pair.Value;
+                    foreach (var pair in answer)
+                    {
+                        // Берём лучший ответ: разные трекеры знают разное, и ноль
+                        // у одного не отменяет живых сидов у другого.
+                        if (!counts.TryGetValue(pair.Key, out var было) || pair.Value.Seeders > было.Seeders)
+                            counts[pair.Key] = pair.Value;
+                    }
                 }
             }
 
