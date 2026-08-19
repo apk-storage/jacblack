@@ -84,6 +84,19 @@ public class RomajiPickupTests
     }
 
     [Fact]
+    public void Короткое_имя_у_англоязычного_трекера_совпадает_с_базовым()
+    {
+        // nyaa подписывает эти же раздачи «Hell Mode S2», без подзаголовка.
+        // Подхват берёт базовую часть имени, поэтому они должны проходить.
+        var выдача = new List<Result> { Раздача("Hell Mode S2", "Hell Mode S2") };
+
+        var got = IndexerSearchHelper.FilterByCardTitle(
+            выдача, Карточка("Hell Mode"), originalGiven: true, titleGiven: true);
+
+        Assert.Single(got);
+    }
+
+    [Fact]
     public void Русское_название_по_прежнему_работает()
     {
         // Записи русских трекеров, через которые ромадзи и добывается, из
