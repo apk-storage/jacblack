@@ -2,6 +2,7 @@ using System;
 using JacBlack.Models.Api;
 using Microsoft.AspNetCore.Http;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace JacBlack.Infrastructure.Indexers
@@ -469,11 +470,29 @@ namespace JacBlack.Infrastructure.Indexers
                     || (!string.IsNullOrEmpty(cardKinopoisk) && !string.IsNullOrEmpty(kinopoisk)
                         && string.Equals(kinopoisk, cardKinopoisk, StringComparison.OrdinalIgnoreCase));
 
-                if (!codeConfirms && !YearFits(r, req.Year, req.IsSerial))
-                    continue;
-
                 string name = r.info?.name;
                 string original = r.info?.originalname;
+
+                // Совпало с подхваченным ромадзи — берём сразу, до проверки
+                // года.
+                //
+                // Ромадзи появляется только у карточек с японским названием и
+                // подтверждается не одной записью, а несколькими — то есть это
+                // не догадка, а имя, которым ту же вещь подписали наши русские
+                // аниме-трекеры. Год же у аниме-раздач не разобран никогда:
+                // в имени релиза его нет. Проверка года отсекала их раньше, чем
+                // дело доходило до сравнения имён, и в карточку «Адский режим»
+                // из десяти найденных nyaa попадала одна.
+                if (!string.IsNullOrEmpty(romaji)
+                    && Hits(name, original, romaji, req.TitleRomaji)
+                    && TypeFits(r, req.IsSerial))
+                {
+                    kept.Add(r);
+                    continue;
+                }
+
+                if (!codeConfirms && !YearFits(r, req.Year, req.IsSerial))
+                    continue;
 
                 // Раньше записи без разобранных названий пропускались: мол,
                 // терять их хуже, чем пустить лишнее. Для поиска по карточке
@@ -1015,10 +1034,25 @@ namespace JacBlack.Infrastructure.Indexers
             // добавляет вариант запроса без номера. Две копии одного правила
             // неминуемо разъедутся — так уже было с разбором размера.
             string bare = IndexerRequestParams.StripTrailingSeason(q);
-            if (bare != null)
-                return Same(title, JacBlack.Infrastructure.Utils.StringConvert.SearchName(bare));
+            string bareTitle = IndexerRequestParams.StripTrailingSeason(t);
 
-            return false;
+            if (bare == null && bareTitle == null)
+                return false;
+
+            // Номер сезона срезаем с обеих сторон, но сперва СРАВНИВАЕМ его.
+            // У аниме названия сезонов различаются только этим хвостом —
+            // «Shingeki no Kyojin S2», «S3», «S4», — и простое отбрасывание
+            // потащило бы в карточку четвёртого сезона раздачи первого.
+            //
+            // Разные номера — чужое. А вот отсутствие номера у одной из сторон
+            // помехой не считается: у nyaa раздачи подписаны «Hell Mode S2»,
+            // тогда как карточка знает базовое «Hell Mode», и это та же вещь.
+            int? qSeason = IndexerRequestParams.TrailingSeasonNumber(q);
+            int? tSeason = IndexerRequestParams.TrailingSeasonNumber(t);
+            if (qSeason.HasValue && tSeason.HasValue && qSeason.Value != tSeason.Value)
+                return false;
+
+            return Same(bareTitle ?? t, JacBlack.Infrastructure.Utils.StringConvert.SearchName(bare ?? q));
         }
     }
 }

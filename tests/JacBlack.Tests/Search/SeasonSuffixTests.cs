@@ -77,6 +77,38 @@ public class SeasonSuffixTests
     }
 
     [Fact]
+    public void Сезоны_между_собой_не_смешиваются()
+    {
+        // Возражение Сергея 19.08.2026: у «Атаки титанов» и подобных сезоны
+        // различаются ТОЛЬКО хвостом, и простое отбрасывание номера свалило бы
+        // их в кучу. Номера сравниваются: разные — чужое.
+        var выдача = new List<Result>
+        {
+            Раздача("Shingeki no Kyojin S1"),
+            Раздача("Shingeki no Kyojin S4"),
+        };
+
+        var got = IndexerSearchHelper.FilterByCardTitle(
+            выдача, Карточка("Shingeki no Kyojin S4"), originalGiven: true, titleGiven: true);
+
+        Assert.Single(got);
+        Assert.Equal("Shingeki no Kyojin S4", got[0].info.name);
+    }
+
+    [Fact]
+    public void Раздача_без_номера_подходит_карточке_с_номером()
+    {
+        // Обратный случай: у трекера имя сериала без номера — это та же вещь,
+        // и терять её нельзя. Ради этого срезка и делалась.
+        var выдача = new List<Result> { Раздача("Shingeki no Kyojin") };
+
+        var got = IndexerSearchHelper.FilterByCardTitle(
+            выдача, Карточка("Shingeki no Kyojin S4"), originalGiven: true, titleGiven: true);
+
+        Assert.Single(got);
+    }
+
+    [Fact]
     public void Карточка_без_номера_ведёт_себя_как_прежде()
     {
         // Хвоста нет — срезать нечего, и лишнего сравнения не делается.
