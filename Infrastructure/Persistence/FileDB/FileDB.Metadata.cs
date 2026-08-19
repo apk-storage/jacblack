@@ -131,6 +131,23 @@ namespace JacBlack.Infrastructure.Persistence
             if (RxJpnAudio.IsMatch(titlelower))
                 t.languages.Add("jpn");
 
+            // Явная языковая разметка: «2xUkr/Eng», «Ukr/Eng», «2xRus». Так
+            // подписывает toloka и часть релизёров на других трекерах — там
+            // прямо сказано, каких дорожек сколько.
+            int дорожекВсего = 0;
+            foreach (Match m in RxLangSlots.Matches(titlelower))
+            {
+                string язык = m.Groups[2].Value.ToLowerInvariant();
+                t.languages.Add(язык);
+
+                дорожекВсего += m.Groups[1].Success && int.TryParse(m.Groups[1].Value, out int n) && n > 0 ? n : 1;
+            }
+
+            // Две и больше дорожек — это то, что человеку полезно видеть в
+            // списке: раздача с несколькими озвучками ценнее одноголосой.
+            if (дорожекВсего >= 2 && !t.voices.Contains("Мультиязычная"))
+                t.voices.Add("Две дорожки");
+
             if (titlelower.Contains("ukr") || titlelower.Contains("українськ") || titlelower.Contains("украинск") || t.trackerName == "toloka")
                 t.languages.Add("ukr");
 
@@ -380,7 +397,23 @@ namespace JacBlack.Infrastructure.Persistence
             @"\b(jap|jpn|japanese)\b(?![\s._-]?subs?\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         static readonly Regex RxSubsOnly = new Regex(
-            @"\b(multi[\s._-]?subs?|eng[\s._-]?subs?|subbed|softsubs?|hardsubs?|subtitles?)\b",
+            @"\b(multi[\s._-]?subs?|eng[\s._-]?subs?|subbed|softsubs?|hardsubs?|subtitles?|sub\s+(eng|ukr|rus|jpn))\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Языковая разметка дорожек вида «2xUkr/Eng», «Ukr/Eng», «2xRus».
+        ///
+        /// Так подписывает раздачи toloka, и не она одна: запись говорит, каких
+        /// дорожек сколько и на каких языках. Раньше это пропадало целиком —
+        /// у раздачи «Дюна / Dune: Part One (2021) BDRip 2xUkr/Eng | Sub Eng»
+        /// поле языков оставалось пустым, хотя там прямо написаны две
+        /// украинские дорожки и английская.
+        ///
+        /// Разбирается только то, что действительно указано: язык без пометки
+        /// не додумывается.
+        /// </summary>
+        static readonly Regex RxLangSlots = new Regex(
+            @"\b(\d+)?x?\s?(ukr|rus|eng|jpn|pol|ger|fre|ita|spa)\b(?![\s._-]?subs?\b)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>

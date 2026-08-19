@@ -120,6 +120,30 @@ public class ForeignTracksTests
     }
 
     [Fact]
+    public void Языковая_разметка_toloka_разбирается()
+    {
+        // Так подписывает раздачи toloka: две украинские дорожки, английская,
+        // английские субтитры. Раньше всё это пропадало — поле языков было
+        // пустым, хотя в названии написано прямым текстом.
+        var t = Разобрать(Раздача(
+            "Дюна / Dune: Part One (2021) BDRip-AVC 2xUkr/Eng | Sub Eng", "toloka"));
+
+        Assert.Contains("ukr", t.languages);
+        Assert.Contains("eng", t.languages);
+        Assert.Contains("Две дорожки", t.voices);
+        Assert.Contains("Субтитры", t.voices);
+    }
+
+    [Fact]
+    public void Одна_дорожка_не_объявляется_двумя()
+    {
+        var t = Разобрать(Раздача("Фільм / Film (2024) BDRip Ukr", "toloka"));
+
+        Assert.Contains("ukr", t.languages);
+        Assert.DoesNotContain("Две дорожки", t.voices);
+    }
+
+    [Fact]
     public void Пустое_название_ничего_не_выдумывает()
     {
         var t = Разобрать(Раздача("Some Movie 2024 1080p WEBRip"));
