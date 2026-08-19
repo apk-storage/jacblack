@@ -277,14 +277,40 @@ namespace JacBlack.Infrastructure.Indexers
         /// </summary>
         public static string StripTrailingSeason(string query)
         {
+            var m = MatchTrailingSeason(query);
+            if (m == null) return null;
+            string cut = m.Groups[1].Value.Trim();
+            return cut.Length > 0 ? cut : null;
+        }
+
+        /// <summary>
+        /// Номер сезона из хвоста названия: «Wistoria S2» → 2. Возвращает null,
+        /// если хвоста нет.
+        ///
+        /// Нужен, чтобы срезка сезона не смешивала сезоны между собой. У аниме
+        /// названия сезонов различаются ТОЛЬКО этим хвостом — «Shingeki no
+        /// Kyojin S2», «S3», «S4», — и если просто отбросить его с обеих
+        /// сторон, в карточку четвёртого сезона поедут раздачи первого.
+        /// Поэтому номера сравниваются: разные — чужое, а вот отсутствие
+        /// номера у одной из сторон помехой не считается.
+        /// </summary>
+        public static int? TrailingSeasonNumber(string query)
+        {
+            var m = MatchTrailingSeason(query);
+            if (m == null) return null;
+
+            var digits = Regex.Match(m.Value.Substring(m.Groups[1].Value.Length), @"\d{1,2}");
+            return digits.Success && int.TryParse(digits.Value, out int n) ? n : (int?)null;
+        }
+
+        static Match MatchTrailingSeason(string query)
+        {
             if (string.IsNullOrWhiteSpace(query)) return null;
             var m = Regex.Match(
                 query.Trim(),
                 @"^(.+?)[\s:,-]+(?:s\s*\d{1,2}|season\s*\d{1,2}|\d{1,2}(?:st|nd|rd|th)\s*season|сезон\s*\d{1,2}|\d{1,2}\s*сезон)$",
                 RegexOptions.IgnoreCase);
-            if (!m.Success) return null;
-            string cut = m.Groups[1].Value.Trim();
-            return cut.Length > 0 ? cut : null;
+            return m.Success ? m : null;
         }
     }
 }

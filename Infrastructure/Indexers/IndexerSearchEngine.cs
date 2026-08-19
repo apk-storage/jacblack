@@ -63,23 +63,33 @@ namespace JacBlack.Infrastructure.Indexers
                         req.Year, category, isSerial, req.RqNum, cache));
                 }
 
-                // У аниме оригинальное название приходит иероглифами, а
-                // англоязычные трекеры подписывают раздачи ромадзи — общего
-                // в этих строках нет ни буквы. Ромадзи знают наши же русские
-                // аниме-трекеры: у них в записи лежат оба имени. Берём его из
-                // первой выдачи и ищем ещё раз.
-                string romaji = PickRomaji(card, titleEn);
-                if (romaji != null)
-                {
-                    req.TitleRomaji = romaji;
-                    batches.Add(jackettSearch.SearchResults(
-                        req.ApiKey, romaji, null, romaji, req.Year, category, isSerial, req.RqNum, cache));
-                }
-
                 if (card.Count == 0)
                 {
                     foreach (var variant in BuildQueryVariants(query, titleRu, titleEn, settings))
                         batches.Add(jackettSearch.SearchResults(req.ApiKey, variant, null, null, 0, null, isSerial, false, cache));
+                }
+
+                // У аниме оригинальное название приходит иероглифами, а
+                // англоязычные трекеры подписывают раздачи ромадзи — общего
+                // в этих строках нет ни буквы. Ромадзи знают наши же русские
+                // аниме-трекеры: у них в записи лежат оба имени.
+                //
+                // Ищем его по ВСЕМУ уже найденному, а не по первому заходу:
+                // при японском названии первый заход часто пуст, и записи
+                // приходят из запасных вариантов — именно там и лежит ромадзи.
+                string romaji = PickRomaji(batches, titleEn);
+                if (romaji != null)
+                {
+                    req.TitleRomaji = romaji;
+
+                    // Год этому заходу не передаём. Поиск по базе выбрасывает
+                    // раздачи с неразобранным годом, а у nyaa он нулевой всегда:
+                    // года в имени релиза нет и взять его неоткуда. С годом
+                    // заход возвращал одни русские трекеры, ради которых он и
+                    // не затевался. Отбор по году сделает заслон — он умеет
+                    // пропускать записи без года для сериальных карточек.
+                    batches.Add(jackettSearch.SearchResults(
+                        req.ApiKey, romaji, null, romaji, 0, category, isSerial, req.RqNum, cache));
                 }
             }
             else
@@ -136,9 +146,20 @@ namespace JacBlack.Infrastructure.Indexers
         /// Порог в две записи — заслон от случайности: одна раздача с чужим
         /// именем в поле не должна утащить поиск в сторону.
         /// </summary>
-        static string PickRomaji(List<Result> found, string titleEn)
+        static string PickRomaji(List<IEnumerable<Result>> batches, string titleEn)
         {
-            if (found == null || found.Count == 0)
+            if (batches == null || batches.Count == 0)
+                return null;
+
+            var found = new List<Result>();
+            foreach (var batch in batches)
+            {
+                if (batch == null)
+                    continue;
+                found.AddRange(batch);
+            }
+
+            if (found.Count == 0)
                 return null;
 
             // Карточка пришла с латинским названием — искать нечего.
