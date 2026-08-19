@@ -84,6 +84,35 @@ namespace JacBlack.Infrastructure.Indexers
         static readonly Regex Nxnn = new Regex(@"(?<![0-9])(?<season>\d{1,2})x(?<episode>\d{1,3})(?![0-9])", RegexOptions.IgnoreCase);
         static readonly Regex SeasonPack = new Regex(@"(?<![0-9])s(?<season>\d{1,2})(?!\d|\s*e)(?:\s|\.|\]|/|$|[[(])", RegexOptions.IgnoreCase);
 
+        /// <summary>
+        /// Диапазон серий: «[01-12]», «(1-6 из 6)», «S01E01-E12», «01~12».
+        ///
+        /// Такую раздачу нельзя отдавать с номером одной серии — клиент положит
+        /// её не туда. Это набор: сезон известен, конкретная серия — нет.
+        /// Проверяется ПЕРВЫМ, иначе «- 04» из диапазона «01-12» прочиталось бы
+        /// как отдельная четвёртая серия.
+        /// </summary>
+        static readonly Regex EpisodeRange = new Regex(
+            @"s\d{1,2}\s*e\d{1,3}\s*-\s*e?\d{1,3}"
+            + @"|[\[(](?<from>\d{1,3})\s*(?:-|~|–)\s*(?<to>\d{1,3})[\])]"
+            + @"|\((?<from2>\d{1,3})\s*-\s*(?<to2>\d{1,3})\s*(?:из|of)\s*\d{1,3}\)",
+            RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// Серия в аниме-релизе: «[SubsPlease] Wistoria S2 - 04 (1080p) [D8BE1]».
+        ///
+        /// Ни «S01E04», ни «1x04» там не бывает: номер серии пишут через тире
+        /// после названия, а сезон — отдельно, если он вообще есть. Из-за этого
+        /// у всей аниме-выдачи серия оставалась неизвестной, и клиент не мог
+        /// разложить раздачи по сериям — на это и жаловались 19.08.2026.
+        ///
+        /// Номер обязан стоять перед скобкой, концом строки или расширением:
+        /// иначе в серию попадали куски названия и годы.
+        /// </summary>
+        static readonly Regex AnimeEpisode = new Regex(
+            @"\s-\s(?<episode>\d{1,3})(?:v\d)?(?=\s*[\[(]|\s*$|\.mkv|\.mp4)",
+            RegexOptions.IgnoreCase);
+
         public static List<Result> Filter(List<Result> items, int season, int? episode)
         {
             if (season <= 0) return items;
@@ -113,15 +142,55 @@ namespace JacBlack.Infrastructure.Indexers
         static (int season, int? episode, bool isSeasonPack)? ParseTitle(string title)
         {
             if (string.IsNullOrWhiteSpace(title)) return null;
+
+            // Диапазон проверяется до всего остального: «[01-12]» — это набор,
+            // и прочитать оттуда одну серию значит положить раздачу не туда.
+            bool диапазон = EpisodeRange.IsMatch(title);
+
             var m = SxxExx.Match(title);
             if (m.Success)
-                return (int.Parse(m.Groups["season"].Value), int.Parse(m.Groups["episode"].Value), false);
+            {
+                int сезон = int.Parse(m.Groups["season"].Value);
+                return диапазон
+                    ? (сезон, (int?)null, true)
+                    : (сезон, int.Parse(m.Groups["episode"].Value), false);
+            }
+
             m = Nxnn.Match(title);
             if (m.Success)
-                return (int.Parse(m.Groups["season"].Value), int.Parse(m.Groups["episode"].Value), false);
+            {
+                int сезон = int.Parse(m.Groups["season"].Value);
+                return диапазон
+                    ? (сезон, (int?)null, true)
+                    : (сезон, int.Parse(m.Groups["episode"].Value), false);
+            }
+
             m = SeasonPack.Match(title);
             if (m.Success)
-                return (int.Parse(m.Groups["season"].Value), null, true);
+            {
+                int сезон = int.Parse(m.Groups["season"].Value);
+
+                // «Wistoria S2 - 04»: сезон нашёлся отдельно, серия — через тире.
+                // Если рядом диапазон, серию не берём: это набор за сезон.
+                if (!диапазон)
+                {
+                    var аниме = AnimeEpisode.Match(title);
+                    if (аниме.Success)
+                        return (сезон, int.Parse(аниме.Groups["episode"].Value), false);
+                }
+
+                return (сезон, null, true);
+            }
+
+            // Аниме без указания сезона: «[SubsPlease] Dandadan - 07 (1080p)».
+            // Такие релизы идут первым сезоном, пока не сказано иное.
+            if (!диапазон)
+            {
+                var аниме = AnimeEpisode.Match(title);
+                if (аниме.Success)
+                    return (1, int.Parse(аниме.Groups["episode"].Value), false);
+            }
+
             return null;
         }
 
