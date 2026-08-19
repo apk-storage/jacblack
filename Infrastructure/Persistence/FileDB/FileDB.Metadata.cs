@@ -93,10 +93,31 @@ namespace JacBlack.Infrastructure.Persistence
                         t.voices.Add("Дубляж");
                 }
             }
+
+            // Английские обозначения. Русских пометок у зарубежных релизов нет,
+            // и раньше поле оставалось пустым — в Лампе у таких раздач не было
+            // видно ничего, кроме разрешения. Пишем то, что действительно
+            // указано в названии.
+            if (RxDualAudio.IsMatch(titlelower))
+                t.voices.Add("Две дорожки");
+            else if (RxMultiAudio.IsMatch(titlelower))
+                t.voices.Add("Мультиязычная");
+
+            if (RxSubsOnly.IsMatch(titlelower))
+                t.voices.Add("Субтитры");
             #endregion
 
             #region languages
             t.languages = new HashSet<string>();
+
+            // Язык оригинальной дорожки, если он назван. Для зарубежных релизов
+            // это единственный способ хоть что-то сказать о звуке: студий там
+            // не указывают, а «eng» или «jpn» пишут часто.
+            if (RxEngAudio.IsMatch(titlelower))
+                t.languages.Add("eng");
+
+            if (RxJpnAudio.IsMatch(titlelower))
+                t.languages.Add("jpn");
 
             if (titlelower.Contains("ukr") || titlelower.Contains("українськ") || titlelower.Contains("украинск") || t.trackerName == "toloka")
                 t.languages.Add("ukr");
@@ -259,6 +280,30 @@ namespace JacBlack.Infrastructure.Persistence
                      .ToArray();
 
         static readonly Regex RxDub = new Regex("( |x)(d|dub|дб|дуб|дубляж)(,| )", RegexOptions.Compiled);
+
+        // Английские обозначения дорожек.
+        //
+        // У piratebay, yts, eztv, knaben и nyaa русских пометок не бывает вовсе,
+        // поэтому поле «озвучка» у них пустовало, и люди спрашивали, почему в
+        // Лампе у таких раздач не видно ничего, кроме разрешения. Русской
+        // дорожки там действительно нет — это не наш недосмотр. Зато почти
+        // всегда написано другое: сколько дорожек и на каком языке, есть ли
+        // субтитры. Вот это и берём — ровно то, что написано, без догадок.
+        static readonly Regex RxDualAudio = new Regex(
+            @"\b(dual[\s._-]?audio|dualaudio)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        static readonly Regex RxMultiAudio = new Regex(
+            @"\bmulti([\s._-]?(audio|lang\w*))?\b(?![\s._-]?subs?\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        static readonly Regex RxEngAudio = new Regex(
+            @"\b(eng|english)\b(?![\s._-]?subs?\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        static readonly Regex RxJpnAudio = new Regex(
+            @"\b(jap|jpn|japanese)\b(?![\s._-]?subs?\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        static readonly Regex RxSubsOnly = new Regex(
+            @"\b(multi[\s._-]?subs?|eng[\s._-]?subs?|subbed|softsubs?|hardsubs?|subtitles?)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
         /// Вид перевода в названии раздачи. Студию указывают не всегда, а вид —
