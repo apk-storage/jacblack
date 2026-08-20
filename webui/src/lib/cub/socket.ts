@@ -23,10 +23,13 @@
  */
 
 /** Зеркала сокета CUB (soc_mirrors из app.min.js). Перебор при обрыве. */
-// Зеркала сокета — только СВОИ. cub.rip умер к 20.08.2026, cub.best
-// поднимается тем же днём. Чужие домены сюда не добавлять: через сокет
-// уходит объект аккаунта.
-const SOCKET_MIRRORS = ['cub.red', 'cub.black', 'cub.best', 'kurwa-bober.ninja', 'nackhui.com', 'cub.rip']
+// Зеркала сокета — только СВОИ. Через сокет уходит объект аккаунта, поэтому
+// чужие домены сюда не добавлять: cub.tv, например, отвечает 200, но он не наш.
+//
+// kurwa-bober.ninja, nackhui.com и cubnotrip.top — наши, но ТОЛЬКО как сокет:
+// личного кабинета на них нет, и в список входа (CubController) они не идут.
+// cub.rip умер к 20.08.2026, cub.best поднимается тем же днём.
+const SOCKET_MIRRORS = ['cub.red', 'cub.black', 'cub.best', 'kurwa-bober.ninja', 'nackhui.com', 'cubnotrip.top', 'cub.rip']
 const SOCKET_PORT = 8443
 const PING_INTERVAL_MS = 20_000
 
