@@ -27,7 +27,7 @@ namespace JacBlack.Controllers
     ///
     /// В список попадают ТОЛЬКО свои зеркала. `cub.tv` отвечает 200 и выглядит
     /// живым, но принадлежит не нам — отправлять туда код от учётки нельзя,
-    /// поэтому его здесь нет и быть не должно. `cub.site` наш, поднимается
+    /// поэтому его здесь нет и быть не должно. `cub.best` наш, поднимается
     /// 20.08.2026; пока не отвечает — перебор просто пройдёт мимо.
     /// </summary>
     [Route("/cub")]
@@ -35,7 +35,7 @@ namespace JacBlack.Controllers
     {
         static readonly string[] CubMirrors =
         {
-            "cub.red", "cub.black", "cub.site", "cub.rip", "cub.watch"
+            "cub.red", "cub.black", "cub.best", "cub.rip", "cub.watch"
         };
 
         // Зеркало, ответившее последним. Начинаем со следующего раза с него —
