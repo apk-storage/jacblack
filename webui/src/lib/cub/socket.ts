@@ -97,6 +97,15 @@ type Handlers = {
    */
   onMirrors?: (report: string) => void
   /**
+   * device_id устройства, ОТКЛИКНУВШЕГОСЯ на наш код терминала.
+   *
+   * Единственный надёжный признак «моего» устройства. Сервер CUB отдаёт список
+   * ВСЕХ подключённых (138 штук в замере 20.08) без пометки владельца — по нему
+   * свой телевизор от чужого не отличить. А `terminal_result` присылает только
+   * устройство, у которого код совпал, и в ответе стоит его device_id.
+   */
+  onOwnDevice?: (deviceId: string) => void
+  /**
    * Любое пришедшее сообщение — для видимых техданных в диалоге.
    *
    * Без него пустой список устройств неотличим от «сервер вообще молчит», а
@@ -275,7 +284,7 @@ export class CubSocket {
     // Пинг-ответ — не JSON.
     if (ev.data === 'pong') return
 
-    let result: { method?: string; data?: unknown }
+    let result: { method?: string; data?: unknown; device_id?: string; uid?: string }
     try {
       result = JSON.parse(ev.data as string)
     } catch {
@@ -294,6 +303,13 @@ export class CubSocket {
         .filter((d) => d && d.name !== 'CUB' && d.device_id !== this.uid)
       this.publishDevices()
     } else if (result.method === 'terminal_result') {
+      // Ответ пришёл от устройства, у которого КОД СОВПАЛ, — а отвечает оно
+      // через ту же функцию `send`, что добавляет собственный device_id.
+      // Это единственный надёжный признак «моего» устройства: сервер отдаёт
+      // список всех подключённых (138 штук в замере 20.08) без всякой пометки
+      // владельца, и отличить свой телевизор от чужого больше нечем.
+      const otvetil = String(result.device_id || result.uid || '')
+      if (otvetil) this.handlers.onOwnDevice?.(otvetil)
       this.handlers.onTerminalResult?.(result.data)
     } else if (result.method === 'logoff') {
       // Сервер не признал аккаунт. У Лампы это `Account.logoff()` — выход из

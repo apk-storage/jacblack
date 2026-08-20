@@ -147,7 +147,7 @@ async function run(device: CubDevice) {
           Лечатся они по-разному, поэтому разводим прямо в подсказке.
         -->
         <div
-          v-if="cub.devices.value.length === 0"
+          v-if="cub.visibleDevices.value.length === 0"
           class="rounded-lg bg-black/20 px-3 py-4 text-sm opacity-70"
         >
           <template v-if="cub.socketState.value !== 'open'">
@@ -159,26 +159,45 @@ async function run(device: CubDevice) {
             вход просрочен. Устройств в этом состоянии не будет никогда.
             Нажмите «выйти из CUB» и войдите заново свежим кодом с cub.red/add.
           </template>
+          <template v-else-if="cub.ownKnown.value">
+            Ваше устройство отвечало, но сейчас его в списке нет — похоже,
+            Лампа на нём закрылась. Откройте её снова и нажмите «обновить».
+          </template>
+          <template v-else-if="!cub.terminalCode.value">
+            Связь с CUB есть. CUB отдаёт устройства всех подряд, поэтому свой
+            телевизор мы показываем только по коду терминала: задайте его выше
+            (в Лампе на ТВ — Настройки → Терминал), и в списке останется он один.
+          </template>
           <template v-else>
-            Связь с CUB есть, но ни одно устройство не отозвалось. Чаще всего
-            это значит, что <b>телевизор не вошёл в тот же аккаунт CUB</b> —
-            одного кода терминала для этого мало. В Лампе на телевизоре:
-            Настройки → Аккаунт, войти под тем же аккаунтом, и отдельно
-            Настройки → Терминал.
+            Связь есть, код задан, но ни одно устройство не отозвалось. Значит
+            на телевизоре либо не открыта Лампа, либо код в её настройках
+            (Настройки → Терминал) не совпадает с указанным здесь.
           </template>
         </div>
-        <ul v-else class="space-y-2">
-          <li v-for="d in cub.devices.value" :key="d.uid">
-            <button
-              class="flex w-full items-center justify-between rounded-lg bg-black/25 px-3 py-2 hover:bg-black/40 disabled:opacity-50"
-              :disabled="!cub.terminalCode.value"
-              @click="run(d)"
-            >
-              <span class="truncate">{{ d.name }}</span>
-              <Icon name="play" />
-            </button>
-          </li>
-        </ul>
+        <template v-else>
+          <!--
+            CUB отдаёт список ВСЕХ подключённых устройств без пометки владельца —
+            в замере 20.08 их было 138, чужих вперемешку со своими. Показываем
+            только те, что откликнулись на код терминала (см. ownDeviceIds).
+            Пока код не задан, отклика нет — тогда список весь, но с оговоркой.
+          -->
+          <p v-if="!cub.ownKnown.value" class="text-xs text-amber-400/80">
+            Ниже — все устройства на сервере CUB, не только ваши. Задайте код
+            терминала, чтобы остался только ваш телевизор.
+          </p>
+          <ul class="space-y-2">
+            <li v-for="d in cub.visibleDevices.value" :key="d.uid">
+              <button
+                class="flex w-full items-center justify-between rounded-lg bg-black/25 px-3 py-2 hover:bg-black/40 disabled:opacity-50"
+                :disabled="!cub.terminalCode.value"
+                @click="run(d)"
+              >
+                <span class="truncate">{{ d.name }}</span>
+                <Icon name="play" />
+              </button>
+            </li>
+          </ul>
+        </template>
 
         <button class="text-xs underline opacity-50 hover:opacity-80" @click="cub.logout()">выйти из CUB</button>
       </div>
