@@ -1,0 +1,117 @@
+#!/bin/bash
+# Безопасная правка конфигурации nginx: снимок → правка → проверка →
+# перезагрузка → живой запрос, и откат, если что-то не сошлось.
+#
+# ПРАВКУ ВЫПОЛНЯЕТ САМ СКРИПТ — в этом весь смысл. Первая версия снимала
+# снимок в момент запуска, то есть уже ПОСЛЕ правки, и откатывала битый
+# конфиг сам в себя. Порядок нельзя оставлять на усмотрение вызывающего:
+# если правка идёт отдельной командой, рано или поздно её сделают раньше
+# снимка. Здесь это невозможно.
+#
+# Зачем вообще. Дважды подряд наступил на одно: `nginx -t | tail &&
+# systemctl reload` берёт код возврата от `tail`, проверка проглатывается,
+# reload уходит на битый конфиг. Спасло лишь то, что nginx сам отверг конфиг.
+#
+# Имена переменных ЛАТИНИЦЕЙ: bash кириллические не принимает — присваивание
+# молча превращается в попытку выполнить команду.
+#
+# Использование:
+#   nginx-apply "описание правки" -- <команда, вносящая правку>
+#   nginx-apply "правка руками уже внесена" --already   (снимка не будет)
+#
+# Примеры:
+#   nginx-apply "запас лимита до 40" -- sed -i 's/burst=20/burst=40/' /etc/nginx/sites-enabled/jac.black
+#   nginx-apply "карта источников" -- python3 /tmp/pravka.py
+set -u
+
+DESC="${1:-без описания}"
+shift || true
+
+STAMP=$(date +%Y%m%d-%H%M%S)
+BACKUP="/root/nginx-backup-$STAMP"
+PROBE="https://jac.black/api/v2.0/indexers/status:healthy/results?apikey=null&Query=dune"
+
+echo "  правка: $DESC"
+
+# 0. Отказываемся начинать на уже сломанном конфиге: иначе непонятно, чей
+#    это отказ — наш или чужой, и откатывать будет некуда.
+if ! nginx -t 2>/tmp/nginx-apply.pre; then
+    echo "  ОТКАЗ: конфиг СЛОМАН ещё до правки, чинить надо сначала его:"
+    sed 's/^/    /' /tmp/nginx-apply.pre
+    exit 2
+fi
+
+# 1. Снимок ДО правки.
+mkdir -p "$BACKUP"
+cp /etc/nginx/nginx.conf "$BACKUP/" 2>/dev/null
+cp -r /etc/nginx/sites-enabled "$BACKUP/" 2>/dev/null
+cp -r /etc/nginx/snippets "$BACKUP/" 2>/dev/null
+echo "  снимок: $BACKUP"
+
+rollback() {
+    cp "$BACKUP/nginx.conf" /etc/nginx/nginx.conf
+    rm -rf /etc/nginx/sites-enabled && cp -r "$BACKUP/sites-enabled" /etc/nginx/
+    if [ -d "$BACKUP/snippets" ]; then
+        rm -rf /etc/nginx/snippets && cp -r "$BACKUP/snippets" /etc/nginx/
+    fi
+    if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx
+        echo "  ОТКАЧЕНО, nginx перезагружен на прежнем конфиге"
+    else
+        echo "  ОТКАТ НЕ ПРОШЁЛ ПРОВЕРКУ — снимок в $BACKUP, разбирать руками"
+    fi
+}
+
+# 2. Сама правка.
+if [ "${1:-}" = "--" ]; then
+    shift
+    if [ $# -eq 0 ]; then
+        echo "  после -- не указана команда правки"
+        exit 2
+    fi
+    echo "  выполняю: $*"
+    if ! "$@"; then
+        echo "  команда правки завершилась с ошибкой"
+        rollback
+        exit 1
+    fi
+elif [ "${1:-}" = "--already" ]; then
+    echo "  правка внесена до запуска — снимок отражает уже изменённый конфиг,"
+    echo "  откат вернёт его же. Годится только для проверки и перезагрузки."
+else
+    echo "  не указано, что делать: нужен -- <команда> или --already"
+    exit 2
+fi
+
+# 3. Проверка синтаксиса. Никаких конвейеров: код возврата берём у самого
+#    nginx, иначе проверка превращается в украшение.
+if ! nginx -t 2>/tmp/nginx-apply.err; then
+    echo "  конфиг НЕ ПРОШЁЛ проверку, перезагрузки не было:"
+    sed 's/^/    /' /tmp/nginx-apply.err
+    rollback
+    exit 1
+fi
+echo "  синтаксис верен"
+
+# 4. Перезагрузка.
+if ! systemctl reload nginx; then
+    echo "  перезагрузка не удалась"
+    rollback
+    exit 1
+fi
+
+# 5. Живой запрос. Синтаксис может быть верен, а сайт при этом лежать —
+#    например, если правка отрезала своих же клиентов. Представляемся так же,
+#    как настоящий телевизор, иначе упрёмся в собственный заслон.
+sleep 1
+CODE=$(curl -s -o /tmp/nginx-apply.out -w '%{http_code}' --max-time 30 -A 'okhttp/5.3.2' "$PROBE")
+FOUND=$(grep -o '"Tracker"' /tmp/nginx-apply.out 2>/dev/null | wc -l)
+
+if [ "$CODE" != "200" ] || [ "$FOUND" -lt 10 ]; then
+    echo "  живая проверка ПРОВАЛЕНА: код $CODE, раздач $FOUND"
+    rollback
+    exit 1
+fi
+
+echo "  живая проверка пройдена: код $CODE, раздач $FOUND"
+echo "  применено"
