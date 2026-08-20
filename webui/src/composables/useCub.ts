@@ -28,12 +28,11 @@ const received = ref(0)
 const lastMethod = ref('')
 
 /**
- * Что происходило с соединением: зеркало и исход последней попытки.
+ * Состояние каждого зеркала строкой.
  *
  * Без этого «соединение не открылось» — тупик: непонятно, к какому серверу
- * стучались и почему не вышло. Зеркал семь, ведут они себя по-разному
- * (cub.black не слушает сокет-порт вовсе, cub.rip больше не резолвится), и
- * разбирать это по консоли браузера на телевизоре невозможно.
+ * стучались и почему не вышло. Зеркала ведут себя по-разному, и разбирать это
+ * по консоли браузера на телевизоре невозможно.
  */
 const lastAttempt = ref('')
 
@@ -84,7 +83,7 @@ export function useCub() {
       onDevices: (list) => { devices.value = list },
       onTerminalResult: (d) => ответ?.(d),
       onLogoff: () => { rejected.value = true },
-      onAttempt: (mirror, outcome) => { lastAttempt.value = `${mirror} — ${outcome}` },
+      onMirrors: (report) => { lastAttempt.value = report },
       onAny: (method, size) => {
         received.value += 1
         lastMethod.value = size ? `${method} (${size})` : method

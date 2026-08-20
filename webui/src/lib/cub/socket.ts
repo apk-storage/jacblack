@@ -1,37 +1,68 @@
 /**
  * Контроллер сокета CUB — «пульт» Лампы для функции «В Лампе».
  *
- * Протокол восстановлен реверсом app.min.js Лампы (2026-08-06). Полный разбор
- * и обоснование — в personal-hub/lampac/JACBLACK-V-LAMPE.md. Кратко:
+ * Протокол восстановлен реверсом app.min.js Лампы (2026-08-06, сверено
+ * повторно 2026-08-20). Полный разбор — в
+ * personal-hub/lampac/JACBLACK-V-LAMPE.md. Кратко:
  *
- * - Лампа держит WebSocket к `wss://<зеркало>:8443` (зеркала перебираются при
- *   обрыве). Устройства одного аккаунта CUB видят команды друг друга — сервер
- *   роутит по полю `account` в каждом сообщении.
+ * - Лампа держит WebSocket к `wss://<зеркало>:8443`. Устройства одного аккаунта
+ *   CUB видят команды друг друга — сервер роутит по полю `account`.
  * - Отправка: JSON с полями device_id/name/method/version/account/premium/terminal.
  *   Пинг — строкой `'ping'`, ответ — `'pong'`.
  * - Приём: JSON, ветвление по `result.method`. Нам приходят `devices` (список
- *   устройств аккаунта) и `terminal_result` (ответ на eval).
+ *   устройств аккаунта), `terminal_result` (ответ на eval) и `logoff` (сервер
+ *   не признал аккаунт).
  *
- * Запуск раздачи идёт через `terminal_eval`: на выбранное устройство шлётся JS,
- * который открывает карточку (imdb→tmdb) и добавляет magnet в его локальный
- * TorrServer. Требует, чтобы на устройстве был задан код терминала
- * (`terminal_access`) и тот же код введён здесь.
+ * Запуск раздачи идёт через `terminal_eval`: на устройство шлётся JS, который
+ * открывает карточку (imdb→tmdb) и добавляет magnet в его TorrServer. Требует,
+ * чтобы на устройстве был задан код терминала (`terminal_access`).
  *
- * Это обёртка вокруг СТОРОННЕГО недокументированного протокола CUB — он
- * может измениться. Поэтому список зеркал и порт вынесены в константы, а формат
- * сообщения собран точно по реверсу.
+ * ── Почему мы держим ВСЕ зеркала сразу ────────────────────────────────────
+ *
+ * Замер 20.08.2026: `cub.red`, `cub.best`, `kurwa-bober.ninja` и `nackhui.com`
+ * отдают ОДИН И ТОТ ЖЕ список устройств — это один кластер. А `cub.black` живёт
+ * на своём адресе (78.24.93.19, без Cloudflare, свой nginx и свой сертификат) и
+ * список у него ПУСТОЙ, то есть база устройств у него отдельная.
+ *
+ * Лампа на телевизоре перебирает свои зеркала (`['cub.best','cub.black',
+ * 'kurwa-bober.ninja','nackhui.com']`) и может сесть на любое, в том числе на
+ * изолированный `cub.black`. Клиент, подключённый к одному зеркалу, такой
+ * телевизор не увидит НИКОГДА — и это неотличимо от «телевизор не вошёл в
+ * аккаунт», потому что список законно приходит пустым.
+ *
+ * Поэтому здесь не перебор, а пул: соединение с каждым зеркалом одновременно,
+ * устройства объединяются по uid, команды уходят во все открытые сокеты.
+ * Стоимость — несколько лишних соединений; выигрыш — функция перестаёт зависеть
+ * от того, куда попал телевизор.
  */
 
-/** Зеркала сокета CUB (soc_mirrors из app.min.js). Перебор при обрыве. */
-// Зеркала сокета — только СВОИ. Через сокет уходит объект аккаунта, поэтому
-// чужие домены сюда не добавлять: cub.tv, например, отвечает 200, но он не наш.
-//
-// kurwa-bober.ninja, nackhui.com и cubnotrip.top — наши, но ТОЛЬКО как сокет:
-// личного кабинета на них нет, и в список входа (CubController) они не идут.
-// cub.rip умер к 20.08.2026, cub.best поднимается тем же днём.
-const SOCKET_MIRRORS = ['cub.red', 'cub.black', 'cub.best', 'kurwa-bober.ninja', 'nackhui.com', 'cubnotrip.top', 'cub.rip']
+/**
+ * Зеркала сокета CUB. Только СВОИ: через сокет уходит объект аккаунта, поэтому
+ * чужие домены сюда не добавлять — `cub.tv`, например, отвечает 200, но он не
+ * наш.
+ *
+ * `kurwa-bober.ninja`, `nackhui.com` и `cubnotrip.top` — наши, но ТОЛЬКО как
+ * сокет: личного кабинета на них нет, в список входа (CubController) они не
+ * идут. `cub.rip` умер к 20.08.2026 и из перебора убран — он больше не
+ * резолвится вовсе. `cubnotrip.top` соединение отвергает, оставлен на случай
+ * возвращения.
+ */
+const SOCKET_MIRRORS = [
+  'cub.red',
+  'cub.best',
+  'cub.black',
+  'kurwa-bober.ninja',
+  'nackhui.com',
+  'cubnotrip.top',
+]
 const SOCKET_PORT = 8443
-const PING_INTERVAL_MS = 20_000
+
+/**
+ * Пинг. У Лампы `timeping = 5000`; берём столько же — сервер закрывать
+ * соединение за молчание не замечен, но держаться ближе к оригиналу дешевле,
+ * чем выяснять это на живых людях.
+ */
+const PING_INTERVAL_MS = 5_000
 
 /** Как часто переспрашивать список устройств. У Лампы в окне трансляции 3 секунды. */
 const DEVICE_SCAN_MS = 3_000
@@ -60,11 +91,11 @@ type Handlers = {
    */
   onLogoff?: (data: unknown) => void
   /**
-   * Куда подключались и чем кончилось. Нужно диалогу: «соединение не
-   * открылось» без имени зеркала и кода закрытия не отличает мёртвое зеркало
-   * от сервера, который нас выгнал.
+   * Состояние каждого зеркала — для видимых техданных. «Соединение не
+   * открылось» без имён зеркал не отличает мёртвое зеркало от сервера,
+   * который нас выгнал.
    */
-  onAttempt?: (mirror: string, outcome: string) => void
+  onMirrors?: (report: string) => void
   /**
    * Любое пришедшее сообщение — для видимых техданных в диалоге.
    *
@@ -92,14 +123,20 @@ function selfDeviceId(): string {
   }
 }
 
+/** Одно соединение с одним зеркалом. */
+type Link = {
+  host: string
+  ws: WebSocket | null
+  state: 'нет связи' | 'подключаюсь' | 'на связи' | string
+  devices: CubDevice[]
+  ping: ReturnType<typeof setInterval> | null
+  scan: ReturnType<typeof setInterval> | null
+  retry: ReturnType<typeof setTimeout> | null
+}
+
 export class CubSocket {
-  private ws: WebSocket | null = null
-  private mirror = 0
-  private ping: ReturnType<typeof setInterval> | null = null
-  private scan: ReturnType<typeof setInterval> | null = null
+  private links: Link[] = []
   private closedByUs = false
-  /** Зеркало текущей попытки — показываем его в диалоге. */
-  private currentMirror = ''
   /**
    * Код терминала. Лампа кладёт его в КАЖДОЕ сообщение
    * (`data.terminal = Storage.get('terminal_access','')`), а мы слали пустую
@@ -121,35 +158,47 @@ export class CubSocket {
   }
 
   get connected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN
+    return this.links.some((l) => l.ws?.readyState === WebSocket.OPEN)
   }
 
   connect(): void {
     this.closedByUs = false
-    this.open()
+    if (this.links.length === 0) {
+      this.links = SOCKET_MIRRORS.map((host) => ({
+        host, ws: null, state: 'нет связи', devices: [], ping: null, scan: null, retry: null,
+      }))
+    }
+    this.handlers.onState?.('connecting')
+    for (const link of this.links) this.open(link)
   }
 
   close(): void {
     this.closedByUs = true
-    this.stopPing()
-    this.stopDeviceScan()
-    try { this.ws?.close() } catch { /* ignore */ }
-    this.ws = null
+    for (const link of this.links) {
+      this.stopTimers(link)
+      try { link.ws?.close() } catch { /* ignore */ }
+      link.ws = null
+      link.state = 'нет связи'
+      link.devices = []
+    }
     this.handlers.onState?.('closed')
   }
 
-  /** Запросить список устройств аккаунта. Лампа шлёт это раз в 3 с при выборе. */
+  /** Запросить список устройств. Лампа шлёт это раз в 3 с при выборе. */
   requestDevices(): void {
-    this.send('devices', {})
+    this.broadcast('devices', {})
   }
 
   /**
-   * Активировать терминал на устройстве присланным кодом. Должен совпасть с
-   * тем, что пользователь задал на ТВ (Storage 'terminal_access'). Без успешной
-   * активации eval не выполнится.
+   * Активировать терминал присланным кодом. Должен совпасть с тем, что задан на
+   * ТВ (Storage 'terminal_access'). Без успешной активации eval не выполнится.
+   *
+   * Уходит во ВСЕ зеркала: на каком из них сидит нужный телевизор — заранее
+   * неизвестно, а лишняя команда для чужого зеркала безвредна (там её просто
+   * некому исполнить).
    */
   terminalActivate(code: string): void {
-    this.send('terminal_activate', { code })
+    this.broadcast('terminal_activate', { code })
   }
 
   /**
@@ -158,75 +207,71 @@ export class CubSocket {
    * terminal_result.
    */
   terminalEval(code: string, js: string): void {
-    this.send('terminal_eval', { code, eval: js })
+    this.broadcast('terminal_eval', { code, eval: js })
   }
 
   // ── внутреннее ──────────────────────────────────────────────────────────
 
-  private open(): void {
-    // Зеркало НЕ переключаем на каждом открытии — только после неудачи.
-    //
-    // Раньше счётчик рос при каждом open(), и стоило соединению несколько раз
-    // упасть (а из-за CSP оно падало постоянно), как клиент навсегда уезжал
-    // с cub.rip на соседнее зеркало. Устройства при этом не встречаются:
-    // телевизор сидит на cub.rip, а мы спрашиваем совсем другой сервер, и
-    // список законно приходит пустым.
-    const host = SOCKET_MIRRORS[this.mirror % SOCKET_MIRRORS.length]
-    const url = `wss://${host}:${SOCKET_PORT}`
-    this.currentMirror = host
+  private open(link: Link): void {
+    this.stopTimers(link)
+    link.state = 'подключаюсь'
+    this.reportMirrors()
 
-    this.handlers.onState?.('connecting')
-    this.handlers.onAttempt?.(host, 'подключаюсь')
     try {
-      this.ws = new WebSocket(url)
+      link.ws = new WebSocket(`wss://${link.host}:${SOCKET_PORT}`)
     } catch {
-      this.handlers.onAttempt?.(host, 'браузер отказался создать соединение')
-      this.scheduleReconnect()
+      link.state = 'браузер отказал'
+      this.reportMirrors()
+      this.scheduleReconnect(link)
       return
     }
 
-    this.ws.addEventListener('open', () => {
-      // Зеркало сработало — возвращаемся к первому, чтобы следующая же
-      // случайная потеря связи не увела нас с cub.rip навсегда.
-      this.mirror = 0
+    link.ws.addEventListener('open', () => {
+      link.state = 'на связи'
       this.handlers.onState?.('open')
-      this.startPing()
+      this.reportMirrors()
 
-      // Первым делом — check_token, как делает Лампа: у неё это подписано
-      // на событие открытия сокета (`Socket.listener.follow('open',
-      // checkAccountValidity)`, внутри `permit.token && send('check_token')`).
-      // Похоже, именно им сервер признаёт соединение своим и заводит его
-      // в группу аккаунта; без него список устройств приходил пустым.
-      this.send('check_token', {})
+      link.ping = setInterval(() => {
+        if (link.ws?.readyState === WebSocket.OPEN) {
+          try { link.ws.send('ping') } catch { /* ignore */ }
+        }
+      }, PING_INTERVAL_MS)
 
-      this.requestDevices()
+      // check_token первым — так делает Лампа: у неё это подписано на событие
+      // открытия сокета. Похоже, им сервер признаёт соединение своим и заводит
+      // его в группу аккаунта; без него список устройств приходил пустым.
+      this.sendTo(link, 'check_token', {})
+      this.sendTo(link, 'devices', {})
 
-      // И повторяем запрос, как Лампа: у неё в окне трансляции стоит
-      // setInterval на 3 секунды. Устройство могло ещё не подключиться
-      // к моменту нашего первого запроса.
-      this.startDeviceScan()
+      // Повторяем запрос, как Лампа: у неё в окне трансляции setInterval на 3 с.
+      // Устройство могло ещё не подключиться к моменту первого запроса.
+      link.scan = setInterval(() => {
+        if (link.ws?.readyState === WebSocket.OPEN) this.sendTo(link, 'devices', {})
+      }, DEVICE_SCAN_MS)
     })
 
-    this.ws.addEventListener('message', (ev) => this.onMessage(ev))
+    link.ws.addEventListener('message', (ev) => this.onMessage(link, ev))
 
-    this.ws.addEventListener('close', (ev) => {
-      this.stopPing()
-      this.stopDeviceScan()
+    link.ws.addEventListener('close', (ev) => {
+      this.stopTimers(link)
+      link.state = `закрыто (${ev.code})`
+      link.devices = []
+      this.publishDevices()
+      this.reportMirrors()
       if (!this.closedByUs) {
-        // Код закрытия — единственное, что отличает «зеркало не отвечает»
-        // (1006, соединение оборвалось) от «сервер закрыл сам».
-        this.handlers.onAttempt?.(this.currentMirror, `закрыто, код ${ev.code}`)
-        this.scheduleReconnect()
+        if (!this.connected) this.handlers.onState?.('closed')
+        this.scheduleReconnect(link)
       }
     })
 
-    this.ws.addEventListener('error', () => {
-      this.handlers.onAttempt?.(this.currentMirror, 'ошибка соединения')
-      try { this.ws?.close() } catch { /* ignore */ }
+    link.ws.addEventListener('error', () => {
+      link.state = 'ошибка связи'
+      this.reportMirrors()
+      try { link.ws?.close() } catch { /* ignore */ }
     })
   }
 
-  private onMessage(ev: MessageEvent): void {
+  private onMessage(link: Link, ev: MessageEvent): void {
     // Пинг-ответ — не JSON.
     if (ev.data === 'pong') return
 
@@ -245,9 +290,9 @@ export class CubSocket {
     if (result.method === 'devices') {
       // Сервер шлёт список широко, поэтому отсеиваем себя и служебную запись
       // «CUB» — ровно как это делает Лампа в окне трансляции.
-      const list = (Array.isArray(result.data) ? (result.data as CubDevice[]) : [])
+      link.devices = (Array.isArray(result.data) ? (result.data as CubDevice[]) : [])
         .filter((d) => d && d.name !== 'CUB' && d.device_id !== this.uid)
-      this.handlers.onDevices?.(list)
+      this.publishDevices()
     } else if (result.method === 'terminal_result') {
       this.handlers.onTerminalResult?.(result.data)
     } else if (result.method === 'logoff') {
@@ -259,12 +304,35 @@ export class CubSocket {
   }
 
   /**
+   * Свести устройства со всех зеркал в один список.
+   *
+   * Кластерные зеркала отдают один и тот же набор, поэтому дедуплицируем по
+   * uid — иначе один телевизор показался бы человеку четыре раза.
+   */
+  private publishDevices(): void {
+    const seen = new Map<string, CubDevice>()
+    for (const link of this.links) {
+      for (const d of link.devices) {
+        const key = String(d.uid ?? d.device_id ?? '')
+        if (key && !seen.has(key)) seen.set(key, d)
+      }
+    }
+    this.handlers.onDevices?.([...seen.values()])
+  }
+
+  private reportMirrors(): void {
+    this.handlers.onMirrors?.(
+      this.links.map((l) => `${l.host}: ${l.state}`).join(' · '),
+    )
+  }
+
+  /**
    * Сборка и отправка сообщения ровно по формату Лампы (функция send в
    * app.min.js): к данным добавляются обязательные метаполя. account — то, чем
    * сервер роутит команду к устройствам того же пользователя.
    */
-  private send(method: string, data: Record<string, unknown>): void {
-    if (this.ws?.readyState !== WebSocket.OPEN) return
+  private sendTo(link: Link, method: string, data: Record<string, unknown>): void {
+    if (link.ws?.readyState !== WebSocket.OPEN) return
     const payload = {
       ...data,
       device_id: this.uid,
@@ -278,47 +346,26 @@ export class CubSocket {
       terminal: this.terminal,
     }
     try {
-      this.ws.send(JSON.stringify(payload))
+      link.ws.send(JSON.stringify(payload))
     } catch {
       /* соединение оборвалось — переподключение поднимет заново */
     }
   }
 
-  private startPing(): void {
-    this.stopPing()
-    this.ping = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        try { this.ws.send('ping') } catch { /* ignore */ }
-      }
-    }, PING_INTERVAL_MS)
+  private broadcast(method: string, data: Record<string, unknown>): void {
+    for (const link of this.links) this.sendTo(link, method, data)
   }
 
-  private stopPing(): void {
-    if (this.ping) { clearInterval(this.ping); this.ping = null }
-    this.ping = null
+  private stopTimers(link: Link): void {
+    if (link.ping) { clearInterval(link.ping); link.ping = null }
+    if (link.scan) { clearInterval(link.scan); link.scan = null }
+    if (link.retry) { clearTimeout(link.retry); link.retry = null }
   }
 
-  /**
-   * Периодический опрос устройств — ровно как у Лампы в окне трансляции
-   * (setInterval на 3 секунды). Список составляет сервер из тех, кто сейчас
-   * на связи, и телевизор мог подключиться позже нашего первого запроса.
-   */
-  private startDeviceScan(): void {
-    this.stopDeviceScan()
-    this.scan = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) this.requestDevices()
-    }, DEVICE_SCAN_MS)
-  }
-
-  private stopDeviceScan(): void {
-    if (this.scan) { clearInterval(this.scan); this.scan = null }
-  }
-
-  private scheduleReconnect(): void {
-    this.handlers.onState?.('closed')
-    // Не сработало — вот теперь пробуем следующее зеркало, как перебор
-    // soc_mirrors у Лампы.
-    this.mirror++
-    setTimeout(() => { if (!this.closedByUs) this.open() }, 2000)
+  private scheduleReconnect(link: Link): void {
+    if (link.retry) clearTimeout(link.retry)
+    link.retry = setTimeout(() => {
+      if (!this.closedByUs) this.open(link)
+    }, 5000)
   }
 }

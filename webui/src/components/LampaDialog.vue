@@ -133,12 +133,12 @@ async function run(device: CubDevice) {
           сообщений от CUB: {{ cub.received.value }}
           <template v-if="cub.lastMethod.value"> · последнее: {{ cub.lastMethod.value }}</template>
           <!--
-            Зеркало и исход попытки. Без них «соединение не открылось» — тупик:
-            зеркал семь и ведут они себя по-разному (cub.black не слушает
-            сокет-порт вовсе, cub.rip больше не резолвится), а смотреть консоль
-            браузера на телевизоре невозможно.
+            Состояние каждого зеркала. Держим их все сразу: cub.black — сервер
+            отдельный, со своей базой устройств, и телевизор может сидеть
+            именно на нём. Без этой строки «соединение не открылось» — тупик,
+            а смотреть консоль браузера на телевизоре невозможно.
           -->
-          <template v-if="cub.lastAttempt.value"><br>попытка: {{ cub.lastAttempt.value }}</template>
+          <template v-if="cub.lastAttempt.value"><br>зеркала: {{ cub.lastAttempt.value }}</template>
         </div>
 
         <!--
