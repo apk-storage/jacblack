@@ -27,6 +27,19 @@ let socket: CubSocket | null = null
 const received = ref(0)
 const lastMethod = ref('')
 
+/**
+ * Что происходило с соединением: зеркало и исход последней попытки.
+ *
+ * Без этого «соединение не открылось» — тупик: непонятно, к какому серверу
+ * стучались и почему не вышло. Зеркал семь, ведут они себя по-разному
+ * (cub.black не слушает сокет-порт вовсе, cub.rip больше не резолвится), и
+ * разбирать это по консоли браузера на телевизоре невозможно.
+ */
+const lastAttempt = ref('')
+
+/** CUB отверг аккаунт — устройств не будет, надо входить заново. */
+const rejected = ref(false)
+
 /** Куда приходит ответ устройства на текущую команду. */
 let ответ: ((d: unknown) => void) | null = null
 
@@ -57,20 +70,28 @@ export function useCub() {
   function setTerminalCode(code: string): void {
     terminalCode.value = code.trim()
     try { localStorage.setItem(TERMINAL_KEY, terminalCode.value) } catch { /* ignore */ }
+    // Сокет мог быть поднят раньше, чем человек ввёл код: он уходит в каждом
+    // сообщении, поэтому обновляем и в живом соединении, а не только при старте.
+    socket?.setTerminal(terminalCode.value)
   }
 
   /** Поднять сокет, если есть аккаунт. Идемпотентно. */
   function connect(): void {
     if (!account.value || socket) return
+    rejected.value = false
     socket = new CubSocket(account.value, {
       onState: (s) => { socketState.value = s },
       onDevices: (list) => { devices.value = list },
       onTerminalResult: (d) => ответ?.(d),
+      onLogoff: () => { rejected.value = true },
+      onAttempt: (mirror, outcome) => { lastAttempt.value = `${mirror} — ${outcome}` },
       onAny: (method, size) => {
         received.value += 1
         lastMethod.value = size ? `${method} (${size})` : method
       },
     })
+    // Код терминала уходит в каждом сообщении — так делает Лампа.
+    socket.setTerminal(terminalCode.value)
     socket.connect()
   }
 
@@ -143,6 +164,8 @@ export function useCub() {
     socketState,
     received,
     lastMethod,
+    lastAttempt,
+    rejected,
     terminalCode,
     authorized,
     login,
