@@ -8,18 +8,20 @@
  * и по нему сервер CUB роутит команды между устройствами одного пользователя.
  *
  * Флоу для jac.black:
- *   1. Пользователь на `https://cub.rip/add` (в своей учётке) получает КОД.
+ *   1. Пользователь на `https://cub.red/add` (в своей учётке) получает КОД.
  *   2. Вводит код здесь.
  *   3. Мы шлём device/add {code} → получаем account, храним локально.
  *   4. С этим account коннектимся к сокету (CubSocket) и видим свои устройства.
  *
- * CORS: браузерный POST с jac.black на cub.rip — cross-origin. cub.rip может его
+ * CORS: браузерный POST с jac.black на зеркало Лампы — cross-origin. зеркало может его
  * не разрешить. Поэтому по умолчанию идём через СВОЙ бэкенд-прокси
  * (`/cub/device-add`), а прямой запрос оставлен как запасной. Прокси на стороне
  * JacBlack ещё нужно поднять (аналогично проксированию TorrServer).
  */
 
-const CUB_API = 'https://cub.rip/api'
+// Прямой запрос — запасной путь; основной идёт через наш прокси, который сам
+// перебирает зеркала. cub.red и cub.black отдают CORS-заголовки, cub.tv нет.
+const CUB_API = 'https://cub.red/api'
 const ACCOUNT_KEY = 'jb_cub_account'
 
 export type CubAccount = Record<string, unknown>
@@ -54,12 +56,12 @@ export function clearAccount(): void {
  * Обменять код добавления устройства на аккаунт CUB.
  *
  * Сначала пробуем свой прокси (обходит CORS), при его отсутствии — прямой
- * запрос на cub.rip. `code` — то, что пользователь получил на cub.rip/add.
+ * запрос на зеркало Лампы. `code` — то, что пользователь получил на cub.red/add.
  */
 export async function loginWithCode(code: string, signal?: AbortSignal): Promise<CubAccount> {
   const trimmed = String(code).trim()
   if (!/^\d+$/.test(trimmed)) {
-    throw new Error('Код должен быть числом — тем, что показан на cub.rip/add')
+    throw new Error('Код должен быть числом — тем, что показан на cub.red/add')
   }
 
   const account = await deviceAdd(trimmed, signal)
@@ -80,7 +82,7 @@ async function deviceAdd(code: string, signal?: AbortSignal): Promise<CubAccount
     if ((e as { name?: string }).name === 'AbortError') throw e
   }
 
-  // 2) прямой запрос на cub.rip (сработает, только если CORS открыт).
+  // 2) прямой запрос на зеркало (сработает, только если CORS открыт).
   const direct = await postJson(`${CUB_API}/device/add`, { code }, signal)
   return direct as CubAccount
 }

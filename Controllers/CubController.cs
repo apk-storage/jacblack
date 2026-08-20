@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
 using System;
 using System.Net.Http;
 using System.Text;
@@ -16,13 +17,27 @@ namespace JacBlack.Controllers
     /// ответа. Отсюда запрос уходит с нашего сервера — CORS исчезает. Ответ
     /// (объект аккаунта) отдаётся клиенту как есть; на сервере ничего не хранится.
     ///
-    /// SSRF тут не про адрес (он фиксирован — cub.rip), а про то, чтобы не дать
-    /// прокинуть произвольное тело: принимаем ровно код (число), больше ничего.
+    /// SSRF тут не про адрес (он выбирается из зашитого списка), а про то, чтобы
+    /// не дать прокинуть произвольное тело: принимаем ровно код (число).
+    ///
+    /// Зеркала. `cub.rip` умер к 20.08.2026 — вход отваливался с «Failed to
+    /// fetch», потому что домен был прибит одной константой. У Лампы зеркал
+    /// много и они меняются, поэтому здесь список: идём по нему, пока кто-то не
+    /// ответит, и запоминаем сработавшее до перезапуска. Проверено в тот же
+    /// день: живы `cub.red`, `cub.black`, `cub.tv`; мертвы `cub.rip`,
+    /// `cub.site`, `cub.watch`.
     /// </summary>
     [Route("/cub")]
     public class CubController : Controller
     {
-        const string CubDeviceAdd = "https://cub.rip/api/device/add";
+        static readonly string[] CubMirrors =
+        {
+            "cub.red", "cub.black", "cub.tv", "cub.rip", "cub.site", "cub.watch"
+        };
+
+        // Зеркало, ответившее последним. Начинаем со следующего раза с него —
+        // перебор мёртвых доменов стоит человеку секунд ожидания.
+        static volatile string _lastGood;
 
         // Отдельный клиент: у CUB бывает медленный ответ на добавление устройства.
         static readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
@@ -43,48 +58,84 @@ namespace JacBlack.Controllers
             // CUB ждёт число, а не строку.
             string body = Newtonsoft.Json.JsonConvert.SerializeObject(new { code = long.Parse(code) });
 
-            var content = new StringContent(body, Encoding.UTF8);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            string последняяОшибка = null;
 
-            try
+            foreach (string зеркало in Порядок())
             {
-                using var msg = new HttpRequestMessage(HttpMethod.Post, CubDeviceAdd) { Content = content };
-                // CUB смотрит на источник запроса — представляемся как обычный клиент.
-                msg.Headers.TryAddWithoutValidation("Origin", "https://cub.rip");
-                msg.Headers.TryAddWithoutValidation("Referer", "https://cub.rip/");
-
-                using var resp = await http.SendAsync(msg);
-                string text = await resp.Content.ReadAsStringAsync();
-
-                if (!resp.IsSuccessStatusCode)
+                try
                 {
-                    // CUB на НЕВЕРНЫЙ код отвечает пятисоткой, а настоящую
-                    // причину кладёт внутрь: {"error":true,"code":200,...}.
-                    // Сама Лампа так его и читает: errorCode == 200 у неё
-                    // означает «неверный код», а не сбой. Разводим их и мы,
-                    // иначе просроченный код выглядит как поломка сервера.
-                    if (CubErrorCode(text) == 200)
-                        return StatusCode(400, new
+                    // Тело одноразовое: HttpContent нельзя переиспользовать между
+                    // попытками, иначе вторая уйдёт с пустым потоком.
+                    var телоЗапроса = new StringContent(body, Encoding.UTF8);
+                    телоЗапроса.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                    using var msg = new HttpRequestMessage(HttpMethod.Post, $"https://{зеркало}/api/device/add") { Content = телоЗапроса };
+                    // CUB смотрит на источник запроса — представляемся как обычный клиент.
+                    msg.Headers.TryAddWithoutValidation("Origin", $"https://{зеркало}");
+                    msg.Headers.TryAddWithoutValidation("Referer", $"https://{зеркало}/");
+
+                    using var resp = await http.SendAsync(msg);
+                    string text = await resp.Content.ReadAsStringAsync();
+
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        // CUB на НЕВЕРНЫЙ код отвечает пятисоткой, а настоящую
+                        // причину кладёт внутрь: {"error":true,"code":200,...}.
+                        // Сама Лампа так его и читает: errorCode == 200 у неё
+                        // означает «неверный код», а не сбой. Разводим их и мы,
+                        // иначе просроченный код выглядит как поломка сервера.
+                        //
+                        // Это ОТВЕТ зеркала, а не его молчание: перебирать
+                        // дальше незачем — на соседнем код будет так же неверен.
+                        if (CubErrorCode(text) == 200)
                         {
-                            ok = false,
-                            code = "badCode",
-                            message = "Код не подошёл. Возьмите свежий на cub.rip/add — он одноразовый и живёт недолго"
-                        });
+                            _lastGood = зеркало;
+                            return StatusCode(400, new
+                            {
+                                ok = false,
+                                code = "badCode",
+                                message = $"Код не подошёл. Возьмите свежий на {зеркало}/add — он одноразовый и живёт недолго"
+                            });
+                        }
 
-                    return StatusCode(502, new { ok = false, code = "cubError", status = (int)resp.StatusCode, message = CubMessage(text) });
+                        последняяОшибка = CubMessage(text);
+                        continue;                       // зеркало отвечает, но плохо — пробуем следующее
+                    }
+
+                    _lastGood = зеркало;
+
+                    // Ответ CUB — JSON аккаунта. Отдаём как есть, чтобы клиент положил
+                    // его в localStorage и использовал в сокете без изменений.
+                    return Content(text, "application/json");
                 }
+                catch (TaskCanceledException)
+                {
+                    последняяОшибка = $"{зеркало} не ответил вовремя";
+                }
+                catch (HttpRequestException ex)
+                {
+                    последняяОшибка = $"{зеркало}: {ex.Message}";
+                }
+            }
 
-                // Ответ CUB — JSON аккаунта. Отдаём как есть, чтобы клиент положил
-                // его в localStorage и использовал в сокете без изменений.
-                return Content(text, "application/json");
-            }
-            catch (TaskCanceledException)
+            return StatusCode(502, new
             {
-                return StatusCode(504, new { ok = false, code = "timeout", message = "CUB не ответил вовремя" });
-            }
-            catch (Exception ex)
+                ok = false,
+                code = "cubUnavailable",
+                message = "Ни одно зеркало Лампы не ответило. " + (последняяОшибка ?? "")
+            });
+
+            IEnumerable<string> Порядок()
             {
-                return StatusCode(502, new { ok = false, code = "request", message = ex.Message });
+                string первое = _lastGood;
+                if (!string.IsNullOrEmpty(первое))
+                    yield return первое;
+
+                foreach (string m in CubMirrors)
+                {
+                    if (!string.Equals(m, первое, StringComparison.OrdinalIgnoreCase))
+                        yield return m;
+                }
             }
         }
 
