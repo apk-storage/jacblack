@@ -17,13 +17,14 @@
  * TorrServer. Требует, чтобы на устройстве был задан код терминала
  * (`terminal_access`) и тот же код введён здесь.
  *
- * Это обёртка вокруг СТОРОННЕГО недокументированного протокола cub.rip — он
+ * Это обёртка вокруг СТОРОННЕГО недокументированного протокола CUB — он
  * может измениться. Поэтому список зеркал и порт вынесены в константы, а формат
  * сообщения собран точно по реверсу.
  */
 
 /** Зеркала сокета CUB (soc_mirrors из app.min.js). Перебор при обрыве. */
-const SOCKET_MIRRORS = ['cub.rip', 'kurwa-bober.ninja', 'nackhui.com']
+// Зеркала сокета. cub.rip умер к 20.08.2026 — держим список живых первыми.
+const SOCKET_MIRRORS = ['cub.red', 'cub.black', 'cub.tv', 'kurwa-bober.ninja', 'nackhui.com', 'cub.rip']
 const SOCKET_PORT = 8443
 const PING_INTERVAL_MS = 20_000
 

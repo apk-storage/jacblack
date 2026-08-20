@@ -10,8 +10,8 @@ import type { CubDevice } from '@/lib/cub/socket'
  * «В Лампе» — запустить раздачу на устройстве Лампы (ТВ) через CUB.
  *
  * Экрана настроек нет, поэтому всё нужное спрашиваем прямо здесь и по шагам:
- *   1. если не входили в cub.rip — код добавления устройства (берётся на
- *      cub.rip/add в своей учётке);
+ *   1. если не входили в аккаунт Лампы — код добавления устройства (берётся на
+ *      cub.red/add в своей учётке);
  *   2. код терминала — тот, что задан в Лампе на ТВ (без него устройство
  *      откажется выполнять запуск);
  *   3. выбор устройства из списка — по нему и запускаем.
@@ -88,16 +88,16 @@ async function run(device: CubDevice) {
 
       <p v-if="item" class="mb-4 truncate text-sm opacity-70">{{ item.title || item.name }}</p>
 
-      <!-- Шаг 1: вход в cub.rip -->
+      <!-- Шаг 1: вход в аккаунт Лампы -->
       <div v-if="!cub.authorized()" class="space-y-3">
         <p class="text-sm opacity-80">
           Войдите в свою учётку CUB. Откройте на телефоне/ТВ
-          <b>cub.rip/add</b> и введите показанный там код:
+          <b>cub.red/add</b> и введите показанный там код:
         </p>
         <input
           v-model="code"
           inputmode="numeric"
-          placeholder="Код с cub.rip/add"
+          placeholder="Код с cub.red/add"
           class="w-full rounded-lg bg-black/30 px-3 py-2 outline-none"
           @keyup.enter="signIn"
         />
