@@ -53,6 +53,19 @@ type Handlers = {
   onDevices?: (devices: CubDevice[]) => void
   onTerminalResult?: (result: unknown) => void
   /**
+   * CUB отверг аккаунт. У Лампы этот метод приводит к `Account.logoff()` —
+   * то есть к выходу из учётки; значит сервер считает её недействительной и
+   * устройств не пришлёт никогда. Без обработки это выглядит как «связь есть,
+   * а устройств нет», и человек идёт чинить телевизор вместо повторного входа.
+   */
+  onLogoff?: (data: unknown) => void
+  /**
+   * Куда подключались и чем кончилось. Нужно диалогу: «соединение не
+   * открылось» без имени зеркала и кода закрытия не отличает мёртвое зеркало
+   * от сервера, который нас выгнал.
+   */
+  onAttempt?: (mirror: string, outcome: string) => void
+  /**
    * Любое пришедшее сообщение — для видимых техданных в диалоге.
    *
    * Без него пустой список устройств неотличим от «сервер вообще молчит», а
@@ -85,6 +98,14 @@ export class CubSocket {
   private ping: ReturnType<typeof setInterval> | null = null
   private scan: ReturnType<typeof setInterval> | null = null
   private closedByUs = false
+  /** Зеркало текущей попытки — показываем его в диалоге. */
+  private currentMirror = ''
+  /**
+   * Код терминала. Лампа кладёт его в КАЖДОЕ сообщение
+   * (`data.terminal = Storage.get('terminal_access','')`), а мы слали пустую
+   * строку — то есть представлялись сервером как устройство без терминала.
+   */
+  private terminal = ''
   private readonly account: CubAccount
   private readonly handlers: Handlers
   private readonly uid = selfDeviceId()
@@ -92,6 +113,11 @@ export class CubSocket {
   constructor(account: CubAccount, handlers: Handlers = {}) {
     this.account = account
     this.handlers = handlers
+  }
+
+  /** Задать код терминала — он уходит в каждом сообщении, как у Лампы. */
+  setTerminal(code: string): void {
+    this.terminal = String(code || '')
   }
 
   get connected(): boolean {
@@ -147,11 +173,14 @@ export class CubSocket {
     // список законно приходит пустым.
     const host = SOCKET_MIRRORS[this.mirror % SOCKET_MIRRORS.length]
     const url = `wss://${host}:${SOCKET_PORT}`
+    this.currentMirror = host
 
     this.handlers.onState?.('connecting')
+    this.handlers.onAttempt?.(host, 'подключаюсь')
     try {
       this.ws = new WebSocket(url)
     } catch {
+      this.handlers.onAttempt?.(host, 'браузер отказался создать соединение')
       this.scheduleReconnect()
       return
     }
@@ -180,13 +209,19 @@ export class CubSocket {
 
     this.ws.addEventListener('message', (ev) => this.onMessage(ev))
 
-    this.ws.addEventListener('close', () => {
+    this.ws.addEventListener('close', (ev) => {
       this.stopPing()
       this.stopDeviceScan()
-      if (!this.closedByUs) this.scheduleReconnect()
+      if (!this.closedByUs) {
+        // Код закрытия — единственное, что отличает «зеркало не отвечает»
+        // (1006, соединение оборвалось) от «сервер закрыл сам».
+        this.handlers.onAttempt?.(this.currentMirror, `закрыто, код ${ev.code}`)
+        this.scheduleReconnect()
+      }
     })
 
     this.ws.addEventListener('error', () => {
+      this.handlers.onAttempt?.(this.currentMirror, 'ошибка соединения')
       try { this.ws?.close() } catch { /* ignore */ }
     })
   }
@@ -215,6 +250,11 @@ export class CubSocket {
       this.handlers.onDevices?.(list)
     } else if (result.method === 'terminal_result') {
       this.handlers.onTerminalResult?.(result.data)
+    } else if (result.method === 'logoff') {
+      // Сервер не признал аккаунт. У Лампы это `Account.logoff()` — выход из
+      // учётки. Пока мы это молчали, картина выглядела как «связь есть, но
+      // устройств нет», и человек шёл настраивать телевизор впустую.
+      this.handlers.onLogoff?.(result.data)
     }
   }
 
@@ -233,7 +273,9 @@ export class CubSocket {
       version: 1,
       account: this.account,
       premium: false,
-      terminal: '',
+      // Лампа кладёт сюда `Storage.get('terminal_access','')` — код терминала
+      // того устройства, что отправляет сообщение. Мы слали пустую строку.
+      terminal: this.terminal,
     }
     try {
       this.ws.send(JSON.stringify(payload))
