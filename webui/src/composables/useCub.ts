@@ -1,4 +1,4 @@
-import { ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import { CubSocket, type CubDevice, type CubSocketState } from '@/lib/cub/socket'
 import { buildLaunchEval, type LampaLaunch } from '@/lib/cub/eval-payload'
 import { loadAccount, saveAccount, clearAccount, loginWithCode, type CubAccount } from '@/lib/cub/auth'
@@ -17,6 +17,15 @@ const account = shallowRef<CubAccount | null>(loadAccount())
 const devices = ref<CubDevice[]>([])
 const socketState = ref<CubSocketState>('idle')
 let socket: CubSocket | null = null
+
+/**
+ * device_id устройств, откликнувшихся на наш код терминала, — то есть СВОИХ.
+ *
+ * CUB отдаёт список всех подключённых без пометки владельца (138 штук в замере
+ * 20.08), поэтому свой телевизор виден вперемешку с чужими. Как только человек
+ * задал код и хоть одно устройство отозвалось — показываем только их.
+ */
+const ownDeviceIds = ref<Set<string>>(new Set())
 
 /**
  * Техданные для диалога: сколько сообщений пришло от CUB и каким было
@@ -72,6 +81,11 @@ export function useCub() {
     // Сокет мог быть поднят раньше, чем человек ввёл код: он уходит в каждом
     // сообщении, поэтому обновляем и в живом соединении, а не только при старте.
     socket?.setTerminal(terminalCode.value)
+    // Разослать пробную активацию: устройство с этим кодом откликнется
+    // `terminal_result` со своим device_id, и мы опознаем его как своё —
+    // после этого список схлопнется до своих. Код сменился — начинаем заново.
+    ownDeviceIds.value = new Set()
+    if (terminalCode.value) socket?.terminalActivate(terminalCode.value)
   }
 
   /** Поднять сокет, если есть аккаунт. Идемпотентно. */
@@ -84,6 +98,11 @@ export function useCub() {
       onTerminalResult: (d) => ответ?.(d),
       onLogoff: () => { rejected.value = true },
       onMirrors: (report) => { lastAttempt.value = report },
+      onOwnDevice: (id) => {
+        if (id && !ownDeviceIds.value.has(id)) {
+          ownDeviceIds.value = new Set([...ownDeviceIds.value, id])
+        }
+      },
       onAny: (method, size) => {
         received.value += 1
         lastMethod.value = size ? `${method} (${size})` : method
@@ -154,12 +173,30 @@ export function useCub() {
     return итог
   }
 
+  /**
+   * Что показать человеку. Пока код терминала не задан или на него никто не
+   * откликнулся — весь список (без него отфильтровать своих нечем, а прятать
+   * всё — значит скрыть и настоящий телевизор). Как только своё устройство
+   * опознано — только свои: 138 чужих в списке никому не нужны.
+   */
+  const visibleDevices = computed<CubDevice[]>(() => {
+    if (ownDeviceIds.value.size === 0) return devices.value
+    return devices.value.filter(
+      (d) => ownDeviceIds.value.has(String(d.device_id)) || ownDeviceIds.value.has(String(d.uid)),
+    )
+  })
+
+  /** Опознаны ли свои устройства — диалог по этому меняет подпись списка. */
+  const ownKnown = computed(() => ownDeviceIds.value.size > 0)
+
   // Автоподключение при наличии сохранённого аккаунта.
   if (account.value && !socket) connect()
 
   return {
     account,
     devices,
+    visibleDevices,
+    ownKnown,
     socketState,
     received,
     lastMethod,
