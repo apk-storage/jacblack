@@ -141,7 +141,18 @@ type Link = {
   ping: ReturnType<typeof setInterval> | null
   scan: ReturnType<typeof setInterval> | null
   retry: ReturnType<typeof setTimeout> | null
+  /** Сколько раз уже пробивали кодом на этом соединении (ограничено сверху). */
+  probes: number
 }
+
+/**
+ * Сколько раз повторять пробу кода терминала, пока свой ТВ не опознан.
+ * Каждые DEVICE_SCAN_MS (3 с), то есть ~10 попыток ≈ 30 секунд — этого хватает,
+ * чтобы ТВ успел подключиться. Дальше НЕ долбим: список устройств всё равно
+ * приходит периодически, а лишние сообщения на сокет CUB (который и так под
+ * нагрузкой) ни к чему. Смена кода счётчик сбрасывает.
+ */
+const MAX_PROBE_CYCLES = 10
 
 export class CubSocket {
   private links: Link[] = []
@@ -166,7 +177,10 @@ export class CubSocket {
   /** Задать код терминала — он уходит в каждом сообщении, как у Лампы. */
   setTerminal(code: string): void {
     const novyi = String(code || '')
-    if (novyi !== this.terminal) this.ownIdentified = false  // сменили код — пробуем заново
+    if (novyi !== this.terminal) {
+      this.ownIdentified = false          // сменили код — пробуем заново
+      for (const l of this.links) l.probes = 0
+    }
     this.terminal = novyi
   }
 
@@ -178,7 +192,7 @@ export class CubSocket {
     this.closedByUs = false
     if (this.links.length === 0) {
       this.links = SOCKET_MIRRORS.map((host) => ({
-        host, ws: null, state: 'нет связи', devices: [], ping: null, scan: null, retry: null,
+        host, ws: null, state: 'нет связи', devices: [], ping: null, scan: null, retry: null, probes: 0,
       }))
     }
     this.handlers.onState?.('connecting')
@@ -259,7 +273,8 @@ export class CubSocket {
       // Проба «кто мой» — сразу при открытии, если код терминала уже задан.
       // Раньше она уходила только при РУЧНОМ вводе кода (setTerminal), поэтому с
       // уже сохранённым кодом свой ТВ не опознавался и список не схлопывался.
-      if (this.terminal) this.sendTo(link, 'terminal_activate', { code: this.terminal })
+      link.probes = 0
+      if (this.terminal) { this.sendTo(link, 'terminal_activate', { code: this.terminal }); link.probes = 1 }
 
       // Повторяем запрос, как Лампа: у неё в окне трансляции setInterval на 3 с.
       // Устройство могло ещё не подключиться к моменту первого запроса; заодно,
@@ -268,8 +283,9 @@ export class CubSocket {
       link.scan = setInterval(() => {
         if (link.ws?.readyState !== WebSocket.OPEN) return
         this.sendTo(link, 'devices', {})
-        if (this.terminal && !this.ownIdentified) {
+        if (this.terminal && !this.ownIdentified && link.probes < MAX_PROBE_CYCLES) {
           this.sendTo(link, 'terminal_activate', { code: this.terminal })
+          link.probes += 1
         }
       }, DEVICE_SCAN_MS)
     })
