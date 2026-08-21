@@ -1,0 +1,279 @@
+# -*- coding: utf-8 -*-
+"""
+Статистика обращений к jac.black: кто ходит, откуда и с чем.
+
+Зачем. До 20.08.2026 в логе стояли адреса краёв Cloudflare, и понять, кто
+именно нас дёргает, было нельзя в принципе. Реальные адреса восстановлены —
+теперь их можно считать. Второе: к нам ходят чужие сборки Лампы и чужие
+сервисы, которые пополняют свою базу за наш счёт; чтобы решать, кого отсекать,
+нужны цифры, а не догадки.
+
+Что делает:
+  * разбирает логи nginx (формат hostfmt) — текущий И ротированные;
+  * по каждому адресу определяет автономную систему и её владельца — из
+    локальной выгрузки iptoasn, чтобы не ходить наружу на каждый запрос;
+  * относит адрес к ДАТАЦЕНТРУ или ЖИЛОМУ по названию владельца: у хостингов
+    в имени почти всегда hosting/cloud/server/datacenter/vps;
+  * отделяет проверки живости от людей;
+  * копит суточные итоги в sqlite рядом с базой.
+
+Классификация по названию — приближение, а не истина. Поэтому в отчёт идёт и
+сам владелец: спорный случай видно глазами, а правило потом уточняется.
+"""
+import gzip
+import io
+import os
+import re
+import sqlite3
+import urllib.request
+from bisect import bisect_right
+from datetime import datetime
+
+ЛОГ = "/var/log/nginx/jac.black.log"
+БАЗА = "/opt/jacblack/Data/traffic.db"
+ASN_ФАЙЛ = "/opt/jacblack/Data/ip2asn-combined.tsv"
+ASN_URL = "https://iptoasn.com/data/ip2asn-combined.tsv.gz"
+
+# Слова, по которым владельца адреса относим к датацентру.
+ПРИЗНАКИ_ДАТАЦЕНТРА = (
+    "hosting", "host", "cloud", "server", "datacenter", "data center", "dedicated",
+    "vps", "vds", "colocation", "colo", "digital ocean", "digitalocean", "amazon",
+    "google", "microsoft", "azure", "hetzner", "ovh", "linode", "vultr", "scaleway",
+    "contabo", "leaseweb", "m247", "choopa", "oracle", "alibaba", "tencent",
+)
+
+# Их же признаки, но означающие обычного домашнего или мобильного провайдера.
+ПРИЗНАКИ_ЖИЛОГО = (
+    "telecom", "mobile", "cellular", "broadband", "cable", "dsl", "fiber",
+    "communications", "internet service", "isp", "rostelecom", "megafon", "beeline",
+    "mts", "tele2", "vodafone", "orange", "deutsche telekom", "kyivstar",
+)
+
+СТРОКА = re.compile(
+    r'^(?P<ip>\S+) host="(?P<host>[^"]*)" \[(?P<time>[^\]]+)\] "(?P<req>[^"]*)" '
+    r'(?P<status>\d{3}) (?P<size>\d+) "(?P<ref>[^"]*)" "(?P<ua>[^"]*)" origin="(?P<origin>[^"]*)"'
+    # cc (страна от Cloudflare) и mir (метка зеркала) добавлены в log_format
+    # 21.08.2026 — опционально, потому что старые строки лога их не имеют.
+    r'(?: cc="(?P<cc>[^"]*)" mir="(?P<mir>[^"]*)")?'
+)
+
+
+def скачать_asn():
+    """Выгрузка «диапазон → автономная система → владелец». Обновляем раз в неделю."""
+    if os.path.exists(ASN_ФАЙЛ):
+        возраст = (datetime.now().timestamp() - os.path.getmtime(ASN_ФАЙЛ)) / 86400
+        if возраст < 7:
+            return
+
+    print("  качаю выгрузку автономных систем…", flush=True)
+    запрос = urllib.request.Request(ASN_URL, headers={"User-Agent": "jacblack-traffic-stats/1.0"})
+    with urllib.request.urlopen(запрос, timeout=120) as ответ:
+        сырое = ответ.read()
+    with gzip.GzipFile(fileobj=io.BytesIO(сырое)) as g:
+        данные = g.read()
+    with open(ASN_ФАЙЛ + ".tmp", "wb") as f:
+        f.write(данные)
+    os.replace(ASN_ФАЙЛ + ".tmp", ASN_ФАЙЛ)
+
+
+def файлы_логов():
+    """Текущий лог и все ротированные.
+
+    Читать только `jac.black.log` — значит взять кусок с полуночи и назвать это
+    сутками: 20.08.2026 в нём было 8 часов и 4 тысячи строк, тогда как во
+    вчерашнем `.1` — 6 МБ и 30 тысяч. Logrotate держит две недели, берём всё:
+    повторный разбор безвреден, записи ложатся по первичному ключу.
+    """
+    каталог = os.path.dirname(ЛОГ)
+    имя = os.path.basename(ЛОГ)
+    return [os.path.join(каталог, f) for f in sorted(os.listdir(каталог))
+            if f == имя or f.startswith(имя + ".")]
+
+
+def читать(путь):
+    """Строки лога; сжатые архивы разворачиваются на лету."""
+    try:
+        if путь.endswith(".gz"):
+            with gzip.open(путь, "rt", encoding="utf-8", errors="replace") as f:
+                for строка in f:
+                    yield строка
+        else:
+            with open(путь, encoding="utf-8", errors="replace") as f:
+                for строка in f:
+                    yield строка
+    except OSError:
+        return
+
+
+def в_число(ip):
+    """IPv4 в число. IPv6 не поддерживаем: в выгрузке он есть, но диапазоны там
+    иные, а доля таких обращений мала — их относим к «неизвестно»."""
+    части = ip.split(".")
+    if len(части) != 4:
+        return None
+    try:
+        a, b, c, d = (int(x) for x in части)
+    except ValueError:
+        return None
+    if max(a, b, c, d) > 255:
+        return None
+    return (a << 24) | (b << 16) | (c << 8) | d
+
+
+def загрузить_asn():
+    начала, записи = [], []
+    with open(ASN_ФАЙЛ, encoding="utf-8", errors="replace") as f:
+        for строка in f:
+            поля = строка.rstrip("\n").split("\t")
+            if len(поля) < 5:
+                continue
+            от, до, asn, страна, владелец = поля[0], поля[1], поля[2], поля[3], поля[4]
+            n1, n2 = в_число(от), в_число(до)
+            if n1 is None or n2 is None:
+                continue
+            начала.append(n1)
+            записи.append((n2, asn, страна, владелец))
+    return начала, записи
+
+
+def класс_владельца(владелец):
+    низ = владелец.lower()
+    for слово in ПРИЗНАКИ_ЖИЛОГО:
+        if слово in низ:
+            return "жилой"
+    for слово in ПРИЗНАКИ_ДАТАЦЕНТРА:
+        if слово in низ:
+            return "датацентр"
+    return "неизвестно"
+
+
+def найти(начала, записи, ip):
+    n = в_число(ip)
+    if n is None:
+        return None, "", "неизвестно"
+    i = bisect_right(начала, n) - 1
+    if i < 0:
+        return None, "", "неизвестно"
+    до, asn, страна, владелец = записи[i]
+    if n > до:
+        return None, "", "неизвестно"
+    return asn, владелец, класс_владельца(владелец)
+
+
+def служебный_запрос(запрос, клиент):
+    """Проверка живости, а не человек.
+
+    Чужой Gatus с Hetzner берёт `/health` каждые 15 секунд и даёт треть всех
+    строк лога; наш Kuma стучится на корень раз в 30 секунд. Не отделив их,
+    любую цифру о людях приходится делить на глаз — я на этом уже ошибся.
+    """
+    if "/health" in запрос:
+        return 1
+    if клиент.startswith(("Gatus/", "Uptime-Kuma")):
+        return 1
+    return 0
+
+
+def главное():
+    скачать_asn()
+    начала, записи = загрузить_asn()
+    print("  диапазонов в выгрузке: %d" % len(начала))
+
+    conn = sqlite3.connect(БАЗА)
+    conn.execute("""create table if not exists обращения (
+                        день text, ip text, страна text, asn text, владелец text,
+                        класс text, origin text, запросов integer, поисков integer,
+                        служебных integer default 0,
+                        primary key (день, ip, origin))""")
+
+    счёт = {}
+    по_стране = {}   # страна (Cloudflare) → живых запросов
+    по_каналу = {}   # «зеркало»/«прямой» → живых запросов
+    всего = 0
+    for файл in файлы_логов():
+        for строка in читать(файл):
+            m = СТРОКА.match(строка)
+            if not m:
+                continue
+            всего += 1
+            ip = m.group("ip")
+            день = datetime.strptime(m.group("time").split()[0], "%d/%b/%Y:%H:%M:%S").strftime("%Y-%m-%d")
+            origin = m.group("origin") or "-"
+            # Ручек поиска ДВЕ: Torznab (`/api/v2.0/indexers`, им ходит Лампа)
+            # и родная `/api/v1.0/torrents`. Считая только первую, я записал
+            # чужому парсеру из Германии «поисков 0» при 531 запросе — он
+            # выглядел безобидным именно потому, что ходит второй ручкой.
+            req = m.group("req")
+            поиск = 1 if ("indexers" in req or "/api/v1.0/torrents" in req) else 0
+            служебный = служебный_запрос(m.group("req"), m.group("ua"))
+
+            # Разрезы считаем только по живому трафику, без проверок живости.
+            if not служебный:
+                страна = (m.group("cc") or "").upper() or "?"
+                канал = "зеркало" if (m.group("mir") or "") == "ru" else "прямой"
+                по_стране[страна] = по_стране.get(страна, 0) + 1
+                по_каналу[канал] = по_каналу.get(канал, 0) + 1
+
+            ключ = (день, ip, origin)
+            если_есть = счёт.get(ключ)
+            if если_есть:
+                если_есть[0] += 1
+                если_есть[1] += поиск
+                если_есть[2] += служебный
+            else:
+                счёт[ключ] = [1, поиск, служебный]
+
+    for (день, ip, origin), (запросов, поисков, служебных) in счёт.items():
+        asn, владелец, класс = найти(начала, записи, ip)
+        conn.execute("""insert into обращения
+                        (день, ip, страна, asn, владелец, класс, origin, запросов, поисков, служебных)
+                        values (?,?,?,?,?,?,?,?,?,?)
+                        on conflict(день, ip, origin) do update set
+                          запросов = excluded.запросов, поисков = excluded.поисков,
+                          служебных = excluded.служебных, asn = excluded.asn,
+                          владелец = excluded.владелец, класс = excluded.класс""",
+                     (день, ip, "", asn or "", владелец, класс, origin, запросов, поисков, служебных))
+
+    conn.commit()
+
+    дней = conn.execute("select count(distinct день) from обращения").fetchone()[0]
+    служебных_всего = conn.execute("select sum(служебных) from обращения").fetchone()[0] or 0
+    print("  строк разобрано: %d за %d дней, из них проверки живости: %d"
+          % (всего, дней, служебных_всего))
+
+    print("\n  живой трафик по классу адреса (проверки не в счёт):")
+    for класс, запросов, поисков, адресов in conn.execute(
+            """select класс, sum(запросов - служебных), sum(поисков), count(distinct ip)
+               from обращения where запросов > служебных group by класс order by 2 desc"""):
+        print("    %-11s запросов %7d, поисков %6d, адресов %4d" % (класс, запросов, поисков, адресов))
+
+    print("\n  чужие Origin (не наши и не lampa.mx):")
+    for origin, запросов, адресов in conn.execute(
+            """select origin, sum(запросов), count(distinct ip) from обращения
+               where origin not in ('-', '', 'null') and origin not like '%lampa.mx%'
+                 and origin not like '%jac.black%' and origin not like '%yumata.github.io%'
+                 and origin not like '%byskaz%'
+               group by origin order by 2 desc limit 10"""):
+        print("    %-34s запросов %5d, адресов %3d" % (origin[:32], запросов, адресов))
+
+    # Разрезы за ТЕКУЩИЙ разбор (в базу пока не кладём — данные пойдут вперёд).
+    if по_каналу:
+        print("\n  по каналу (живой трафик):")
+        for k, n in sorted(по_каналу.items(), key=lambda x: -x[1]):
+            print("    %-10s %d" % (k, n))
+    if [k for k in по_стране if k != "?"]:
+        print("\n  топ стран (Cloudflare; зеркало РФ идёт без cc):")
+        for k, n in sorted(по_стране.items(), key=lambda x: -x[1])[:12]:
+            print("    %-6s %d" % (k, n))
+
+    print("\n  самые активные адреса (без проверок живости):")
+    for ip, класс, владелец, запросов, поисков in conn.execute(
+            """select ip, класс, владелец, sum(запросов - служебных), sum(поисков) from обращения
+               group by ip having sum(запросов - служебных) > 0 order by 4 desc limit 10"""):
+        print("    %-16s %-11s %-26s запросов %6d, поисков %5d"
+              % (ip, класс, владелец[:24], запросов, поисков))
+
+    conn.close()
+
+
+главное()
