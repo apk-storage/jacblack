@@ -152,6 +152,8 @@ export class CubSocket {
    * строку — то есть представлялись сервером как устройство без терминала.
    */
   private terminal = ''
+  /** Опознали ли уже хоть одно своё устройство — чтобы не пробить кодом вечно. */
+  private ownIdentified = false
   private readonly account: CubAccount
   private readonly handlers: Handlers
   private readonly uid = selfDeviceId()
@@ -163,7 +165,9 @@ export class CubSocket {
 
   /** Задать код терминала — он уходит в каждом сообщении, как у Лампы. */
   setTerminal(code: string): void {
-    this.terminal = String(code || '')
+    const novyi = String(code || '')
+    if (novyi !== this.terminal) this.ownIdentified = false  // сменили код — пробуем заново
+    this.terminal = novyi
   }
 
   get connected(): boolean {
@@ -252,10 +256,21 @@ export class CubSocket {
       this.sendTo(link, 'check_token', {})
       this.sendTo(link, 'devices', {})
 
+      // Проба «кто мой» — сразу при открытии, если код терминала уже задан.
+      // Раньше она уходила только при РУЧНОМ вводе кода (setTerminal), поэтому с
+      // уже сохранённым кодом свой ТВ не опознавался и список не схлопывался.
+      if (this.terminal) this.sendTo(link, 'terminal_activate', { code: this.terminal })
+
       // Повторяем запрос, как Лампа: у неё в окне трансляции setInterval на 3 с.
-      // Устройство могло ещё не подключиться к моменту первого запроса.
+      // Устройство могло ещё не подключиться к моменту первого запроса; заодно,
+      // пока свой ТВ не опознан, повторяем и пробу кода — вдруг он подключился
+      // позже нас.
       link.scan = setInterval(() => {
-        if (link.ws?.readyState === WebSocket.OPEN) this.sendTo(link, 'devices', {})
+        if (link.ws?.readyState !== WebSocket.OPEN) return
+        this.sendTo(link, 'devices', {})
+        if (this.terminal && !this.ownIdentified) {
+          this.sendTo(link, 'terminal_activate', { code: this.terminal })
+        }
       }, DEVICE_SCAN_MS)
     })
 
@@ -309,7 +324,7 @@ export class CubSocket {
       // список всех подключённых (138 штук в замере 20.08) без всякой пометки
       // владельца, и отличить свой телевизор от чужого больше нечем.
       const otvetil = String(result.device_id || result.uid || '')
-      if (otvetil) this.handlers.onOwnDevice?.(otvetil)
+      if (otvetil) { this.ownIdentified = true; this.handlers.onOwnDevice?.(otvetil) }
       this.handlers.onTerminalResult?.(result.data)
     } else if (result.method === 'logoff') {
       // Сервер не признал аккаунт. У Лампы это `Account.logoff()` — выход из
