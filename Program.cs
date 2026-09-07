@@ -201,6 +201,31 @@ namespace JacBlack
             app.UseRouting();
             app.UseResponseCompression();
 
+            // Помечаем обходы: всё, что приходит на /cron/, идёт к СВОЕМУ
+            // браузеру, а не к тому, которым пользуются живые запросы.
+            //
+            // Зачем. Замер 07.09.2026: один браузер отдаёт около одной
+            // страницы в секунду и делает это строго по очереди — несколько
+            // сессий внутри одного экземпляра отдачи не прибавляют (0.98
+            // страниц/с одной сессией против 1.29 двумя). Складывается отдача
+            // только у РАЗНЫХ экземпляров: два дали 1.60 страниц/с. А пока
+            // браузер был один на всех, поиск живых сидов съедал две трети его
+            // времени, и глубокому обходу доставались две страницы в час.
+            app.Use(async (context, next) =>
+            {
+                var path = context.Request.Path.Value ?? "";
+
+                if (path.StartsWith("/cron/", StringComparison.OrdinalIgnoreCase))
+                {
+                    using (Infrastructure.Networking.CloudflareClearance.UseCrawlLane())
+                        await next();
+                }
+                else
+                {
+                    await next();
+                }
+            });
+
             app.Use(async (context, next) =>
             {
                 var path = context.Request.Path.Value ?? "";
