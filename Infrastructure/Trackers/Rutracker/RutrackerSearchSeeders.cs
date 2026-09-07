@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using JacBlack.Infrastructure.Logging;
@@ -49,7 +50,7 @@ namespace JacBlack.Infrastructure.Trackers.Rutracker
             new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Сколько минут считать сохранённые числа пригодными.</summary>
-        const int FreshMinutes = 15;
+        const int FreshMinutes = 45;
 
         /// <summary>
         /// Отдаёт сохранённые счётчики, если они есть. Свежесть не проверяем:
@@ -98,7 +99,7 @@ namespace JacBlack.Infrastructure.Trackers.Rutracker
             int probed = 0;
             foreach (string id in topicIds)
             {
-                if (probed >= 3)
+                if (probed >= 1)
                     break;
 
                 if (string.IsNullOrWhiteSpace(id) || data.ContainsKey(id))
@@ -160,6 +161,12 @@ namespace JacBlack.Infrastructure.Trackers.Rutracker
             string key = queries[0];
 
             if (_cache.TryGetValue(key, out var e) && DateTime.UtcNow < e.At.AddMinutes(FreshMinutes))
+                return;
+
+            // Когда быстрого пути нет и браузер занят — пропускаем. Человек
+            // получит числа из базы, зато обход не встанет: замер 07.09.2026
+            // показал, что этот поиск съедал две трети занятости браузера.
+            if (FastPathUnavailable() && CloudflareClearance.BrowserBusy)
                 return;
 
             if (!_inFlight.TryAdd(key, 0))
@@ -285,12 +292,66 @@ namespace JacBlack.Infrastructure.Trackers.Rutracker
 
         static int Count(string html) => string.IsNullOrEmpty(html) ? 0 : Row.Matches(html).Count;
 
+        /// <summary>Ходить придётся браузером: cookie для быстрого пути нет.</summary>
+        static bool FastPathUnavailable()
+        {
+            try
+            {
+                return CfFetch.For(new Uri(AppInit.conf.Rutracker.host).Host) == null;
+            }
+            catch (UriFormatException)
+            {
+                return true;
+            }
+        }
+
+        /// <summary>Когда вход удался в последний раз — отметка общая на всех.</summary>
+        static DateTime _lastLogin = DateTime.MinValue;
+
+        /// <summary>Входим строго по одному.</summary>
+        static readonly SemaphoreSlim _loginGate = new(1, 1);
+
+        /// <summary>
+        /// Сколько секунд после удачного входа считать, что входить не надо.
+        ///
+        /// Зачем. Вход делается в ответ на пустую выдачу поиска, а пустой она
+        /// становится у ВСЕХ разом — например, когда Cloudflare отзывает
+        /// clearance. Замер 07.09.2026: одна такая потеря дала 27 входов за
+        /// три минуты, и каждый шёл через браузер, где решение задачи занимает
+        /// до 130 секунд. Лечение выходило дороже болезни: браузер, только что
+        /// разгруженный, снова забивался под завязку.
+        /// </summary>
+        const int LoginCooldownSeconds = 120;
+
         static async Task<bool> LoginAsync()
         {
             var login = AppInit.conf.Rutracker?.login;
             if (login == null || string.IsNullOrWhiteSpace(login.u) || string.IsNullOrWhiteSpace(login.p))
                 return false;
 
+            await _loginGate.WaitAsync();
+            try
+            {
+                // Пока стояли в очереди, кто-то мог уже войти — тогда повторять
+                // незачем, cookie у нас уже свежие.
+                if (DateTime.UtcNow < _lastLogin.AddSeconds(LoginCooldownSeconds))
+                    return true;
+
+                bool entered = await SendLoginAsync(login);
+
+                if (entered)
+                    _lastLogin = DateTime.UtcNow;
+
+                return entered;
+            }
+            finally
+            {
+                _loginGate.Release();
+            }
+        }
+
+        static async Task<bool> SendLoginAsync(Models.AppConf.LoginSettings login)
+        {
             // Значения не логируем ни при каком исходе — в журнал попадёт
             // только факт попытки.
             string form = "login_username=" + HttpUtility.UrlEncode(login.u, Encoding.UTF8)

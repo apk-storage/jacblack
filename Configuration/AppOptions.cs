@@ -198,6 +198,8 @@ namespace JacBlack.Configuration
 
         public FlareSolverrSettings flaresolverr = new FlareSolverrSettings();
 
+        public CfFetchSettings cffetch = new CfFetchSettings();
+
         public TitleApiSettings titleapi = new TitleApiSettings();
 
         public SweepSettings sweep = new SweepSettings();
