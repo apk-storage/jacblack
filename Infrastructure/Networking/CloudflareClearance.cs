@@ -41,13 +41,47 @@ namespace JacBlack.Infrastructure.Networking
         /// <summary>Хосты, про которые уже известно, что они за проверкой: туда идём сразу браузером.</summary>
         static readonly ConcurrentDictionary<string, GuardState> _guarded = new(StringComparer.OrdinalIgnoreCase);
 
-        // Браузер на машине один, и ядер всего два. Запросы к нему строго по очереди:
-        // параллельные вызовы разгоняли нагрузку до 22 при двух ядрах.
-        static readonly SemaphoreSlim _gate = new(1, 1);
+        /// <summary>
+        /// Состояние одного браузера: очередь к нему, его сессия и сторож
+        /// простоя. Браузеров теперь может быть два — общий и отдельный для
+        /// обходов, — и путать их состояния нельзя.
+        /// </summary>
+        sealed class Lane
+        {
+            // Запросы к одному браузеру идут строго по очереди: параллельные
+            // вызовы разгоняли нагрузку до 22 при двух ядрах, а отдачи не
+            // прибавляли — замер 07.09.2026 показал, что несколько сессий
+            // внутри одного экземпляра его не ускоряют.
+            public readonly SemaphoreSlim Gate = new(1, 1);
 
-        static bool _sessionAlive;
-        static DateTime _lastUse = DateTime.MinValue;
-        static Timer _idleTimer;
+            public bool SessionAlive;
+            public DateTime LastUse = DateTime.MinValue;
+            public Timer IdleTimer;
+        }
+
+        static readonly ConcurrentDictionary<string, Lane> _lanes =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        static Lane LaneOf(string url) => _lanes.GetOrAdd(url ?? "", _ => new Lane());
+
+        /// <summary>Этот запрос — часть обхода, значит идёт к своему браузеру.</summary>
+        static readonly AsyncLocal<bool> _crawlLane = new();
+
+        /// <summary>
+        /// Пометить всё, что делается внутри, как обход. Ставится один раз —
+        /// прослойкой по пути `/cron/` — и дальше сама течёт по вложенным
+        /// вызовам.
+        /// </summary>
+        public static IDisposable UseCrawlLane()
+        {
+            _crawlLane.Value = true;
+            return new LaneScope();
+        }
+
+        sealed class LaneScope : IDisposable
+        {
+            public void Dispose() => _crawlLane.Value = false;
+        }
 
         /// <summary>
         /// Браузер сейчас занят: очередь к нему не пуста.
@@ -58,7 +92,14 @@ namespace JacBlack.Infrastructure.Networking
         /// обращений к браузеру за пять минут были поиском живых сидов, и
         /// обход в это время стоял.
         /// </summary>
-        public static bool BrowserBusy => _gate.CurrentCount == 0;
+        public static bool BrowserBusy
+        {
+            get
+            {
+                var conf = Conf;
+                return conf.Url != null && LaneOf(conf.Url).Gate.CurrentCount == 0;
+            }
+        }
 
         static FlareSolverrSettingsView Conf
         {
@@ -70,7 +111,7 @@ namespace JacBlack.Infrastructure.Networking
                 // у неё Url равен null, и все пути наверху это проверяют.
                 return c == null || !c.enable || string.IsNullOrWhiteSpace(c.url)
                     ? default
-                    : new FlareSolverrSettingsView(c);
+                    : new FlareSolverrSettingsView(c, _crawlLane.Value);
             }
         }
 
@@ -82,9 +123,11 @@ namespace JacBlack.Infrastructure.Networking
             public readonly int GuardedHours;
             public readonly int RecheckMinutes;
 
-            public FlareSolverrSettingsView(Models.AppConf.FlareSolverrSettings c)
+            public FlareSolverrSettingsView(Models.AppConf.FlareSolverrSettings c, bool crawl = false)
             {
-                Url = c.url;
+                // У обхода свой браузер, если он задан: тогда его очередь и его
+                // сессия отдельные, и поиск живых сидов ему не мешает.
+                Url = crawl && !string.IsNullOrWhiteSpace(c.crawlUrl) ? c.crawlUrl : c.url;
                 MaxTimeoutMs = c.maxTimeoutMs;
                 SessionIdleMinutes = c.sessionIdleMinutes;
                 GuardedHours = c.guardedHours;
@@ -267,13 +310,15 @@ namespace JacBlack.Infrastructure.Networking
                     break;
             }
 
-            await _gate.WaitAsync();
+            var lane = LaneOf(conf.Url);
+
+            await lane.Gate.WaitAsync();
             try
             {
-                if (!_sessionAlive && !await CreateSessionAsync(conf))
+                if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane))
                     return null;
 
-                var (outcome, html) = await RequestAsync(conf, url, cookie);
+                var (outcome, html) = await RequestAsync(conf, lane, url, cookie);
 
                 // Пересоздаём сессию ТОЛЬКО когда сломался браузер: он может
                 // упасть посреди решения задачи, и служба отвечает «Read timed
@@ -286,12 +331,12 @@ namespace JacBlack.Infrastructure.Networking
                 // вторая и третья в той же — 2.7 и 2.3 с.
                 if (outcome == FetchOutcome.BrowserFailed)
                 {
-                    await DestroySessionAsync(conf);
+                    await DestroySessionAsync(conf, lane);
 
-                    if (!await CreateSessionAsync(conf))
+                    if (!await CreateSessionAsync(conf, lane))
                         return null;
 
-                    (outcome, html) = await RequestAsync(conf, url, cookie);
+                    (outcome, html) = await RequestAsync(conf, lane, url, cookie);
 
                     if (outcome == FetchOutcome.Ok)
                         JacBlackLog.Warning(JacBlackLogCategories.Host, $"{host}: получилось со второй попытки, сессия пересоздана");
@@ -300,8 +345,8 @@ namespace JacBlack.Infrastructure.Networking
                 // Сессия жива в любом случае, кроме уже обработанного выше:
                 // отметку об использовании ставим и после неудачной страницы,
                 // иначе полоса закрытых разделов усыпит браузер по простою.
-                _lastUse = DateTime.UtcNow;
-                ArmIdleTimer(conf);
+                lane.LastUse = DateTime.UtcNow;
+                ArmIdleTimer(conf, lane);
 
                 return outcome == FetchOutcome.Ok ? html : null;
             }
@@ -316,7 +361,7 @@ namespace JacBlack.Infrastructure.Networking
                 // ходили в браузер, остальные ждали именно нас.
                 ReleaseRenew(host);
 
-                _gate.Release();
+                lane.Gate.Release();
             }
         }
 
@@ -570,10 +615,12 @@ namespace JacBlack.Infrastructure.Networking
             if (conf.Url == null || string.IsNullOrWhiteSpace(url))
                 return null;
 
-            await _gate.WaitAsync();
+            var lane = LaneOf(conf.Url);
+
+            await lane.Gate.WaitAsync();
             try
             {
-                if (!_sessionAlive && !await CreateSessionAsync(conf))
+                if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane))
                     return null;
 
                 var payload = new Dictionary<string, object>
@@ -585,11 +632,11 @@ namespace JacBlack.Infrastructure.Networking
                     ["maxTimeout"] = conf.MaxTimeoutMs
                 };
 
-                var root = await CallAsync(conf, payload, conf.MaxTimeoutMs + 30000);
+                var root = await CallAsync(conf, lane, payload, conf.MaxTimeoutMs + 30000);
                 if (root == null || !string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
                     return null;
 
-                _lastUse = DateTime.UtcNow;
+                lane.LastUse = DateTime.UtcNow;
 
                 // Вход на трекер меняет cookie, и быстрый путь должен ходить
                 // с новыми: со старыми поиск отдаёт гостевую страницу без
@@ -605,11 +652,11 @@ namespace JacBlack.Infrastructure.Networking
             }
             finally
             {
-                _gate.Release();
+                lane.Gate.Release();
             }
         }
 
-        static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, string url, string cookie)
+        static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, Lane lane, string url, string cookie)
         {
             var payload = new Dictionary<string, object>
             {
@@ -623,7 +670,7 @@ namespace JacBlack.Infrastructure.Networking
             if (jar.Count > 0)
                 payload["cookies"] = jar;
 
-            var root = await CallAsync(conf, payload, conf.MaxTimeoutMs + 30000);
+            var root = await CallAsync(conf, lane, payload, conf.MaxTimeoutMs + 30000);
 
             // До службы не достучались — это про браузер, не про страницу.
             if (root == null)
@@ -636,7 +683,7 @@ namespace JacBlack.Infrastructure.Networking
 
                 // Такое сообщение означает, что сессии больше нет.
                 if (message.IndexOf("session", StringComparison.OrdinalIgnoreCase) >= 0)
-                    _sessionAlive = false;
+                    lane.SessionAlive = false;
 
                 return (FetchOutcome.BrowserFailed, null);
             }
@@ -682,9 +729,9 @@ namespace JacBlack.Infrastructure.Networking
         #endregion
 
         #region сессия
-        static async Task<bool> CreateSessionAsync(FlareSolverrSettingsView conf)
+        static async Task<bool> CreateSessionAsync(FlareSolverrSettingsView conf, Lane lane)
         {
-            var root = await CallAsync(conf, new Dictionary<string, object>
+            var root = await CallAsync(conf, lane, new Dictionary<string, object>
             {
                 ["cmd"] = "sessions.create",
                 ["session"] = SessionName
@@ -693,7 +740,7 @@ namespace JacBlack.Infrastructure.Networking
             bool ok = root != null &&
                       string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase);
 
-            _sessionAlive = ok;
+            lane.SessionAlive = ok;
 
             if (ok)
                 JacBlackLog.Warning(JacBlackLogCategories.Host, "FlareSolverr: сессия браузера создана");
@@ -704,55 +751,60 @@ namespace JacBlack.Infrastructure.Networking
         }
 
         /// <summary>Закрывает сессию, не поднимая шума: она могла уже умереть сама.</summary>
-        static async Task DestroySessionAsync(FlareSolverrSettingsView conf)
+        static async Task DestroySessionAsync(FlareSolverrSettingsView conf, Lane lane)
         {
-            if (!_sessionAlive)
+            if (!lane.SessionAlive)
                 return;
 
-            await CallAsync(conf, new Dictionary<string, object>
+            await CallAsync(conf, lane, new Dictionary<string, object>
             {
                 ["cmd"] = "sessions.destroy",
                 ["session"] = SessionName
             }, 60000);
 
-            _sessionAlive = false;
+            lane.SessionAlive = false;
         }
 
-        static void ArmIdleTimer(FlareSolverrSettingsView conf)
+        static void ArmIdleTimer(FlareSolverrSettingsView conf, Lane lane)
         {
             if (conf.SessionIdleMinutes <= 0)
                 return;
 
-            _idleTimer ??= new Timer(_ => CloseIfIdle(), null, Timeout.Infinite, Timeout.Infinite);
+            string url = conf.Url;
+            lane.IdleTimer ??= new Timer(_ => CloseIfIdle(url, lane), null, Timeout.Infinite, Timeout.Infinite);
 
             var period = TimeSpan.FromMinutes(1);
-            _idleTimer.Change(period, period);
+            lane.IdleTimer.Change(period, period);
         }
 
         /// <summary>Закрывает простаивающую сессию: браузер держит около 700 МБ.</summary>
-        static void CloseIfIdle()
+        static void CloseIfIdle(string url, Lane lane)
         {
-            var conf = Conf;
-            if (conf.Url == null || !_sessionAlive || conf.SessionIdleMinutes <= 0)
+            var c = AppInit.conf?.flaresolverr;
+            if (c == null || url == null || !lane.SessionAlive || c.sessionIdleMinutes <= 0)
                 return;
 
-            if (DateTime.UtcNow < _lastUse.AddMinutes(conf.SessionIdleMinutes))
+            // Сторож живёт на таймере, а не внутри запроса, поэтому пометки
+            // полосы у него нет: адрес берём тот, с которым его завели.
+            var conf = new FlareSolverrSettingsView(c, crawl: url == c.crawlUrl);
+
+            if (DateTime.UtcNow < lane.LastUse.AddMinutes(conf.SessionIdleMinutes))
                 return;
 
             // Если сейчас идёт запрос — не мешаем, закроем на следующем тике.
-            if (!_gate.Wait(0))
+            if (!lane.Gate.Wait(0))
                 return;
 
             try
             {
-                CallAsync(conf, new Dictionary<string, object>
+                CallAsync(conf, lane, new Dictionary<string, object>
                 {
                     ["cmd"] = "sessions.destroy",
                     ["session"] = SessionName
                 }, 60000).GetAwaiter().GetResult();
 
-                _sessionAlive = false;
-                _idleTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                lane.SessionAlive = false;
+                lane.IdleTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
                 JacBlackLog.Warning(JacBlackLogCategories.Host, "FlareSolverr: сессия закрыта по простою, память освобождена");
             }
@@ -762,12 +814,12 @@ namespace JacBlack.Infrastructure.Networking
             }
             finally
             {
-                _gate.Release();
+                lane.Gate.Release();
             }
         }
         #endregion
 
-        static async Task<JObject> CallAsync(FlareSolverrSettingsView conf, Dictionary<string, object> payload, int timeoutMs)
+        static async Task<JObject> CallAsync(FlareSolverrSettingsView conf, Lane lane, Dictionary<string, object> payload, int timeoutMs)
         {
             try
             {
@@ -780,7 +832,7 @@ namespace JacBlack.Infrastructure.Networking
             catch (Exception ex)
             {
                 JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr недоступен: {ex.GetType().Name}: {ex.Message}");
-                _sessionAlive = false;
+                lane.SessionAlive = false;
                 return null;
             }
         }
