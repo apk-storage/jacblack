@@ -49,6 +49,17 @@ namespace JacBlack.Infrastructure.Networking
         static DateTime _lastUse = DateTime.MinValue;
         static Timer _idleTimer;
 
+        /// <summary>
+        /// Браузер сейчас занят: очередь к нему не пуста.
+        ///
+        /// Нужно тем, кто может обойтись без него. Живые сиды — украшение
+        /// выдачи, а обход трекера — её содержание, и когда браузер один на
+        /// всех, украшение должно уступать. Замер 07.09.2026: 134 из 204
+        /// обращений к браузеру за пять минут были поиском живых сидов, и
+        /// обход в это время стоял.
+        /// </summary>
+        public static bool BrowserBusy => _gate.CurrentCount == 0;
+
         static FlareSolverrSettingsView Conf
         {
             get
@@ -221,6 +232,41 @@ namespace JacBlack.Infrastructure.Networking
             try { host = new Uri(url).Host; }
             catch (UriFormatException) { return null; }
 
+            // Сперва быстрый путь. Если браузер уже решил задачу для этого
+            // хоста, страница берётся обычным клиентом с его отпечатком —
+            // 0.13 с против 3.9 с. Браузер никуда не девается: сюда
+            // возвращаемся, как только cookie перестала проходить.
+            // Cookie отозвана — обновлять её идёт ОДИН, остальные ждут его и
+            // возвращаются на быстрый путь. Без этого каждый отзыв стоил
+            // лавины: замер 07.09.2026 — на отзыв в браузер ломились все
+            // висящие запросы разом (137 обращений за десять минут вместо 26),
+            // и обход в это время стоял, продвигаясь рывками: 102 страницы за
+            // восемь минут, потом одна за девять.
+            for (int round = 0; round < 3; round++)
+            {
+                var (fast, fastHtml) = await TryFastAsync(host, url, cookie, null);
+
+                if (fast == FastOutcome.Ok)
+                    return fastHtml;
+
+                // Сайт ответил по существу — например, тема снесена и это 404.
+                // Идти за тем же ответом в браузер незачем: он ответит так же,
+                // только в тридцать раз медленнее.
+                if (fast == FastOutcome.PageFailed)
+                    return null;
+
+                // Быстрого пути для этой страницы нет — берём её браузером
+                // сами, не трогая cookie: она жива и нужна остальным.
+                if (fast == FastOutcome.NotAvailable)
+                    break;
+
+                // Cookie отозвана. Обновлять её идёт ОДИН: если право за нами,
+                // сами и пойдём в браузер; иначе дождались чужого обновления
+                // и пробуем быстрый путь заново.
+                if (await ClearanceRenewedAsync(host))
+                    break;
+            }
+
             await _gate.WaitAsync();
             try
             {
@@ -266,8 +312,228 @@ namespace JacBlack.Infrastructure.Networking
             }
             finally
             {
+                // Право обновлять cookie отдаём здесь, а не раньше: пока мы
+                // ходили в браузер, остальные ждали именно нас.
+                ReleaseRenew(host);
+
                 _gate.Release();
             }
+        }
+
+        /// <summary>Кто сейчас обновляет cookie по этому хосту — по одному на хост.</summary>
+        static readonly ConcurrentDictionary<string, SemaphoreSlim> _renewGates =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Сколько ждать чужого обновления cookie. Решение задачи занимает
+        /// до полутора минут, поэтому ждём с запасом: простоять минуту и уйти
+        /// быстрым путём дешевле, чем встать в очередь к браузеру самому.
+        /// </summary>
+        static readonly TimeSpan RenewWait = TimeSpan.FromSeconds(100);
+
+        /// <summary>
+        /// Возвращает true, если обновлять cookie предстоит НАМ, и false —
+        /// если это уже делает кто-то другой и его результат дождались
+        /// (либо не дождались, но ждать дольше бессмысленно).
+        ///
+        /// Право обновлять берётся без ожидания: кто первым добежал, тот и
+        /// идёт в браузер. Остальные ждут появления свежей cookie и
+        /// возвращаются на быстрый путь.
+        /// </summary>
+        static async Task<bool> ClearanceRenewedAsync(string host)
+        {
+            var gate = _renewGates.GetOrAdd(host, _ => new SemaphoreSlim(1, 1));
+
+            if (await gate.WaitAsync(0))
+            {
+                // Право за нами. Отпускаем его сразу после того, как браузер
+                // отработает: сам поход делает вызывающий, а не мы, поэтому
+                // освобождение стоит на его finally — здесь только отметка.
+                _renewing[host] = gate;
+                return true;
+            }
+
+            // Ждём чужого результата: как только cookie появилась, уходим
+            // быстрым путём.
+            var deadline = DateTime.UtcNow + RenewWait;
+            while (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(250);
+
+                if (CfFetch.For(host) != null)
+                    return false;
+            }
+
+            return false;
+        }
+
+        /// <summary>Захваченные права на обновление — чтобы вернуть их после похода в браузер.</summary>
+        static readonly ConcurrentDictionary<string, SemaphoreSlim> _renewing =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Вернуть право обновлять cookie, если мы его брали.</summary>
+        static void ReleaseRenew(string host)
+        {
+            if (_renewing.TryRemove(host, out var gate))
+                gate.Release();
+        }
+
+        /// <summary>Чем кончилась попытка обойтись без браузера.</summary>
+        enum FastOutcome
+        {
+            /// <summary>Быстрого пути нет: он выключен или cookie ещё не добыта.</summary>
+            NotAvailable,
+
+            /// <summary>Страница получена.</summary>
+            Ok,
+
+            /// <summary>Сайт ответил, но страницы не дал: 404 у снесённой темы и подобное.</summary>
+            PageFailed,
+
+            /// <summary>Cookie перестала проходить — нужен браузер, чтобы решить задачу заново.</summary>
+            ClearanceLost
+        }
+
+        /// <summary>
+        /// Пробует взять страницу без браузера — обычным клиентом, но с
+        /// отпечатком Chrome и cookie, которую браузер добыл раньше.
+        /// </summary>
+        static async Task<(FastOutcome outcome, string html)> TryFastAsync(
+            string host, string url, string cookie, string postData)
+        {
+            var clearance = CfFetch.For(host);
+            if (clearance == null)
+                return (FastOutcome.NotAvailable, null);
+
+            // К cookie от браузера добавляем то, что просил вызывающий:
+            // у трекеров с входом там своя сессия, и без неё страница
+            // отдаётся гостевая.
+            var merged = MergeCookies(clearance.Cookies, cookie);
+
+            var (status, body, cfMitigated) = await CfFetch.GetAsync(url, new CfFetch.Clearance
+            {
+                Cookies = merged,
+                UserAgent = clearance.UserAgent,
+                At = clearance.At
+            }, postData);
+
+            // До самой службы-помощника не достучались — это не про cookie.
+            if (status == 0)
+                return (FastOutcome.NotAvailable, null);
+
+            if (CfFetch.ClearanceLost(status, body, cfMitigated))
+            {
+                // Один отказ — ещё не приговор cookie: трекер придирается к
+                // страницам поиска, а обход теми же ключами идёт. Выбрасываем
+                // её только когда отказы пошли подряд.
+                if (CfFetch.ShouldDropClearance(host))
+                {
+                    CfFetch.Forget(host);
+                    return (FastOutcome.ClearanceLost, null);
+                }
+
+                // Эту страницу возьмём браузером, остальные пусть идут быстро.
+                return (FastOutcome.NotAvailable, null);
+            }
+
+            if (status == 200 && !string.IsNullOrWhiteSpace(body))
+                return (FastOutcome.Ok, body);
+
+            return (FastOutcome.PageFailed, null);
+        }
+
+        /// <summary>
+        /// Складывает два набора cookie в один. При совпадении имени
+        /// побеждает тот, что просил вызывающий: его сессия свежее.
+        /// </summary>
+        static string MergeCookies(string fromBrowser, string fromCaller)
+        {
+            if (string.IsNullOrWhiteSpace(fromCaller))
+                return fromBrowser;
+
+            var jar = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var source in new[] { fromBrowser, fromCaller })
+            {
+                if (string.IsNullOrWhiteSpace(source))
+                    continue;
+
+                foreach (var part in source.Split(';'))
+                {
+                    int eq = part.IndexOf('=');
+                    if (eq <= 0)
+                        continue;
+
+                    string name = part.Substring(0, eq).Trim();
+                    if (name.Length > 0)
+                        jar[name] = part.Substring(eq + 1).Trim();
+                }
+            }
+
+            var sb = new StringBuilder();
+            foreach (var pair in jar)
+            {
+                if (sb.Length > 0)
+                    sb.Append("; ");
+
+                sb.Append(pair.Key).Append('=').Append(pair.Value);
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Забирает из ответа браузера cookie и то, чем он представлялся, —
+        /// это и есть ключ к быстрому пути. Зовётся после каждого удачного
+        /// обращения: после входа на трекер cookie меняются.
+        /// </summary>
+        static async Task RememberClearance(string url, JObject solution)
+        {
+            if (solution == null)
+                return;
+
+            string host;
+            try { host = new Uri(url).Host; }
+            catch (UriFormatException) { return; }
+
+            // Уже есть рабочая cookie — не трогаем: замена стоила дорого.
+            // Свежая от браузера может оказаться негодной, и тогда мы обменяли
+            // бы рабочую на нерабочую.
+            if (CfFetch.For(host) != null)
+                return;
+
+            var jar = solution["cookies"] as JArray;
+            if (jar == null || jar.Count == 0)
+                return;
+
+            var sb = new StringBuilder();
+            foreach (var c in jar)
+            {
+                string name = c.Value<string>("name");
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                if (sb.Length > 0)
+                    sb.Append("; ");
+
+                sb.Append(name).Append('=').Append(c.Value<string>("value"));
+            }
+
+            var candidate = new CfFetch.Clearance
+            {
+                Cookies = sb.ToString(),
+                UserAgent = solution.Value<string>("userAgent"),
+                At = DateTime.UtcNow
+            };
+
+            // Проверяем делом: «браузер прошёл» больше не значит «пройдём и мы».
+            if (!await CfFetch.ValidateAsync(url, candidate))
+            {
+                CfFetch.BlockFastPath(host);
+                return;
+            }
+
+            CfFetch.Remember(host, candidate.Cookies, candidate.UserAgent);
         }
 
         /// <summary>
@@ -324,6 +590,12 @@ namespace JacBlack.Infrastructure.Networking
                     return null;
 
                 _lastUse = DateTime.UtcNow;
+
+                // Вход на трекер меняет cookie, и быстрый путь должен ходить
+                // с новыми: со старыми поиск отдаёт гостевую страницу без
+                // единой строки, а это выглядит как «трекер сломался».
+                await RememberClearance(url, root.Value<JObject>("solution"));
+
                 return root["solution"]?.Value<string>("response");
             }
             catch (Exception ex)
@@ -378,6 +650,10 @@ namespace JacBlack.Infrastructure.Networking
             // здесь было главной причиной медленного обхода.
             if (status != 200 || string.IsNullOrWhiteSpace(html))
                 return (FetchOutcome.PageFailed, null);
+
+            // Задача решена, cookie у нас — дальше по этому хосту браузер
+            // не нужен, пока она не перестанет проходить.
+            await RememberClearance(url, solution);
 
             return (FetchOutcome.Ok, html);
         }

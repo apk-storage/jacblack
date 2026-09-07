@@ -100,42 +100,21 @@ namespace JacBlack.Infrastructure.Trackers.Toloka
                 if (string.IsNullOrEmpty(html))
                     return result;
 
-                // Разметка страницы ПОИСКА отличается от форумного листинга:
-                // класса topictitle там нет вовсе, из-за чего разбор молча
-                // давал ноль на странице в 141 КБ (замер 01.08.2026). Поэтому
-                // идём не по классам, а по строкам таблицы: в строке есть
-                // ссылка на раздачу и её же счётчики. Так разбирается и та
-                // разметка, и другая.
-                var rows = Regex.Matches(html, @"<tr[^>]*>(?:(?!</tr>).)*</tr>",
-                    RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                foreach (var pair in ParseSearchSeeders(html))
+                    result[pair.Key] = pair.Value;
 
-                foreach (Match row in rows)
-                {
-                    // Toloka адресует раздачи коротко и ОТНОСИТЕЛЬНО — в строке
-                    // стоит href="t690003", без косой черты и без имени файла.
-                    // Из-за косой черты в шаблоне разбор давал ноль на странице,
-                    // где счётчиков было 17 (замер 01.08.2026). Длинную форму
-                    // принимаем тоже: под ней лежат старые записи в базе.
-                    var id = Regex.Match(row.Value, @"(?:viewtopic\.php\?t=|href=[""']/?t)(\d+)");
-                    if (!id.Success)
-                        continue;
-
-                    var sm = Regex.Match(row.Value, @"seedmed[^>]*>\s*(?:<b>\s*)?(\d+)", RegexOptions.IgnoreCase);
-                    var lm = Regex.Match(row.Value, @"leechmed[^>]*>\s*(?:<b>\s*)?(\d+)", RegexOptions.IgnoreCase);
-
-                    if (!sm.Success)
-                        continue;
-
-                    int.TryParse(sm.Groups[1].Value, out int sid);
-                    int.TryParse(lm.Success ? lm.Groups[1].Value : "0", out int pir);
-
-                    result[id.Groups[1].Value] = (sid, pir);
-                }
-
-                if (result.Count == 0)
+                // Жалуемся на разметку ТОЛЬКО когда на странице есть счётчики,
+                // а разобрать их не вышло. Если счётчиков нет вовсе — поиск
+                // просто ничего не нашёл, и это обычное дело: на украинском
+                // трекере спрашивают «Джек Ричер», «Число зверя» и даже
+                // «呪術廻戦». За сутки 07.09.2026 таких случаев было шесть, все
+                // шесть с нулём счётчиков, и каждый звал проверять разметку,
+                // которая на деле была исправна — в тот же час поиск отдавал
+                // 39 раздач toloka с живыми числами.
+                if (result.Count == 0 && CountSearchSeedCounters(html) > 0)
                     JacBlackLog.Warning(JacBlackLogCategories.Trackers,
-                        $"toloka: поиск по «{title}» разобран в ноль ({html.Length} байт, строк {rows.Count}, " +
-                        $"счётчиков {Regex.Matches(html, "seedmed", RegexOptions.IgnoreCase).Count}) — проверить разметку страницы поиска");
+                        $"toloka: поиск по «{title}» разобран в ноль ({html.Length} байт, " +
+                        $"счётчиков {CountSearchSeedCounters(html)}) — проверить разметку страницы поиска");
             }
             catch (Exception ex)
             {
@@ -144,6 +123,61 @@ namespace JacBlack.Infrastructure.Trackers.Toloka
 
             return result;
         }
+
+        /// <summary>
+        /// Разбирает страницу поиска в счётчики раздающих.
+        ///
+        /// Разметка страницы ПОИСКА отличается от форумного листинга: класса
+        /// topictitle там нет вовсе, из-за чего разбор молча давал ноль на
+        /// странице в 141 КБ (замер 01.08.2026). Поэтому идём не по классам,
+        /// а по строкам таблицы: в строке есть и ссылка на раздачу, и её
+        /// счётчики. Так разбирается и та разметка, и другая.
+        ///
+        /// Вынесено отдельно, чтобы проверялось тестом без сети.
+        /// </summary>
+        internal static Dictionary<string, (int sid, int pir)> ParseSearchSeeders(string html)
+        {
+            var found = new Dictionary<string, (int sid, int pir)>(StringComparer.Ordinal);
+
+            if (string.IsNullOrEmpty(html))
+                return found;
+
+            var rows = Regex.Matches(html, @"<tr[^>]*>(?:(?!</tr>).)*</tr>",
+                RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+            foreach (Match row in rows)
+            {
+                // Toloka адресует раздачи коротко и ОТНОСИТЕЛЬНО — в строке
+                // стоит href="t690003", без косой черты и без имени файла.
+                // Из-за косой черты в шаблоне разбор давал ноль на странице,
+                // где счётчиков было 17 (замер 01.08.2026). Длинную форму
+                // принимаем тоже: под ней лежат старые записи в базе.
+                var id = Regex.Match(row.Value, @"(?:viewtopic\.php\?t=|href=[""']/?t)(\d+)");
+                if (!id.Success)
+                    continue;
+
+                var sm = Regex.Match(row.Value, @"seedmed[^>]*>\s*(?:<b>\s*)?(\d+)", RegexOptions.IgnoreCase);
+                var lm = Regex.Match(row.Value, @"leechmed[^>]*>\s*(?:<b>\s*)?(\d+)", RegexOptions.IgnoreCase);
+
+                if (!sm.Success)
+                    continue;
+
+                int.TryParse(sm.Groups[1].Value, out int sid);
+                int.TryParse(lm.Success ? lm.Groups[1].Value : "0", out int pir);
+
+                found[id.Groups[1].Value] = (sid, pir);
+            }
+
+            return found;
+        }
+
+        /// <summary>
+        /// Сколько счётчиков раздающих есть на странице вообще. Отличает
+        /// «ничего не нашлось» от «разметка сменилась»: в первом случае их
+        /// ноль, во втором — есть, но разобрать не вышло.
+        /// </summary>
+        internal static int CountSearchSeedCounters(string html) =>
+            string.IsNullOrEmpty(html) ? 0 : Regex.Matches(html, "seedmed", RegexOptions.IgnoreCase).Count;
 
         static string Cookie(IMemoryCache memoryCache)
         {
