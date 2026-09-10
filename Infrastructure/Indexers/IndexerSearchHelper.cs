@@ -1001,18 +1001,41 @@ namespace JacBlack.Infrastructure.Indexers
 
             var types = r.info?.types;
             bool serial = cardIsSerial == 2;
+            bool filmOnly = false;
 
             if (types != null)
             {
+                bool anySerial = false, anyFilm = false;
+
                 foreach (string t in types)
                 {
                     if (t == "serial" || t == "multserial" || t == "docuserial" || t == "tvshow" || t == "anime")
-                    {
-                        serial = true;
-                        break;
-                    }
+                        anySerial = true;
+                    else if (t == "movie" || t == "multfilm" || t == "documovie")
+                        anyFilm = true;
                 }
+
+                if (anySerial)
+                    serial = true;
+                else if (anyFilm)
+                    filmOnly = true;
             }
+
+            // Карточка сериала, а раздача — фильм и без пометки сезона или
+            // серии: это тёзка, и широкий сериальный допуск ей не полагается.
+            //
+            // Иначе выходило вот что: в карточку сериала «Каратель» 2017 года
+            // попадали 49 раздач фильма «Каратель: Последнее убийство» 2026-го
+            // (замер 10.09.2026 на запросе с телевизора). Название совпадало по
+            // правилу подзаголовка, тип у раздачи фильмовый, но допуск брался
+            // сериальный — «год не раньше 2016», и 2026 в него укладывался.
+            // Человек искал первый сезон, а получал ещё и чужой фильм.
+            //
+            // Пометку сезона проверяем отдельно: сборники вроде «Сезон 1-3»
+            // трекеры иногда кладут с фильмовым типом, и терять их нельзя.
+            if (cardIsSerial == 2 && filmOnly
+                && (string.IsNullOrEmpty(r.Title) || !RxSeriesMark.IsMatch(r.Title)))
+                return year == cardYear;
 
             // Сериал: сезоны идут только вперёд, назад — лишь на год, на случай
             // если карточка датирована премьерой, а раздача пилотом.
