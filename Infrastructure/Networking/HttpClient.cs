@@ -386,17 +386,16 @@ namespace JacBlack.Infrastructure.Networking
             return Post(url, new StringContent(data, Encoding.UTF8, "application/x-www-form-urlencoded"), cookie: cookie, MaxResponseContentBufferSize: MaxResponseContentBufferSize, timeoutSeconds: timeoutSeconds, addHeaders: addHeaders, useproxy: useproxy, proxy: proxy, formData: data);
         }
 
-        /// <param name="formData">
-        /// Тело формы дословно — им повторяется запрос через браузер, когда
-        /// хост закрыт проверкой Cloudflare. Null означает «повторить нечем»:
-        /// так у произвольного HttpContent, чей вид (JSON, файл, поток) для
-        /// формы не годится, и такой запрос остаётся на обычном пути.
-        ///
-        /// До 10.09.2026 обход Cloudflare стоял только на GET, и это молча
-        /// стоило нам всех новых раздач kinozal: инфо-хеш там берётся POST-ом,
-        /// без хеша нет магнета, а запись без магнета FileDB не создаёт.
-        /// В журнале при этом ни одной ошибки — только «добавлено=0».
-        /// </param>
+        // В formData лежит тело формы дословно — им повторяется запрос через
+        // браузер, когда хост закрыт проверкой Cloudflare. Null означает
+        // «повторить нечем»: так у произвольного HttpContent, чей вид (JSON,
+        // файл, поток) формой не отправить, и такой запрос остаётся на обычном
+        // пути.
+        //
+        // До 10.09.2026 обход Cloudflare стоял только на GET, и это молча
+        // стоило нам всех новых раздач kinozal: инфо-хеш там берётся POST-ом,
+        // без хеша нет магнета, а запись без магнета FileDB не создаёт.
+        // В журнале при этом ни одной ошибки — только «добавлено=0».
         async public static ValueTask<string> Post(string url, HttpContent data, Encoding encoding = default, string cookie = null, int MaxResponseContentBufferSize = 0, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, WebProxy proxy = null, string formData = null)
         {
             var proxies = ResolveProxies(url, useproxy, proxy);
