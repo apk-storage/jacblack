@@ -127,19 +127,54 @@ namespace JacBlack.Infrastructure.Persistence
             bool foundById = false;
             if (!Database.TryGetValue(torrent.url, out TorrentDetails t))
             {
+                var sameTrackerEntries = Database
+                    .Where(kv => string.Equals(kv.Value.trackerName, torrent.trackerName, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
                 int torrentId = GetTorrentIdFromUrl(torrent.trackerName, torrent.url);
                 if (torrentId > 0)
                 {
-                    var sameTrackerEntries = Database
-                        .Where(kv => string.Equals(kv.Value.trackerName, torrent.trackerName, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-
                     foreach (var kv in sameTrackerEntries)
                     {
                         // Check if existing torrent has same tracker and same ID
                         int existingId = GetTorrentIdFromUrl(torrent.trackerName, kv.Key);
                         if (existingId == torrentId)
                         {
+                            Database.Remove(kv.Key);
+                            t = kv.Value;
+                            t.url = torrent.url;
+                            foundById = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Вторая ступень: тот же трекер и тот же ФАЙЛ, но другой адрес.
+                //
+                // Номер спасает от смены домена, но не от перезалива: у kinozal
+                // одна и та же раздача лежала под `kinozal.tv/details.php?id=1828507`
+                // и `kinozal.guru/details.php?id=2017675` — номера разные, хеш
+                // один. У knaben адрес и вовсе берётся со страницы источника,
+                // поэтому один файл приходит под несколькими адресами, у eztv —
+                // под разными идентификаторами их же API.
+                //
+                // Замер 10.09.2026: 2 867 таких пар в базе, из них knaben 1 201,
+                // eztv 1 041, kinozal 432. Их приходилось вычищать миграцией
+                // после того, как они уже накопились.
+                //
+                // Инфохеш — отпечаток файла: совпал у одного трекера значит это
+                // та же раздача под новым адресом. Забираем старую запись себе,
+                // как и в случае с номером.
+                if (t == null)
+                {
+                    string hash = InfoHashOf(torrent.magnet);
+                    if (hash != null)
+                    {
+                        foreach (var kv in sameTrackerEntries)
+                        {
+                            if (!string.Equals(InfoHashOf(kv.Value?.magnet), hash, StringComparison.OrdinalIgnoreCase))
+                                continue;
+
                             Database.Remove(kv.Key);
                             t = kv.Value;
                             t.url = torrent.url;
