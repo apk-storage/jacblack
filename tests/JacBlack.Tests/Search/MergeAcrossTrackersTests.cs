@@ -134,4 +134,44 @@ public class MergeAcrossTrackersTests
         Assert.Empty(DuplicateFilter.MergeAcrossTrackers(Array.Empty<TorrentDetails>()));
         Assert.Empty(DuplicateFilter.MergeAcrossTrackers(null));
     }
+
+    /// <summary>
+    /// Имя трекера в подписи не повторяется, даже когда у копии поле само
+    /// список. Раньше сравнивалась строка целиком: «bitru, kinozal» не
+    /// содержит подстроки «kinozal, rutor», и вторая приписывалась вся —
+    /// выходило «bitru, kinozal, kinozal, rutor». Замер 10.09.2026 на живом
+    /// запросе по «Дюне»: 43 строки из 107 с таким повтором.
+    /// </summary>
+    [Fact]
+    public void Имя_трекера_в_подписи_не_повторяется()
+    {
+        var merged = DuplicateFilter.MergeAcrossTrackers(new[]
+        {
+            T("bitru, kinozal", HashA, 5, 5, "https://bitru.org/details.php?id=1"),
+            T("kinozal, rutor", HashA, 7, 7, "https://kinozal.guru/details.php?id=2"),
+            T("rutor", HashA, 1, 1, "http://rutor.info/torrent/3/")
+        });
+
+        Assert.Single(merged);
+        Assert.Equal("bitru, kinozal, rutor", merged[0].Item.trackerName);
+    }
+
+    /// <summary>
+    /// Склейка не трогает записи, которые ей дали: сюда приходят объекты
+    /// самой базы, и правка имени оставалась в них навсегда — следующий
+    /// поиск складывал уже испорченное поле, и повторы копились.
+    /// </summary>
+    [Fact]
+    public void Склейка_не_меняет_исходные_записи()
+    {
+        var первая = T("kinozal", HashA, 54, 54, "https://kinozal.guru/details.php?id=1");
+        var вторая = T("rutor", HashA, 2, 91, "http://rutor.info/torrent/2/");
+
+        var merged = DuplicateFilter.MergeAcrossTrackers(new[] { первая, вторая });
+
+        Assert.Equal("kinozal, rutor", merged[0].Item.trackerName);
+        Assert.Equal("kinozal", первая.trackerName);
+        Assert.Equal(54, первая.sid);
+        Assert.Equal("rutor", вторая.trackerName);
+    }
 }

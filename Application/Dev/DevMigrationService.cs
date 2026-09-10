@@ -15,6 +15,7 @@ namespace JacBlack.Application.Dev
         readonly FixDomainDuplicatesMigration _fixDomainDuplicates;
         readonly RemoveNonTmdbContentMigration _removeNonTmdb;
         readonly NormalizeWhitespaceMigration _normalizeWhitespace;
+        readonly FixTrackerNameDuplicatesMigration _fixTrackerNameDuplicates;
         readonly RemoveOrphanShardsMigration _removeOrphanShards;
         readonly FillImdbFromDictionaryMigration _fillImdb;
         readonly FillKinopoiskFromDictionaryMigration _fillKinopoisk;
@@ -33,6 +34,7 @@ namespace JacBlack.Application.Dev
             FixDomainDuplicatesMigration fixDomainDuplicates,
             RemoveNonTmdbContentMigration removeNonTmdb,
             NormalizeWhitespaceMigration normalizeWhitespace,
+            FixTrackerNameDuplicatesMigration fixTrackerNameDuplicates,
             RemoveOrphanShardsMigration removeOrphanShards,
             FillImdbFromDictionaryMigration fillImdb,
             FillKinopoiskFromDictionaryMigration fillKinopoisk,
@@ -45,6 +47,7 @@ namespace JacBlack.Application.Dev
             _fixDomainDuplicates = fixDomainDuplicates;
             _removeNonTmdb = removeNonTmdb;
             _normalizeWhitespace = normalizeWhitespace;
+            _fixTrackerNameDuplicates = fixTrackerNameDuplicates;
             _removeOrphanShards = removeOrphanShards;
             _fillImdb = fillImdb;
             _fillKinopoisk = fillKinopoisk;
@@ -86,6 +89,10 @@ namespace JacBlack.Application.Dev
         /// <summary>Единая нормализация пробелов в именах с переносом ключей.</summary>
         public object NormalizeWhitespace(bool dryRun) =>
             dryRun ? _normalizeWhitespace.DryRun() : _normalizeWhitespace.Run();
+
+        /// <summary>Схлопывает повторы имён внутри trackerName. dryRun считает, не трогая базу.</summary>
+        public object FixTrackerNameDuplicates(bool dryRun) =>
+            dryRun ? _fixTrackerNameDuplicates.DryRun() : _fixTrackerNameDuplicates.Run();
 
         /// <summary>Уборка файлов шардов, которых нет в индексе.</summary>
         public object RemoveOrphanShards(bool dryRun) =>

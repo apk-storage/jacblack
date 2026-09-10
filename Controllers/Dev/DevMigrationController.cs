@@ -64,6 +64,12 @@ namespace JacBlack.Controllers.Dev
         /// <summary>Единая нормализация пробелов в именах. Сначала ?dryRun=true.</summary>
         public JsonResult NormalizeWhitespace(bool dryRun = true) => Json(_migrationService.NormalizeWhitespace(dryRun));
 
+        /// <summary>
+        /// Схлопывает повторы имён внутри trackerName («bitru, kinozal, kinozal»).
+        /// Сначала запускать с `?dryRun=true` — посчитает, ничего не трогая.
+        /// </summary>
+        public JsonResult FixTrackerNameDuplicates(bool dryRun = true) => Json(_migrationService.FixTrackerNameDuplicates(dryRun));
+
         /// <summary>Уборка осиротевших файлов шардов. Сначала ?dryRun=true.</summary>
         public JsonResult RemoveOrphanShards(bool dryRun = true) => Json(_migrationService.RemoveOrphanShards(dryRun));
 
