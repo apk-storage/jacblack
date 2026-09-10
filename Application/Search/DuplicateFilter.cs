@@ -85,15 +85,25 @@ namespace JacBlack.Application.Search
 
                 if (!merged.TryGetValue(hash, out var had))
                 {
-                    merged[hash] = new Merged { Item = t, Sources = new List<string> { t.url } };
+                    // Основную запись КЛОНИРУЕМ: сюда приходят объекты самой
+                    // базы, и правки ниже (имя трекера, сиды, название) писались
+                    // прямо в неё. Составное имя оставалось в записи навсегда,
+                    // следующий поиск складывал его снова — так и накапливалось
+                    // «bitru, kinozal, kinozal, rutor, bitru». Путь чтения не
+                    // должен менять то, что читает.
+                    merged[hash] = new Merged
+                    {
+                        Item = (TorrentDetails)t.Clone(),
+                        Sources = new List<string> { t.url }
+                    };
                     continue;
                 }
 
                 var main = had.Item;
 
-                if (!string.IsNullOrEmpty(t.trackerName)
-                    && (main.trackerName == null || !main.trackerName.Contains(t.trackerName, StringComparison.OrdinalIgnoreCase)))
-                    main.trackerName += ", " + t.trackerName;
+                // Складываем ИМЕНА, а не строки: у копии поле само может быть
+                // списком, и сравнение подстрокой его не узнавало.
+                main.trackerName = Infrastructure.Parsing.TrackerNames.Merge(main.trackerName, t.trackerName);
 
                 if (t.sid > main.sid)
                     main.sid = t.sid;

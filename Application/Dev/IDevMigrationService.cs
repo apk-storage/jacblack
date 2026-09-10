@@ -19,6 +19,9 @@ namespace JacBlack.Application.Dev
 
         object NormalizeWhitespace(bool dryRun);
 
+        /// <summary>Схлопывает повторы имён внутри trackerName. dryRun считает, не трогая базу.</summary>
+        object FixTrackerNameDuplicates(bool dryRun);
+
         object RemoveOrphanShards(bool dryRun);
 
         object FillImdbFromDictionary(bool dryRun);

@@ -57,5 +57,27 @@ namespace JacBlack.Infrastructure.Parsing
             }
             return false;
         }
+
+        /// <summary>
+        /// Складывает два поля в одно, без повторов и с сохранением порядка.
+        ///
+        /// Склейка копий раньше сравнивала строку целиком: «bitru, kinozal»
+        /// не содержит подстроки «kinozal, rutor», поэтому вторая приписы-
+        /// валась вся, и выходило «bitru, kinozal, kinozal, rutor». Замер
+        /// 10.09.2026 на живом запросе по «Дюне»: 43 строки из 107 с повтором.
+        /// Складывать надо имена, а не строки.
+        /// </summary>
+        public static string Merge(string trackerName, string добавляемое)
+        {
+            var итог = new List<string>(Split(trackerName));
+
+            foreach (var имя in Split(добавляемое))
+            {
+                if (!итог.Contains(имя, StringComparer.OrdinalIgnoreCase))
+                    итог.Add(имя);
+            }
+
+            return итог.Count == 0 ? trackerName : string.Join(", ", итог);
+        }
     }
 }

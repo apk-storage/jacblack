@@ -134,6 +134,7 @@ namespace JacBlack
             builder.Services.AddScoped<FixDomainDuplicatesMigration>();
             builder.Services.AddScoped<RemoveNonTmdbContentMigration>();
             builder.Services.AddScoped<NormalizeWhitespaceMigration>();
+            builder.Services.AddScoped<FixTrackerNameDuplicatesMigration>();
             builder.Services.AddScoped<RemoveOrphanShardsMigration>();
             builder.Services.AddScoped<FillImdbFromDictionaryMigration>();
             builder.Services.AddScoped<FillKinopoiskFromDictionaryMigration>();

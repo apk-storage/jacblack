@@ -99,8 +99,11 @@ namespace JacBlack.Application.Search
                     {
                         var t = temp[hex];
 
-                        if (!t.torrent.trackerName.Contains(torrent.trackerName))
-                            t.torrent.trackerName += $", {torrent.trackerName}";
+                        // Складываем имена, а не строки: у копии поле само может
+                        // быть списком («kinozal, rutor»), и сравнение подстрокой
+                        // его не узнавало — имя приписывалось целиком, повторно.
+                        t.torrent.trackerName = Infrastructure.Parsing.TrackerNames.Merge(
+                            t.torrent.trackerName, torrent.trackerName);
 
                         // Название выживает одно (предпочитается кинозаловское),
                         // а описывают трекеры по-разному. У раздачи 3 сезона
