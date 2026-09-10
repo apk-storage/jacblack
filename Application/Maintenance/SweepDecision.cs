@@ -34,8 +34,15 @@ namespace JacBlack.Application.Maintenance
             /// <summary>Старый снимок сидов заменён подтверждённым нулём.</summary>
             public bool Zeroed { get; init; }
 
-            /// <summary>Нулей подряд набралось столько, что раздача считается мёртвой.</summary>
+            /// <summary>Нулей подряд набралось столько, что раздача считается мёртвой и прячется из выдачи.</summary>
             public bool ReachedThreshold { get; init; }
+
+            /// <summary>
+            /// Нулей набралось столько, что запись можно удалять совсем.
+            /// Порог отдельный и много выше: ноль от публичного анонса не
+            /// доказывает смерть раздачи, живущей на анонсе своего трекера.
+            /// </summary>
+            public bool ReachedDeleteThreshold { get; init; }
         }
 
         /// <summary>
@@ -53,7 +60,7 @@ namespace JacBlack.Application.Maintenance
         /// <paramref name="leechers"/> берутся из ответа; <c>null</c> означает,
         /// что не ответил никто.
         /// </summary>
-        public static Result Apply(TorrentDetails t, int? seeders, int? leechers, int deadThreshold)
+        public static Result Apply(TorrentDetails t, int? seeders, int? leechers, int deadThreshold, int deleteThreshold = int.MaxValue)
         {
             if (t == null || seeders == null)
                 return new Result { Outcome = Outcome.Unknown };
@@ -94,7 +101,8 @@ namespace JacBlack.Application.Maintenance
             {
                 Outcome = Outcome.Zero,
                 Zeroed = zeroed,
-                ReachedThreshold = t.deadChecks >= Math.Max(1, deadThreshold)
+                ReachedThreshold = t.deadChecks >= Math.Max(1, deadThreshold),
+                ReachedDeleteThreshold = t.deadChecks >= Math.Max(deadThreshold, deleteThreshold)
             };
         }
     }

@@ -310,7 +310,8 @@ namespace JacBlack.Application.Maintenance
                             t,
                             отвечали ? c.Seeders : null,
                             отвечали ? c.Leechers : null,
-                            conf.deadThreshold);
+                            conf.deadThreshold,
+                            conf.deleteThreshold);
 
                         if (решение.Outcome == SweepDecision.Outcome.Unknown)
                         {
@@ -335,11 +336,16 @@ namespace JacBlack.Application.Maintenance
                                 report.zeroed++;
 
                             if (решение.ReachedThreshold)
-                            {
                                 report.reachedThreshold++;
-                                if (conf.deleteDead)
-                                    toRemove.Add(url);
-                            }
+
+                            // Удаляем по СВОЕМУ порогу, много выше того, по
+                            // которому раздачу прячут: ноль от публичного
+                            // анонса не доказывает смерть раздачи, живущей на
+                            // анонсе своего трекера. Замер 10.09.2026: при
+                            // пороге прятания под удаление шли бы 39%
+                            // опрашиваемых записей, включая живые.
+                            if (решение.ReachedDeleteThreshold && conf.deleteDead)
+                                toRemove.Add(url);
                         }
                     }
 
