@@ -89,6 +89,64 @@ public class SweepDecisionTests
     }
 
     /// <summary>
+    /// Прятать и удалять — разные пороги. Ноль от публичного анонса не
+    /// доказывает смерть раздачи, живущей на анонсе своего трекера: замер
+    /// 10.09.2026 показал среди «пяти нулей подряд» раздачу rutor с одним
+    /// сидом и склейку bitru+nnmclub с девятью.
+    /// </summary>
+    [Fact]
+    public void Прятать_и_удалять_разные_пороги()
+    {
+        var t = Раздача(sid: 0, deadChecks: 6);
+
+        var r = SweepDecision.Apply(t, seeders: 0, leechers: 0, deadThreshold: 5, deleteThreshold: 40);
+
+        Assert.True(r.ReachedThreshold);
+        Assert.False(r.ReachedDeleteThreshold);
+    }
+
+    [Fact]
+    public void На_своём_пороге_удаление_разрешается()
+    {
+        var t = Раздача(sid: 0, deadChecks: 39);
+
+        var r = SweepDecision.Apply(t, seeders: 0, leechers: 0, deadThreshold: 5, deleteThreshold: 40);
+
+        Assert.True(r.ReachedDeleteThreshold);
+        Assert.Equal(40, t.deadChecks);
+    }
+
+    /// <summary>
+    /// Порог удаления не может оказаться ниже порога прятания, даже если так
+    /// написали в конфиге: иначе запись исчезала бы раньше, чем её успели
+    /// хотя бы спрятать.
+    /// </summary>
+    [Fact]
+    public void Порог_удаления_не_опускается_ниже_порога_прятания()
+    {
+        var t = Раздача(sid: 0, deadChecks: 2);
+
+        var r = SweepDecision.Apply(t, seeders: 0, leechers: 0, deadThreshold: 5, deleteThreshold: 1);
+
+        Assert.False(r.ReachedDeleteThreshold);
+    }
+
+    /// <summary>
+    /// По умолчанию удаление не разрешается никогда: вызов без явного порога
+    /// не должен внезапно начать удалять записи.
+    /// </summary>
+    [Fact]
+    public void Без_указанного_порога_удаление_не_разрешается()
+    {
+        var t = Раздача(sid: 0, deadChecks: 999);
+
+        var r = SweepDecision.Apply(t, seeders: 0, leechers: 0, deadThreshold: 5);
+
+        Assert.True(r.ReachedThreshold);
+        Assert.False(r.ReachedDeleteThreshold);
+    }
+
+    /// <summary>
     /// Молчание трекера — это «не знаю», а не «мертва»: ни счётчик, ни числа
     /// трогать нельзя, иначе сетевой сбой утопил бы живую раздачу.
     /// </summary>
