@@ -39,6 +39,9 @@ namespace JacBlack.Application.Maintenance
             public int zero { get; set; }
             public int unknown { get; set; }
             public int revived { get; set; }
+
+            /// <summary>Скольким раздачам записали подтверждённый ноль вместо старого снимка.</summary>
+            public int zeroed { get; set; }
             public int reachedThreshold { get; set; }
             public int deleted { get; set; }
             public double seconds { get; set; }
@@ -167,7 +170,7 @@ namespace JacBlack.Application.Maintenance
                 ParserLog.Write(LogName,
                     $"Прогон завершён за {report.seconds}с | ключей {report.keysProcessed}, раздач {report.torrents}, " +
                     $"спросили {report.asked}, живых {report.alive}, нулей {report.zero}, молчали {report.unknown}, " +
-                    $"воскресли {report.revived}, достигли порога {report.reachedThreshold}, удалено {report.deleted}");
+                    $"воскресли {report.revived}, обнулено {report.zeroed}, достигли порога {report.reachedThreshold}, удалено {report.deleted}");
 
                 return report;
             }
@@ -301,34 +304,37 @@ namespace JacBlack.Application.Maintenance
                         if (!fdb.Database.TryGetValue(url, out TorrentDetails t) || t == null)
                             continue;
 
-                        if (!counts.TryGetValue(hash, out var c))
+                        bool отвечали = counts.TryGetValue(hash, out var c);
+
+                        var решение = SweepDecision.Apply(
+                            t,
+                            отвечали ? c.Seeders : null,
+                            отвечали ? c.Leechers : null,
+                            conf.deadThreshold);
+
+                        if (решение.Outcome == SweepDecision.Outcome.Unknown)
                         {
                             // Ни один трекер не ответил про эту раздачу — это «не знаю».
                             report.unknown++;
                             continue;
                         }
 
-                        t.lastAliveCheck = DateTime.UtcNow;
+                        touched = true;
 
-                        if (c.Seeders > 0)
+                        if (решение.Outcome == SweepDecision.Outcome.Alive)
                         {
                             report.alive++;
-                            if (t.deadChecks > 0)
-                            {
+                            if (решение.Revived)
                                 report.revived++;
-                                t.deadChecks = 0;
-                            }
-                            t.sid = c.Seeders;
-                            t.pir = c.Leechers;
-                            touched = true;
                         }
                         else
                         {
                             report.zero++;
-                            t.deadChecks++;
-                            touched = true;
 
-                            if (t.deadChecks >= Math.Max(1, conf.deadThreshold))
+                            if (решение.Zeroed)
+                                report.zeroed++;
+
+                            if (решение.ReachedThreshold)
                             {
                                 report.reachedThreshold++;
                                 if (conf.deleteDead)
