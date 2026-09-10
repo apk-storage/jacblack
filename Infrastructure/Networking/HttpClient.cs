@@ -380,14 +380,51 @@ namespace JacBlack.Infrastructure.Networking
         #region Post
         public static ValueTask<string> Post(string url, string data, string cookie = null, int MaxResponseContentBufferSize = 0, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, WebProxy proxy = null)
         {
-            return Post(url, new StringContent(data, Encoding.UTF8, "application/x-www-form-urlencoded"), cookie: cookie, MaxResponseContentBufferSize: MaxResponseContentBufferSize, timeoutSeconds: timeoutSeconds, addHeaders: addHeaders, useproxy: useproxy, proxy: proxy);
+            // Сырое тело передаём дальше: только здесь достоверно известно, что
+            // это форма, а не JSON, — значит только отсюда его можно повторить
+            // браузером, если хост окажется за проверкой Cloudflare.
+            return Post(url, new StringContent(data, Encoding.UTF8, "application/x-www-form-urlencoded"), cookie: cookie, MaxResponseContentBufferSize: MaxResponseContentBufferSize, timeoutSeconds: timeoutSeconds, addHeaders: addHeaders, useproxy: useproxy, proxy: proxy, formData: data);
         }
 
-        async public static ValueTask<string> Post(string url, HttpContent data, Encoding encoding = default, string cookie = null, int MaxResponseContentBufferSize = 0, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, WebProxy proxy = null)
+        /// <param name="formData">
+        /// Тело формы дословно — им повторяется запрос через браузер, когда
+        /// хост закрыт проверкой Cloudflare. Null означает «повторить нечем»:
+        /// так у произвольного HttpContent, чей вид (JSON, файл, поток) для
+        /// формы не годится, и такой запрос остаётся на обычном пути.
+        ///
+        /// До 10.09.2026 обход Cloudflare стоял только на GET, и это молча
+        /// стоило нам всех новых раздач kinozal: инфо-хеш там берётся POST-ом,
+        /// без хеша нет магнета, а запись без магнета FileDB не создаёт.
+        /// В журнале при этом ни одной ошибки — только «добавлено=0».
+        /// </param>
+        async public static ValueTask<string> Post(string url, HttpContent data, Encoding encoding = default, string cookie = null, int MaxResponseContentBufferSize = 0, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, WebProxy proxy = null, string formData = null)
         {
             var proxies = ResolveProxies(url, useproxy, proxy);
             if (proxies.Count == 0)
                 proxies.Add(null);
+
+            string requestHost = null;
+            try { requestHost = new Uri(url).Host; }
+            catch (UriFormatException) { }
+
+            // Готовая форма читается повторно (FormUrlEncodedContent — это
+            // буфер в памяти), поэтому её тоже можно повторить браузером.
+            // Так закрывается тот же случай у поиска живых сидов nnmclub,
+            // который собирает форму объектом, а не строкой.
+            if (formData == null && data is FormUrlEncodedContent form)
+            {
+                try { formData = await form.ReadAsStringAsync(); }
+                catch { }
+            }
+
+            // Про хост уже известно, что обычный клиент туда не пройдёт: не
+            // тратим запрос на заведомый 403.
+            if (formData != null && CloudflareClearance.IsGuarded(requestHost))
+            {
+                string guardedBrowser = await CloudflareClearance.FetchAsync(url, cookie, formData);
+                if (!string.IsNullOrWhiteSpace(guardedBrowser))
+                    return guardedBrowser;
+            }
 
             foreach (var px in proxies)
             {
@@ -417,8 +454,47 @@ namespace JacBlack.Infrastructure.Networking
 
                         using (HttpResponseMessage response = await client.SendAsync(req, timeoutCts.Token))
                         {
+                            if (response.StatusCode == HttpStatusCode.OK)
+                                CloudflareClearance.Unguard(requestHost);
+
                             if (response.StatusCode != HttpStatusCode.OK)
+                            {
+                                // Тот же разбор, что и у GET: заголовок
+                                // `cf-mitigated`, а для старых видов проверки —
+                                // разметка «Just a moment…» в теле.
+                                bool challenge = CloudflareClearance.IsChallenge(response);
+
+                                if (!challenge
+                                    && (response.StatusCode == HttpStatusCode.Forbidden
+                                        || response.StatusCode == HttpStatusCode.ServiceUnavailable))
+                                {
+                                    try
+                                    {
+                                        challenge = CloudflareClearance.IsChallengeBody(
+                                            await response.Content.ReadAsStringAsync());
+                                    }
+                                    catch
+                                    {
+                                        // Тело не прочиталось — считаем, что проверки
+                                        // нет: ошибочная пометка уводит хост в браузер
+                                        // на часы и роняет темп обхода.
+                                    }
+                                }
+
+                                if (challenge)
+                                {
+                                    CloudflareClearance.MarkGuarded(requestHost);
+
+                                    if (formData != null)
+                                    {
+                                        string viaBrowser = await CloudflareClearance.FetchAsync(url, cookie, formData);
+                                        if (!string.IsNullOrWhiteSpace(viaBrowser))
+                                            return viaBrowser;
+                                    }
+                                }
+
                                 continue;
+                            }
 
                             using (HttpContent content = response.Content)
                             {
@@ -455,14 +531,14 @@ namespace JacBlack.Infrastructure.Networking
         #region Post<T>
         async public static ValueTask<T> Post<T>(string url, string data, string cookie = null, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, Encoding encoding = default, WebProxy proxy = null, bool IgnoreDeserializeObject = false)
         {
-            return await Post<T>(url, new StringContent(data, Encoding.UTF8, "application/x-www-form-urlencoded"), cookie: cookie, timeoutSeconds: timeoutSeconds, addHeaders: addHeaders, useproxy: useproxy, encoding: encoding, proxy: proxy, IgnoreDeserializeObject: IgnoreDeserializeObject);
+            return await Post<T>(url, new StringContent(data, Encoding.UTF8, "application/x-www-form-urlencoded"), cookie: cookie, timeoutSeconds: timeoutSeconds, addHeaders: addHeaders, useproxy: useproxy, encoding: encoding, proxy: proxy, IgnoreDeserializeObject: IgnoreDeserializeObject, formData: data);
         }
 
-        async public static ValueTask<T> Post<T>(string url, HttpContent data, string cookie = null, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, Encoding encoding = default, WebProxy proxy = null, bool IgnoreDeserializeObject = false)
+        async public static ValueTask<T> Post<T>(string url, HttpContent data, string cookie = null, int timeoutSeconds = 15, List<(string name, string val)> addHeaders = null, bool useproxy = false, Encoding encoding = default, WebProxy proxy = null, bool IgnoreDeserializeObject = false, string formData = null)
         {
             try
             {
-                string json = await Post(url, data, cookie: cookie, timeoutSeconds: timeoutSeconds, addHeaders: addHeaders, useproxy: useproxy, encoding: encoding, proxy: proxy);
+                string json = await Post(url, data, cookie: cookie, timeoutSeconds: timeoutSeconds, addHeaders: addHeaders, useproxy: useproxy, encoding: encoding, proxy: proxy, formData: formData);
                 if (json == null)
                     return default;
 

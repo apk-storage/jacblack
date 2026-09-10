@@ -265,7 +265,15 @@ namespace JacBlack.Infrastructure.Networking
         /// Свой таймаут: решение задачи занимает до полутора минут, и таймаут
         /// вызывающего (обычно 15 с) для этого пути не годится.
         /// </summary>
-        public static async Task<string> FetchAsync(string url, string cookie = null)
+        /// <param name="postData">
+        /// Тело формы, если это POST; null означает обычный GET. Понадобилось
+        /// 10.09.2026, когда kinozal ушёл под проверку: инфо-хеш там берётся
+        /// POST-ом на get_srv_details.php, обход стоял только на GET, и новые
+        /// раздачи молча перестали попадать в базу. Листинг при этом браузер
+        /// получал исправно, обновления шли, и в журнале было ровно
+        /// «добавлено=0 обновлено=1076» без единой ошибки.
+        /// </param>
+        public static async Task<string> FetchAsync(string url, string cookie = null, string postData = null)
         {
             var conf = Conf;
             if (conf.Url == null || string.IsNullOrWhiteSpace(url))
@@ -287,7 +295,7 @@ namespace JacBlack.Infrastructure.Networking
             // восемь минут, потом одна за девять.
             for (int round = 0; round < 3; round++)
             {
-                var (fast, fastHtml) = await TryFastAsync(host, url, cookie, null);
+                var (fast, fastHtml) = await TryFastAsync(host, url, cookie, postData);
 
                 if (fast == FastOutcome.Ok)
                     return fastHtml;
@@ -318,7 +326,7 @@ namespace JacBlack.Infrastructure.Networking
                 if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane))
                     return null;
 
-                var (outcome, html) = await RequestAsync(conf, lane, url, cookie);
+                var (outcome, html) = await RequestAsync(conf, lane, url, cookie, postData);
 
                 // Пересоздаём сессию ТОЛЬКО когда сломался браузер: он может
                 // упасть посреди решения задачи, и служба отвечает «Read timed
@@ -336,7 +344,7 @@ namespace JacBlack.Infrastructure.Networking
                     if (!await CreateSessionAsync(conf, lane))
                         return null;
 
-                    (outcome, html) = await RequestAsync(conf, lane, url, cookie);
+                    (outcome, html) = await RequestAsync(conf, lane, url, cookie, postData);
 
                     if (outcome == FetchOutcome.Ok)
                         JacBlackLog.Warning(JacBlackLogCategories.Host, $"{host}: получилось со второй попытки, сессия пересоздана");
@@ -656,15 +664,21 @@ namespace JacBlack.Infrastructure.Networking
             }
         }
 
-        static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, Lane lane, string url, string cookie)
+        static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, Lane lane, string url, string cookie, string postData = null)
         {
             var payload = new Dictionary<string, object>
             {
-                ["cmd"] = "request.get",
+                // Форма отправляется тем же путём и в той же сессии, что и
+                // страницы: браузер уже прошёл проверку, а отдельная сессия
+                // под POST стоила бы ещё одного решения задачи.
+                ["cmd"] = postData == null ? "request.get" : "request.post",
                 ["session"] = SessionName,
                 ["url"] = url,
                 ["maxTimeout"] = conf.MaxTimeoutMs
             };
+
+            if (postData != null)
+                payload["postData"] = postData;
 
             var jar = ParseCookies(cookie);
             if (jar.Count > 0)
