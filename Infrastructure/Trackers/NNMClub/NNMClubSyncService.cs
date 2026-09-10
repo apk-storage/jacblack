@@ -371,11 +371,53 @@ namespace JacBlack.Infrastructure.Trackers.NNMClub
                 var torrent = MonoTorrent.Torrent.Load(data);
                 string hash = torrent?.InfoHashes?.V1OrV2?.ToHex();
 
-                return string.IsNullOrEmpty(hash) ? null : $"magnet:?xt=urn:btih:{hash}";
+                if (!string.IsNullOrEmpty(hash))
+                    return $"magnet:?xt=urn:btih:{hash}";
+
+                return await MagnetFromTopicPageAsync(topicUrl);
             }
             catch (Exception ex)
             {
+                // MonoTorrent не умеет BitTorrent v2 и падает на таких файлах с
+                // «The hash root is missing». Раздача из-за этого пропадала
+                // совсем — по замеру 90 штук в сутки, и это не только книги:
+                // 10.09.2026 так терялся сериал «Щит и меч». Хеш при этом
+                // напечатан на самой странице темы.
+                string изСтраницы = await MagnetFromTopicPageAsync(topicUrl);
+                if (изСтраницы != null)
+                {
+                    JacBlackLog.Information(JacBlackLogCategories.Trackers,
+                        $"nnmclub: торрент-файл не разобран ({ex.GetType().Name}), хеш взят со страницы темы {topicUrl}");
+                    return изСтраницы;
+                }
+
                 JacBlackLog.Swallowed(JacBlackLogCategories.Trackers, $"nnmclub: торрент-файл не разобран ({topicUrl})", ex);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Запасной путь: magnet со страницы темы. Гостю его показывают не
+        /// везде, а обход ходит гостем — где не показали, вернём null и
+        /// останемся как были.
+        /// </summary>
+        async Task<string> MagnetFromTopicPageAsync(string topicUrl)
+        {
+            if (string.IsNullOrEmpty(topicUrl))
+                return null;
+
+            try
+            {
+                string html = await HttpClient.Get(
+                    topicUrl,
+                    encoding: Encoding.GetEncoding(1251),
+                    timeoutSeconds: 20,
+                    useproxy: AppInit.conf.NNMClub.useproxy);
+
+                return NNMClubParser.MagnetFromTopicHtml(html);
+            }
+            catch
+            {
                 return null;
             }
         }

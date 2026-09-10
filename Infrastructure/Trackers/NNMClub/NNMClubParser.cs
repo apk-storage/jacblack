@@ -10,6 +10,34 @@ namespace JacBlack.Infrastructure.Trackers.NNMClub
     {
         const string TrackerName = "nnmclub";
 
+        static readonly Regex RxMagnet = new Regex(
+            @"magnet:\?xt=urn:btih:([A-Fa-f0-9]{40})",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Достаёт magnet со страницы темы.
+        ///
+        /// Нужен как запасной путь: хеш мы берём из торрент-файла, а
+        /// MonoTorrent не умеет BitTorrent v2 и падает на нём с «The hash root
+        /// is missing». Раздача из-за этого не попадала в базу вовсе — по
+        /// прежнему замеру 90 штук в сутки, и это не только книги: 10.09.2026
+        /// так терялся сериал «Щит и меч».
+        ///
+        /// На странице темы nnmclub печатает готовый magnet с хешем v1 — ровно
+        /// то, что нужно, и без разбора файла. Сверено на живых темах: хеш со
+        /// страницы совпадает с тем, что лежит у нас в базе. Гостю magnet
+        /// показывают не везде, а обход ходит гостем — где не показали,
+        /// остаёмся как были.
+        /// </summary>
+        public static string MagnetFromTopicHtml(string html)
+        {
+            if (string.IsNullOrEmpty(html))
+                return null;
+
+            var m = RxMagnet.Match(html);
+            return m.Success ? $"magnet:?xt=urn:btih:{m.Groups[1].Value.ToLowerInvariant()}" : null;
+        }
+
         public static List<TorrentBaseDetails> ParseTorrentsFromPage(string html, string cat)
         {
             if (!NNMClubCategories.Map.TryGetValue(cat, out var meta))
