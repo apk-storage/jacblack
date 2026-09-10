@@ -98,5 +98,19 @@ namespace JacBlack.Infrastructure.Persistence
             return m.Success && int.TryParse(m.Groups[1].Value, out int id) ? id : 0;
         }
 
+        static readonly Regex RxInfoHash = new Regex("btih:([0-9a-fA-F]{40})", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// Инфохеш из магнет-ссылки — отпечаток самого файла. Нужен там, где
+        /// номер раздачи не спасает: при перезаливе номер новый, а файл прежний.
+        /// </summary>
+        internal static string InfoHashOf(string magnet)
+        {
+            if (string.IsNullOrEmpty(magnet))
+                return null;
+
+            var m = RxInfoHash.Match(magnet);
+            return m.Success ? m.Groups[1].Value.ToLowerInvariant() : null;
+        }
     }
 }
