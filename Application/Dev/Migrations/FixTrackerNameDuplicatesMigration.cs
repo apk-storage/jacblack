@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using JacBlack.Application.Index;
 using JacBlack.Infrastructure.Parsing;
 using JacBlack.Infrastructure.Persistence;
