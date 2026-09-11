@@ -651,6 +651,8 @@ namespace JacBlack.Infrastructure.Networking
                 // единой строки, а это выглядит как «трекер сломался».
                 await RememberClearance(url, root.Value<JObject>("solution"));
 
+                LastFormCookies = CookieHeaderOf(root.Value<JObject>("solution"));
+
                 return root["solution"]?.Value<string>("response");
             }
             catch (Exception ex)
@@ -662,6 +664,44 @@ namespace JacBlack.Infrastructure.Networking
             {
                 lane.Gate.Release();
             }
+        }
+
+        /// <summary>
+        /// Cookie, которые браузер получил на последней отправке формы.
+        ///
+        /// Нужно для входа на трекер: сам вход теперь идёт через браузер, а
+        /// вызывающему нужны его cookie — у kinozal это `uid` и `pass`, без
+        /// них все дальнейшие страницы отдаются гостевыми. 11.09.2026
+        /// Cloudflare закрыл там и `takelogin.php`: обычный клиент получает
+        /// 403, вход перестал проходить, и обход встал с «добавлено=0
+        /// обновлено=0».
+        ///
+        /// Поле общее на процесс, и это осознанно: вход — редкая операция под
+        /// замком очереди к браузеру, читают его сразу после вызова.
+        /// </summary>
+        public static string LastFormCookies { get; private set; }
+
+        /// <summary>Склеивает cookie из ответа браузера в готовый заголовок.</summary>
+        static string CookieHeaderOf(JObject solution)
+        {
+            var jar = solution?["cookies"] as JArray;
+            if (jar == null || jar.Count == 0)
+                return null;
+
+            var sb = new StringBuilder();
+            foreach (var c in jar)
+            {
+                string name = c.Value<string>("name");
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                if (sb.Length > 0)
+                    sb.Append("; ");
+
+                sb.Append(name).Append('=').Append(c.Value<string>("value"));
+            }
+
+            return sb.Length > 0 ? sb.ToString() : null;
         }
 
         static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, Lane lane, string url, string cookie, string postData = null)
