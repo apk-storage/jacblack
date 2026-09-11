@@ -631,18 +631,27 @@ namespace JacBlack.Infrastructure.Networking
                 if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane))
                     return null;
 
+                string через = ProxyFor(url);
+
                 var payload = new Dictionary<string, object>
                 {
                     ["cmd"] = "request.post",
-                    ["session"] = SessionName,
                     ["url"] = url,
                     ["postData"] = formData ?? string.Empty,
                     ["maxTimeout"] = conf.MaxTimeoutMs
                 };
 
-                string через = ProxyFor(url);
+                // Выход задаётся ТОЛЬКО при создании сессии: запросу внутри
+                // готовой сессии FlareSolverr поле proxy молча не применяет, и
+                // задача решается с прежнего адреса. Проверено 11.09.2026 —
+                // тот же запрос без сессии с прокси проходит с первого раза, а
+                // в сессии отвечает «Cloudflare has blocked this request».
+                // Поэтому для проксированных хостов идём разово, без сессии:
+                // задача решается каждый раз заново, зато с нужного адреса.
                 if (через != null)
                     payload["proxy"] = new Dictionary<string, object> { ["url"] = через };
+                else
+                    payload["session"] = SessionName;
 
                 var root = await CallAsync(conf, lane, payload, conf.MaxTimeoutMs + 30000);
                 if (root == null || !string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
@@ -755,13 +764,16 @@ namespace JacBlack.Infrastructure.Networking
 
         static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, Lane lane, string url, string cookie, string postData = null)
         {
+            // Хост, до которого нельзя ходить напрямую, браузер тоже берёт
+            // через выход — иначе задачу решает забаненный адрес.
+            string через = ProxyFor(url);
+
             var payload = new Dictionary<string, object>
             {
                 // Форма отправляется тем же путём и в той же сессии, что и
                 // страницы: браузер уже прошёл проверку, а отдельная сессия
                 // под POST стоила бы ещё одного решения задачи.
                 ["cmd"] = postData == null ? "request.get" : "request.post",
-                ["session"] = SessionName,
                 ["url"] = url,
                 ["maxTimeout"] = conf.MaxTimeoutMs
             };
@@ -769,11 +781,12 @@ namespace JacBlack.Infrastructure.Networking
             if (postData != null)
                 payload["postData"] = postData;
 
-            // Хост, до которого нельзя ходить напрямую, браузер тоже берёт
-            // через выход — иначе задачу решает забаненный адрес.
-            string через = ProxyFor(url);
+            // Выход задаётся только при создании сессии, поэтому проксированные
+            // хосты идут разовым запросом — см. подробности в PostFormAsync.
             if (через != null)
                 payload["proxy"] = new Dictionary<string, object> { ["url"] = через };
+            else
+                payload["session"] = SessionName;
 
             var jar = ParseCookies(cookie);
             if (jar.Count > 0)
