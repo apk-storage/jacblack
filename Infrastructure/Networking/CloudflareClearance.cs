@@ -64,6 +64,21 @@ namespace JacBlack.Infrastructure.Networking
 
         static Lane LaneOf(string url) => _lanes.GetOrAdd(url ?? "", _ => new Lane());
 
+        /// <summary>
+        /// Полоса для связки «браузер + выход». У запросов через выход своя
+        /// сессия, а значит и своя очередь: сессия задаёт прокси на всю свою
+        /// жизнь, и смешивать их в одной полосе нельзя.
+        /// </summary>
+        static Lane LaneOf(string url, string через) =>
+            _lanes.GetOrAdd((url ?? "") + "|" + (через ?? ""), _ => new Lane());
+
+        /// <summary>
+        /// Имя сессии: своё на каждый выход. FlareSolverr берёт прокси только
+        /// при создании сессии, поэтому для другого выхода нужна другая.
+        /// </summary>
+        static string SessionNameFor(string через) =>
+            через == null ? SessionName : SessionName + "-" + Math.Abs(через.GetHashCode()).ToString();
+
         /// <summary>Этот запрос — часть обхода, значит идёт к своему браузеру.</summary>
         static readonly AsyncLocal<bool> _crawlLane = new();
 
@@ -318,12 +333,13 @@ namespace JacBlack.Infrastructure.Networking
                     break;
             }
 
-            var lane = LaneOf(conf.Url);
+            string черезВыход = ProxyFor(url);
+            var lane = LaneOf(conf.Url, черезВыход);
 
             await lane.Gate.WaitAsync();
             try
             {
-                if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane))
+                if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane, черезВыход))
                     return null;
 
                 var (outcome, html) = await RequestAsync(conf, lane, url, cookie, postData);
@@ -339,9 +355,9 @@ namespace JacBlack.Infrastructure.Networking
                 // вторая и третья в той же — 2.7 и 2.3 с.
                 if (outcome == FetchOutcome.BrowserFailed)
                 {
-                    await DestroySessionAsync(conf, lane);
+                    await DestroySessionAsync(conf, lane, черезВыход);
 
-                    if (!await CreateSessionAsync(conf, lane))
+                    if (!await CreateSessionAsync(conf, lane, черезВыход))
                         return null;
 
                     (outcome, html) = await RequestAsync(conf, lane, url, cookie, postData);
@@ -635,35 +651,23 @@ namespace JacBlack.Infrastructure.Networking
             if (conf.Url == null || string.IsNullOrWhiteSpace(url))
                 return (null, null);
 
-            var lane = LaneOf(conf.Url);
+            string через = ProxyFor(url);
+            var lane = LaneOf(conf.Url, через);
 
             await lane.Gate.WaitAsync();
             try
             {
-                if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane))
+                if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane, через))
                     return (null, null);
-
-                string через = ProxyFor(url);
 
                 var payload = new Dictionary<string, object>
                 {
                     ["cmd"] = "request.post",
                     ["url"] = url,
                     ["postData"] = formData ?? string.Empty,
-                    ["maxTimeout"] = conf.MaxTimeoutMs
+                    ["maxTimeout"] = conf.MaxTimeoutMs,
+                    ["session"] = SessionNameFor(через)
                 };
-
-                // Выход задаётся ТОЛЬКО при создании сессии: запросу внутри
-                // готовой сессии FlareSolverr поле proxy молча не применяет, и
-                // задача решается с прежнего адреса. Проверено 11.09.2026 —
-                // тот же запрос без сессии с прокси проходит с первого раза, а
-                // в сессии отвечает «Cloudflare has blocked this request».
-                // Поэтому для проксированных хостов идём разово, без сессии:
-                // задача решается каждый раз заново, зато с нужного адреса.
-                if (через != null)
-                    payload["proxy"] = new Dictionary<string, object> { ["url"] = через };
-                else
-                    payload["session"] = SessionName;
 
                 var root = await CallAsync(conf, lane, payload, conf.MaxTimeoutMs + 30000);
                 if (root == null || !string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
@@ -774,8 +778,10 @@ namespace JacBlack.Infrastructure.Networking
 
         static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, Lane lane, string url, string cookie, string postData = null)
         {
-            // Хост, до которого нельзя ходить напрямую, браузер тоже берёт
-            // через выход — иначе задачу решает забаненный адрес.
+            // Хост, до которого нельзя ходить напрямую, браузер берёт через
+            // выход — иначе задачу решает забаненный адрес. Выход живёт в
+            // СЕССИИ: полю proxy у запроса внутри готовой сессии FlareSolverr
+            // не верит, а без сессии теряются cookie входа.
             string через = ProxyFor(url);
 
             var payload = new Dictionary<string, object>
@@ -791,12 +797,7 @@ namespace JacBlack.Infrastructure.Networking
             if (postData != null)
                 payload["postData"] = postData;
 
-            // Выход задаётся только при создании сессии, поэтому проксированные
-            // хосты идут разовым запросом — см. подробности в PostFormAsync.
-            if (через != null)
-                payload["proxy"] = new Dictionary<string, object> { ["url"] = через };
-            else
-                payload["session"] = SessionName;
+            payload["session"] = SessionNameFor(через);
 
             var jar = ParseCookies(cookie);
             if (jar.Count > 0)
@@ -861,13 +862,22 @@ namespace JacBlack.Infrastructure.Networking
         #endregion
 
         #region сессия
-        static async Task<bool> CreateSessionAsync(FlareSolverrSettingsView conf, Lane lane)
+        static async Task<bool> CreateSessionAsync(FlareSolverrSettingsView conf, Lane lane, string через = null)
         {
-            var root = await CallAsync(conf, lane, new Dictionary<string, object>
+            var payload = new Dictionary<string, object>
             {
                 ["cmd"] = "sessions.create",
-                ["session"] = SessionName
-            }, conf.MaxTimeoutMs + 30000);
+                ["session"] = SessionNameFor(через)
+            };
+
+            // Прокси задаётся ровно здесь и на всю жизнь сессии: запросу внутри
+            // готовой сессии FlareSolverr поле proxy молча не применяет —
+            // проверено 11.09.2026, задача решалась с прежнего, забаненного
+            // адреса.
+            if (через != null)
+                payload["proxy"] = new Dictionary<string, object> { ["url"] = через };
+
+            var root = await CallAsync(conf, lane, payload, conf.MaxTimeoutMs + 30000);
 
             bool ok = root != null &&
                       string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase);
@@ -883,7 +893,7 @@ namespace JacBlack.Infrastructure.Networking
         }
 
         /// <summary>Закрывает сессию, не поднимая шума: она могла уже умереть сама.</summary>
-        static async Task DestroySessionAsync(FlareSolverrSettingsView conf, Lane lane)
+        static async Task DestroySessionAsync(FlareSolverrSettingsView conf, Lane lane, string через = null)
         {
             if (!lane.SessionAlive)
                 return;
@@ -891,7 +901,7 @@ namespace JacBlack.Infrastructure.Networking
             await CallAsync(conf, lane, new Dictionary<string, object>
             {
                 ["cmd"] = "sessions.destroy",
-                ["session"] = SessionName
+                ["session"] = SessionNameFor(через)
             }, 60000);
 
             lane.SessionAlive = false;
