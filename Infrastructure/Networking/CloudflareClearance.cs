@@ -640,6 +640,10 @@ namespace JacBlack.Infrastructure.Networking
                     ["maxTimeout"] = conf.MaxTimeoutMs
                 };
 
+                string через = ProxyFor(url);
+                if (через != null)
+                    payload["proxy"] = new Dictionary<string, object> { ["url"] = через };
+
                 var root = await CallAsync(conf, lane, payload, conf.MaxTimeoutMs + 30000);
                 if (root == null || !string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
                     return null;
@@ -681,6 +685,51 @@ namespace JacBlack.Infrastructure.Networking
         /// </summary>
         public static string LastFormCookies { get; private set; }
 
+        /// <summary>
+        /// Через какой выход браузеру идти на этот адрес.
+        ///
+        /// Берём из того же `globalproxy`, что и обычные запросы: если для
+        /// хоста задан прокси, значит ходить туда напрямую нельзя, и браузеру
+        /// это касается ровно так же. 11.09.2026 Cloudflare забанил адрес awg
+        /// на kinozal — с него блок-страница «Attention Required», и браузер
+        /// отвечал «Cloudflare has blocked this request»; тот же запрос через
+        /// туннель до любой нашей ноды решался с первого раза.
+        ///
+        /// Берём ПЕРВЫЙ адрес списка, а не случайный: у браузера сессия живёт
+        /// долго, и менять выход под ней значит терять решённую задачу.
+        /// </summary>
+        static string ProxyFor(string url)
+        {
+            var rules = AppInit.conf?.globalproxy;
+            if (rules == null || string.IsNullOrWhiteSpace(url))
+                return null;
+
+            foreach (var rule in rules)
+            {
+                if (rule?.list == null || rule.list.Count == 0 || string.IsNullOrWhiteSpace(rule.pattern))
+                    continue;
+
+                try
+                {
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(url, rule.pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        continue;
+                }
+                catch (ArgumentException)
+                {
+                    // Кривое правило в конфиге не должно ронять обход.
+                    continue;
+                }
+
+                foreach (string адрес in rule.list)
+                {
+                    if (!string.IsNullOrWhiteSpace(адрес))
+                        return адрес.Trim();
+                }
+            }
+
+            return null;
+        }
+
         /// <summary>Склеивает cookie из ответа браузера в готовый заголовок.</summary>
         static string CookieHeaderOf(JObject solution)
         {
@@ -719,6 +768,12 @@ namespace JacBlack.Infrastructure.Networking
 
             if (postData != null)
                 payload["postData"] = postData;
+
+            // Хост, до которого нельзя ходить напрямую, браузер тоже берёт
+            // через выход — иначе задачу решает забаненный адрес.
+            string через = ProxyFor(url);
+            if (через != null)
+                payload["proxy"] = new Dictionary<string, object> { ["url"] = через };
 
             var jar = ParseCookies(cookie);
             if (jar.Count > 0)

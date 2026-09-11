@@ -70,6 +70,15 @@ def fetch(task):
         "allow_redirects": True,
     }
 
+    # Выход, если напрямую туда нельзя. 11.09.2026 Cloudflare забанил адрес
+    # машины на kinozal: с него приходит блок-страница «Attention Required»,
+    # а через туннель до любой нашей ноды тот же запрос проходит. Раз браузер
+    # пошёл через выход, быстрый путь должен идти тем же — иначе он продолжит
+    # стучаться с забаненного адреса.
+    proxy = task.get("proxy")
+    if proxy:
+        kwargs["proxies"] = {"http": proxy, "https": proxy}
+
     post = task.get("postData")
 
     if post is None:

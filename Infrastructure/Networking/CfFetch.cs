@@ -350,6 +350,13 @@ namespace JacBlack.Infrastructure.Networking
                 if (postData != null)
                     payload["postData"] = postData;
 
+                // Хост, до которого нельзя ходить напрямую, быстрый путь берёт
+                // через тот же выход, что и браузер: иначе он продолжает
+                // стучаться с забаненного адреса и портить его репутацию.
+                string через = ProxyForHost(url);
+                if (через != null)
+                    payload["proxy"] = через;
+
                 using var client = new System.Net.Http.HttpClient
                 {
                     Timeout = TimeSpan.FromSeconds(conf.timeoutSeconds + 10)
@@ -388,6 +395,42 @@ namespace JacBlack.Infrastructure.Networking
             {
                 gate.Release();
             }
+        }
+
+        /// <summary>
+        /// Выход для этого адреса — из общих правил `globalproxy`. Правило там
+        /// значит «напрямую туда нельзя», и это одинаково верно для обычного
+        /// клиента, браузера и быстрого пути.
+        /// </summary>
+        static string ProxyForHost(string url)
+        {
+            var rules = AppInit.conf?.globalproxy;
+            if (rules == null || string.IsNullOrWhiteSpace(url))
+                return null;
+
+            foreach (var rule in rules)
+            {
+                if (rule?.list == null || rule.list.Count == 0 || string.IsNullOrWhiteSpace(rule.pattern))
+                    continue;
+
+                try
+                {
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(url, rule.pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        continue;
+                }
+                catch (ArgumentException)
+                {
+                    continue;
+                }
+
+                foreach (string адрес in rule.list)
+                {
+                    if (!string.IsNullOrWhiteSpace(адрес))
+                        return адрес.Trim();
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
