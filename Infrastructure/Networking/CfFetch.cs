@@ -376,7 +376,24 @@ namespace JacBlack.Infrastructure.Networking
                 {
                     string error = root.Value<string>("error");
                     if (!string.IsNullOrWhiteSpace(error))
+                    {
                         JacBlackLog.Swallowed(JacBlackLogCategories.Host, $"cffetch: {url}: {error}", null);
+
+                        // Выход не справляется с потоком — значит быстрый путь
+                        // по этому хосту сейчас не работает, и долбиться в него
+                        // на каждой странице бессмысленно.
+                        //
+                        // 11.09.2026 это стоило 166 отказов в минуту и подняло
+                        // нагрузку машины до 12 при четырёх ядрах: одиночный
+                        // запрос через туннель проходит, а поток обхода `ssh -D`
+                        // не тянет и рвёт соединение.
+                        if (error.IndexOf("ProxyError", StringComparison.OrdinalIgnoreCase) >= 0
+                            || error.IndexOf("SOCKS", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            try { BlockFastPath(new Uri(url).Host); }
+                            catch (UriFormatException) { }
+                        }
+                    }
                 }
 
                 bool mitigated = root.Value<bool?>("cfMitigated") ?? false;
