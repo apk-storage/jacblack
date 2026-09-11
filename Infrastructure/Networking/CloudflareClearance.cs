@@ -618,10 +618,22 @@ namespace JacBlack.Infrastructure.Networking
         /// поэтому и вход, и поиск идут одной браузерной сессией.
         /// </summary>
         public static async Task<string> PostFormAsync(string url, string formData)
+            => (await PostFormWithCookiesAsync(url, formData)).html;
+
+        /// <summary>
+        /// То же, но отдаёт и cookie, которые браузер получил на этой форме.
+        ///
+        /// Отдельным методом, а не общим полем: формы через браузер шлёт не
+        /// только вход — nnmclub так ищет живые сиды, и его вызов успевал
+        /// перезаписать поле между отправкой и чтением. Внешне это выглядело
+        /// как «браузер вошёл, но uid/pass в cookie нет», хотя тот же запрос
+        /// руками отдавал их исправно.
+        /// </summary>
+        public static async Task<(string html, string cookies)> PostFormWithCookiesAsync(string url, string formData)
         {
             var conf = Conf;
             if (conf.Url == null || string.IsNullOrWhiteSpace(url))
-                return null;
+                return (null, null);
 
             var lane = LaneOf(conf.Url);
 
@@ -629,7 +641,7 @@ namespace JacBlack.Infrastructure.Networking
             try
             {
                 if (!lane.SessionAlive && !await CreateSessionAsync(conf, lane))
-                    return null;
+                    return (null, null);
 
                 string через = ProxyFor(url);
 
@@ -655,23 +667,23 @@ namespace JacBlack.Infrastructure.Networking
 
                 var root = await CallAsync(conf, lane, payload, conf.MaxTimeoutMs + 30000);
                 if (root == null || !string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
-                    return null;
+                    return (null, null);
 
                 lane.LastUse = DateTime.UtcNow;
+
+                var solution = root.Value<JObject>("solution");
 
                 // Вход на трекер меняет cookie, и быстрый путь должен ходить
                 // с новыми: со старыми поиск отдаёт гостевую страницу без
                 // единой строки, а это выглядит как «трекер сломался».
-                await RememberClearance(url, root.Value<JObject>("solution"));
+                await RememberClearance(url, solution);
 
-                LastFormCookies = CookieHeaderOf(root.Value<JObject>("solution"));
-
-                return root["solution"]?.Value<string>("response");
+                return (solution?.Value<string>("response"), CookieHeaderOf(solution));
             }
             catch (Exception ex)
             {
                 JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr: отправка формы не удалась: {ex.GetType().Name}");
-                return null;
+                return (null, null);
             }
             finally
             {
@@ -692,8 +704,6 @@ namespace JacBlack.Infrastructure.Networking
         /// Поле общее на процесс, и это осознанно: вход — редкая операция под
         /// замком очереди к браузеру, читают его сразу после вызова.
         /// </summary>
-        public static string LastFormCookies { get; private set; }
-
         /// <summary>
         /// Через какой выход браузеру идти на этот адрес.
         ///
