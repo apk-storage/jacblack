@@ -218,11 +218,67 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                     ParserLog.Write(TrackerName, $"TakeLogin error: {ex.Message}");
                 }
 
+                // Вход своим клиентом не прошёл — пробуем браузером.
+                //
+                // 11.09.2026 Cloudflare закрыл у kinozal и `takelogin.php`:
+                // обычный клиент получает 403, cookie входа взять неоткуда, и
+                // обход встал с «добавлено=0 обновлено=0» — при том, что сами
+                // страницы браузером берутся исправно. Этот путь идёт формой
+                // через тот же браузер и забирает его cookie.
+                if (await TakeLoginViaBrowser())
+                    return true;
+
                 return false;
             }
             finally
             {
                 _loginSemaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// Вход через браузер: отправляем ту же форму и забираем cookie,
+        /// которые он получил. Годными считаем только те, где есть `uid` и
+        /// `pass` — остальное трекер выдаёт и гостю.
+        /// </summary>
+        async Task<bool> TakeLoginViaBrowser()
+        {
+            try
+            {
+                string host = AppInit.conf.Kinozal.host;
+                string form =
+                    $"username={Uri.EscapeDataString(AppInit.conf.Kinozal.login.u ?? "")}" +
+                    $"&password={Uri.EscapeDataString(AppInit.conf.Kinozal.login.p ?? "")}" +
+                    "&returnto=";
+
+                string html = await Infrastructure.Networking.CloudflareClearance.PostFormAsync($"{host}/takelogin.php", form);
+                if (html == null)
+                    return false;
+
+                string cookies = Infrastructure.Networking.CloudflareClearance.LastFormCookies;
+                if (string.IsNullOrWhiteSpace(cookies))
+                    return false;
+
+                bool есть(string имя) =>
+                    Regex.IsMatch(cookies, $@"(^|;\s*){Regex.Escape(имя)}=[^;]+");
+
+                if (!есть("uid") || !есть("pass"))
+                {
+                    _lastLoginError = "браузер вошёл, но uid/pass в cookie нет";
+                    ParserLog.Write(TrackerName, $"TakeLogin failed: {_lastLoginError}");
+                    return false;
+                }
+
+                _cookie = cookies;
+                _lastLoginError = null;
+                ParserLog.Write(TrackerName, "TakeLogin OK (через браузер)");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _lastLoginError = ex.Message;
+                ParserLog.Write(TrackerName, $"TakeLogin via browser error: {ex.Message}");
+                return false;
             }
         }
 
