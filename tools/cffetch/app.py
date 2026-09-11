@@ -77,6 +77,14 @@ def fetch(task):
     # стучаться с забаненного адреса.
     proxy = task.get("proxy")
     if proxy:
+        # socks5h, а не socks5: имя сайта должен резолвить сам выход. С
+        # обычным socks5 клиент резолвит домен у себя и отдаёт туннелю адрес,
+        # а `ssh -D` такого не принимает — curl отвечает «Failed to receive
+        # SOCKS response». Проверено 11.09.2026: socks5 падает, socks5h даёт
+        # 302 с той же машины и тем же прокси.
+        if proxy.startswith("socks5://"):
+            proxy = "socks5h://" + proxy[len("socks5://"):]
+
         kwargs["proxies"] = {"http": proxy, "https": proxy}
 
     post = task.get("postData")
