@@ -253,11 +253,21 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
 
                 string html = await Infrastructure.Networking.CloudflareClearance.PostFormAsync($"{host}/takelogin.php", form);
                 if (html == null)
+                {
+                    // Молчать тут нельзя: именно так вход и «пропал» 11.09.2026 —
+                    // браузер запрос получал, а в журнале трекера не было ни строки.
+                    _lastLoginError = "браузер форму входа не отправил";
+                    ParserLog.Write(TrackerName, $"TakeLogin failed: {_lastLoginError}");
                     return false;
+                }
 
                 string cookies = Infrastructure.Networking.CloudflareClearance.LastFormCookies;
                 if (string.IsNullOrWhiteSpace(cookies))
+                {
+                    _lastLoginError = "браузер отработал, но cookie не вернул";
+                    ParserLog.Write(TrackerName, $"TakeLogin failed: {_lastLoginError}");
                     return false;
+                }
 
                 bool есть(string имя) =>
                     Regex.IsMatch(cookies, $@"(^|;\s*){Regex.Escape(имя)}=[^;]+");
