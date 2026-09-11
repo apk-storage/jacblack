@@ -251,7 +251,9 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                     $"&password={Uri.EscapeDataString(AppInit.conf.Kinozal.login.p ?? "")}" +
                     "&returnto=";
 
-                string html = await Infrastructure.Networking.CloudflareClearance.PostFormAsync($"{host}/takelogin.php", form);
+                var (html, cookies) = await Infrastructure.Networking.CloudflareClearance
+                    .PostFormWithCookiesAsync($"{host}/takelogin.php", form);
+
                 if (html == null)
                 {
                     // Молчать тут нельзя: именно так вход и «пропал» 11.09.2026 —
@@ -261,7 +263,6 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                     return false;
                 }
 
-                string cookies = Infrastructure.Networking.CloudflareClearance.LastFormCookies;
                 if (string.IsNullOrWhiteSpace(cookies))
                 {
                     _lastLoginError = "браузер отработал, но cookie не вернул";
