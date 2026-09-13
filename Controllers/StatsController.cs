@@ -303,6 +303,59 @@ namespace JacBlack.Controllers
             }
         }
 
+        /// <summary>
+        /// Чем занята память прямо сейчас. Заведено 13.09.2026 после двух падений
+        /// по OutOfMemory: снаружи снимок кучи снимается тяжело — приложение
+        /// собрано self-contained, отдельного runtime в образе нет, и
+        /// dotnet-gcdump приходится звать через PID-namespace контейнера. Здесь
+        /// те же числа, но доступны всегда и без возни.
+        ///
+        /// Живёт под /stats/, потому что там уже стоит basic auth в nginx: новая
+        /// точка входа означала бы ещё и правку vhost.
+        ///
+        /// `?compact=true` уплотняет LOH прямо сейчас. Это блокирующая сборка на
+        /// секунды, поэтому только руками и осознанно; сам сторож делает это по
+        /// признаку — см. Infrastructure/Background/MemoryCron.
+        /// </summary>
+        [Route("/stats/memory")]
+        public JsonResult Memory(bool compact = false)
+        {
+            if (!AppInit.conf.openstats)
+                return Json(new { ok = false });
+
+            long freedNow = compact ? Infrastructure.Background.MemoryCron.Compact() : 0;
+
+            var m = Infrastructure.Background.MemoryCron.Read();
+            static long Mb(long bytes) => bytes / 1024 / 1024;
+
+            return Json(new
+            {
+                ok = true,
+                workingSetMb = Mb(m.WorkingSetBytes),
+                committedMb = Mb(m.CommittedBytes),
+                heapMb = Mb(m.HeapBytes),
+                gen0Mb = Mb(m.Gen0Bytes),
+                gen1Mb = Mb(m.Gen1Bytes),
+                gen2Mb = Mb(m.Gen2Bytes),
+                lohMb = Mb(m.LohBytes),
+                pohMb = Mb(m.PohBytes),
+                lohFragmentedMb = Mb(m.LohFragmentedBytes),
+                lohFragmentedPercent = m.LohFragmentedPercent,
+                fragmentedTotalMb = Mb(m.TotalFragmentedBytes),
+                // Чем занята куча помимо мусора: индекс базы и открытые шарды.
+                masterDbKeys = Infrastructure.Persistence.FileDB.masterDb.Count,
+                openShards = Infrastructure.Persistence.FileDB.OpenShardsCount,
+                compaction = new
+                {
+                    count = Infrastructure.Background.MemoryCron.CompactionCount,
+                    lastAt = Infrastructure.Background.MemoryCron.LastCompactionAt,
+                    lastFreedMb = Mb(Infrastructure.Background.MemoryCron.LastCompactionFreedBytes),
+                    lastMs = Infrastructure.Background.MemoryCron.LastCompactionMs,
+                    freedNowMb = Mb(freedNow)
+                }
+            });
+        }
+
         [Route("/stats/meta")]
         public JsonResult Meta()
         {

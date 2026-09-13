@@ -147,6 +147,7 @@ namespace JacBlack
             builder.Services.AddHostedService<StatsWorker>();
             builder.Services.AddHostedService<FileDbWorker>();
             builder.Services.AddHostedService<TracksWorker>();
+            builder.Services.AddHostedService<MemoryWorker>();
 
             builder.Services.AddJacBlackTrackers();
             builder.Services.AddJacBlackSwagger();
