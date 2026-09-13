@@ -24,6 +24,14 @@ namespace JacBlack.Infrastructure.Persistence
         static ConcurrentDictionary<string, WriteTaskModel> openWriteTask = new ConcurrentDictionary<string, WriteTaskModel>();
 
         /// <summary>
+        /// Сколько шардов сейчас держится в памяти. Наружу отдаём только счётчик:
+        /// сам словарь приватный, и таким он и должен остаться — вытеснение
+        /// (FileDB.Cron) считает открытые записи под замком каждой из них.
+        /// Нужен ручке /stats/memory, чтобы видеть, чем занята куча.
+        /// </summary>
+        public static int OpenShardsCount => openWriteTask.Count;
+
+        /// <summary>
         /// Поднимает индекс базы: сам файл, а если его нет или он не читается —
         /// суточную копию за сегодня, затем за вчера.
         ///

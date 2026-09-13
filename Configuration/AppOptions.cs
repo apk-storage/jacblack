@@ -120,6 +120,12 @@ namespace JacBlack.Configuration
 
         public Evercache evercache = new Evercache() { enable = true, validHour = 1, maxOpenWriteTask = 2000, dropCacheTake = 200 };
 
+        // Пороги подобраны по замеру 13.09.2026: LOH 794 МБ, дыр в нём 339 МБ,
+        // то есть 43%. Уплотнение занимает секунды полной остановки (замер того
+        // же дня: 14 секунд на 274 МБ), поэтому только в тихие часы и не чаще
+        // раза в шесть часов — то есть на деле раз в сутки, ночью.
+        public MemoryGuard memoryGuard = new MemoryGuard() { enable = true, checkMinutes = 10, fragmentedMb = 250, fragmentedPercent = 30, minIntervalMinutes = 360, quietFromHour = 3, quietToHour = 6 };
+
         public int fdbPathLevels = 2;
 
         public int timeStatsUpdate = 90; // минут

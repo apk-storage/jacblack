@@ -102,6 +102,16 @@ namespace JacBlack.Configuration.Schema
                         Field("evercache.maxOpenWriteTask", "int", "Max open write", null, min: 1),
                         Field("evercache.dropCacheTake", "int", "Drop cache take", null, min: 1)
                     }),
+                    Group("memoryGuard", "Присмотр за памятью", "Уплотнение кучи больших объектов по признаку", new[]
+                    {
+                        Field("memoryGuard.enable", "bool", "Включить", null),
+                        Field("memoryGuard.checkMinutes", "int", "Смотреть раз в (мин)", null, min: 1),
+                        Field("memoryGuard.fragmentedMb", "int", "Порог дыр в LOH (МБ)", "Ниже — уплотнять незачем", min: 1),
+                        Field("memoryGuard.fragmentedPercent", "int", "И доля дыр (%)", "Оба условия должны сойтись", min: 1, max: 99),
+                        Field("memoryGuard.minIntervalMinutes", "int", "Не чаще раза в (мин)", "Уплотнение блокирует службу на секунды", min: 1),
+                        Field("memoryGuard.quietFromHour", "int", "Тихие часы с", "Местное время; равные значения — без ограничения", min: 0, max: 23),
+                        Field("memoryGuard.quietToHour", "int", "Тихие часы до", "Не включая", min: 0, max: 23)
+                    }),
                     Group("search", "Поиск (combined)", "Jackett JSON + Torznab combined search", new[]
                     {
                         Field("search.mergeV1", "select", "Merge v1 (fuzzy)", "auto — только fuzzy; card без v1", enumValues: new[] { "false", "auto", "true" }),
@@ -278,6 +288,24 @@ namespace JacBlack.Configuration.Schema
                     errors.Add("evercache.validHour: не может быть отрицательным");
                 if (config.evercache.maxOpenWriteTask < 1)
                     errors.Add("evercache.maxOpenWriteTask: должно быть ≥ 1");
+            }
+
+            if (config.memoryGuard != null && config.memoryGuard.enable)
+            {
+                if (config.memoryGuard.checkMinutes < 1)
+                    errors.Add("memoryGuard.checkMinutes: должно быть ≥ 1");
+                if (config.memoryGuard.fragmentedMb < 1)
+                    errors.Add("memoryGuard.fragmentedMb: должно быть ≥ 1");
+                // Ноль или сотня обессмысливают признак: при нуле уплотняли бы
+                // всегда, при сотне — никогда.
+                if (config.memoryGuard.fragmentedPercent < 1 || config.memoryGuard.fragmentedPercent > 99)
+                    errors.Add("memoryGuard.fragmentedPercent: ожидается 1–99");
+                if (config.memoryGuard.minIntervalMinutes < 1)
+                    errors.Add("memoryGuard.minIntervalMinutes: должно быть ≥ 1");
+                if (config.memoryGuard.quietFromHour < 0 || config.memoryGuard.quietFromHour > 23)
+                    errors.Add("memoryGuard.quietFromHour: ожидается 0–23");
+                if (config.memoryGuard.quietToHour < 0 || config.memoryGuard.quietToHour > 23)
+                    errors.Add("memoryGuard.quietToHour: ожидается 0–23");
             }
 
             if (config.TracksInterval != null)
