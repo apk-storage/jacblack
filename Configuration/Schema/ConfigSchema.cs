@@ -118,7 +118,8 @@ namespace JacBlack.Configuration.Schema
                         Field("search.maxV1Pairs", "int", "Max v1 pairs", "При mergeV1=auto или true (fuzzy)", min: 1),
                         Field("search.v1Sort", "string", "V1 sort", "sid, pir, size…"),
                         Field("search.stripTrailingYear", "bool", "Strip trailing year", "Fuzzy: запрос без года"),
-                        Field("search.skipCatFilter", "bool", "Skip cat filter", "Не фильтровать cat/Category[] на сервере")
+                        Field("search.skipCatFilter", "bool", "Skip cat filter", "Не фильтровать cat/Category[] на сервере"),
+                        Field("search.budgetSeconds", "int", "Бюджет поиска (с)", "Дальше живые сиды и закрытые трекеры пропускаются", min: 1, max: 60)
                     }),
                     Group("torznab", "Torznab", "Torznab XML (Sonarr/Radarr/Prowlarr)", new[]
                     {

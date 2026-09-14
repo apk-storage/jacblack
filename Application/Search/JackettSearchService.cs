@@ -57,14 +57,30 @@ namespace JacBlack.Application.Search
 
             title_original = ResolveCounterpartTitle(query, title, title_original);
 
+            // Часы на весь запрос. Заведены 14.09.2026: в лог nginx добавили
+            // время ответа, и оказалось, что каждый пятый запрос идёт дольше
+            // пятнадцати секунд, а девять из десяти укладываются лишь в сорок
+            // три. Изнутри же было не разобрать, чей это вклад: у живых сидов
+            // свой предел (800 мс), у закрытых трекеров свой (6 с), а у поиска
+            // по индексу — никакого, и общего потолка не было вовсе. Теперь
+            // этапы замеряются, а всё, что не влезло в бюджет, пропускается:
+            // выдача важнее украшений к ней.
+            var часы = System.Diagnostics.Stopwatch.StartNew();
+            long сидыМс = 0, закрытыеМс = 0;
+
             var req = IndexerSearchHelper.BuildRequest(q, request.ApiKey, rqnum, query, title, title_original, year, is_serial);
             var results = await IndexerSearchEngine.SearchCombinedAsync(req, cache, this);
             var filtered = IndexerSearchHelper.ApplyPostFilters(results, q, req);
+            long поискМс = часы.ElapsedMilliseconds;
 
             // Сиды в базе — снимок на момент индексации, поэтому спрашиваем трекеры
             // о том, что происходит сейчас. Не успели в бюджет — отдаём как есть.
-            if (_liveSeeders != null)
+            if (_liveSeeders != null && ЕстьВремя(часы))
+            {
+                long было = часы.ElapsedMilliseconds;
                 filtered = await _liveSeeders.ApplyAsync(filtered, ct);
+                сидыМс = часы.ElapsedMilliseconds - было;
+            }
 
             // Закрытые трекеры опросом анонса не берутся: их анонс не отвечает
             // посторонним, а торрент-файлы помечены private, из-за чего не
@@ -87,7 +103,12 @@ namespace JacBlack.Application.Search
                 })
                 .ToList();
 
-            await _closedTrackers.ApplyAsync(targets, title_original ?? query, title, ct);
+            if (ЕстьВремя(часы))
+            {
+                long было = часы.ElapsedMilliseconds;
+                await _closedTrackers.ApplyAsync(targets, title_original ?? query, title, ct);
+                закрытыеМс = часы.ElapsedMilliseconds - было;
+            }
 
             // Раздачи, которых на трекере уже нет, из выдачи убираем: скачать
             // их нельзя, а число сидов у них — прошлогодний снимок. Признак
@@ -130,7 +151,42 @@ namespace JacBlack.Application.Search
             // сборщик не срабатывал ни разу, хотя их в базе полтора десятка.
             HarvestCardKinopoisk(results, title, title_original, year);
 
+            ЗаписатьДолгийПоиск(часы, поискМс, сидыМс, закрытыеМс, filtered.Count, query ?? title ?? title_original);
+
             return filtered;
+        }
+
+        /// <summary>
+        /// Сколько всего разрешено тратить на запрос. Дальше живые сиды и
+        /// закрытые трекеры пропускаются — числа останутся из базы и будут
+        /// помечены непроверенными, зато человек получит выдачу.
+        ///
+        /// Шесть секунд взяты не с потолка: столько поиск занимал, когда на
+        /// него не жаловались, и в такой ответ укладывается таймаут Лампы.
+        /// </summary>
+        static TimeSpan Бюджет =>
+            TimeSpan.FromSeconds(AppInit.conf?.search?.budgetSeconds > 0
+                ? AppInit.conf.search.budgetSeconds
+                : 6);
+
+        static bool ЕстьВремя(System.Diagnostics.Stopwatch часы) => часы.Elapsed < Бюджет;
+
+        /// <summary>
+        /// Пишет в лог только те запросы, что вышли за бюджет, и сразу с
+        /// раскладкой по этапам. Без раскладки такая запись бесполезна: сегодня
+        /// полдня ушло на выяснение, чей это вклад — поиска по индексу, живых
+        /// сидов или закрытых трекеров.
+        /// </summary>
+        static void ЗаписатьДолгийПоиск(
+            System.Diagnostics.Stopwatch часы, long поискМс, long сидыМс, long закрытыеМс, int найдено, string что)
+        {
+            if (часы.Elapsed < Бюджет)
+                return;
+
+            Infrastructure.Logging.JacBlackLog.Warning(
+                Infrastructure.Logging.JacBlackLogCategories.Parser,
+                $"долгий поиск «{что}»: всего {часы.ElapsedMilliseconds} мс " +
+                $"(индекс {поискМс}, живые сиды {сидыМс}, закрытые трекеры {закрытыеМс}), раздач {найдено}");
         }
 
         /// <summary>
