@@ -28,6 +28,21 @@ namespace JacBlack.Infrastructure.Indexers
                 titleEn = split.en;
             }
 
+            // Часы на поиск по индексу. Заведены 14.09.2026, когда в лог nginx
+            // добавили время ответа: запросы по карточкам аниме и сериалов шли
+            // по 70–100 секунд, и 342 из тысячи закончились кодом 504 — nginx
+            // не дожидался ответа, человек не получал ничего.
+            //
+            // Причина не в одном заходе, а в их числе: карточка разворачивается
+            // в основной поиск, поиск без номера сезона, варианты написания, до
+            // двух псевдонимов, ромадзи и пары v1. Каждый стоит секунд, и на
+            // тяжёлых названиях они складываются в минуты. Общий предел на
+            // запрос есть (search.budgetSeconds), но проверялся он ПОСЛЕ этого
+            // метода и потому не спасал. Теперь добор вариантов прекращается,
+            // как только время вышло: лучше отдать найденное основным заходом,
+            // чем не отдать ничего.
+            var часыПоиска = System.Diagnostics.Stopwatch.StartNew();
+
             bool imdbMode = !req.CardMode && IndexerRequestParams.IsImdbOrKpQuery(query);
             var batches = new List<IEnumerable<Result>>();
 
@@ -56,7 +71,7 @@ namespace JacBlack.Infrastructure.Indexers
                 string bareQuery = IndexerRequestParams.StripTrailingSeason(query);
                 string bareRu = IndexerRequestParams.StripTrailingSeason(titleRu);
                 string bareEn = IndexerRequestParams.StripTrailingSeason(titleEn);
-                if (bareQuery != null || bareRu != null || bareEn != null)
+                if ((bareQuery != null || bareRu != null || bareEn != null) && ЕстьВремя(часыПоиска))
                 {
                     batches.Add(jackettSearch.SearchResults(
                         req.ApiKey, bareQuery ?? query, bareRu ?? titleRu, bareEn ?? titleEn,
@@ -66,7 +81,12 @@ namespace JacBlack.Infrastructure.Indexers
                 if (card.Count == 0)
                 {
                     foreach (var variant in BuildQueryVariants(query, titleRu, titleEn, settings))
+                    {
+                        if (!ЕстьВремя(часыПоиска))
+                            break;
+
                         batches.Add(jackettSearch.SearchResults(req.ApiKey, variant, null, null, 0, null, isSerial, false, cache));
+                    }
                 }
 
                 // У аниме оригинальное название приходит иероглифами, а
@@ -93,6 +113,9 @@ namespace JacBlack.Infrastructure.Indexers
                 {
                     foreach (string alias in aliases.Skip(1).Take(2))
                     {
+                        if (!ЕстьВремя(часыПоиска))
+                            break;
+
                         batches.Add(jackettSearch.SearchResults(
                             req.ApiKey, alias, null, alias, 0, category, isSerial, req.RqNum, cache));
                     }
@@ -120,9 +143,31 @@ namespace JacBlack.Infrastructure.Indexers
             }
 
             foreach (var pair in V1Pairs(query, titleRu, titleEn, settings, req.CardMode))
+            {
+                if (!ЕстьВремя(часыПоиска))
+                    break;
+
                 batches.Add(await V1SearchAsync(pair.search, pair.altname, exact: false, settings.v1Sort, req.Trackers, req.Season, cache, req.RqNum));
+            }
 
             return await FinishAsync(batches, liveSeeders);
+        }
+
+        /// <summary>
+        /// Осталось ли время на ДОПОЛНИТЕЛЬНЫЙ заход. Основной заход делается
+        /// всегда — без него отвечать нечем; прекращаются только доборы.
+        ///
+        /// Предел берём тот же, что у всего запроса (search.budgetSeconds), но
+        /// оставляем четверть на то, что идёт после поиска: живые сиды,
+        /// закрытые трекеры, сортировку и сборку ответа.
+        /// </summary>
+        static bool ЕстьВремя(System.Diagnostics.Stopwatch часы)
+        {
+            int бюджет = AppInit.conf?.search?.budgetSeconds > 0
+                ? AppInit.conf.search.budgetSeconds
+                : 6;
+
+            return часы.Elapsed < TimeSpan.FromSeconds(бюджет * 0.75);
         }
 
         /// <summary>
