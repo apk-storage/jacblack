@@ -344,7 +344,13 @@ namespace JacBlack.Infrastructure.Networking
                     ["cookies"] = clearance.Cookies,
                     ["userAgent"] = clearance.UserAgent ?? string.Empty,
                     ["impersonate"] = conf.impersonate,
-                    ["timeout"] = conf.timeoutSeconds
+                    // У обхода и у поиска разная цена ожидания. Человеку ответ
+                    // нужен сейчас, поэтому 14.09.2026 предел для поиска снижен
+                    // с 25 секунд до 10: мёртвый выход для конкретного хоста
+                    // уводил запрос в пустоту на все двадцать пять. Обходу же
+                    // короткий предел вредит — тяжёлые страницы рвутся и
+                    // теряются, — так что у него остаётся прежний.
+                    ["timeout"] = ТекущийПредел(conf)
                 };
 
                 if (postData != null)
@@ -359,7 +365,7 @@ namespace JacBlack.Infrastructure.Networking
 
                 using var client = new System.Net.Http.HttpClient
                 {
-                    Timeout = TimeSpan.FromSeconds(conf.timeoutSeconds + 10)
+                    Timeout = TimeSpan.FromSeconds(ТекущийПредел(conf) + 10)
                 };
 
                 using var content = new System.Net.Http.StringContent(
@@ -419,6 +425,20 @@ namespace JacBlack.Infrastructure.Networking
         /// значит «напрямую туда нельзя», и это одинаково верно для обычного
         /// клиента, браузера и быстрого пути.
         /// </summary>
+        /// <summary>
+        /// Сколько секунд ждать страницу. У обхода свой предел: он идёт по
+        /// тяжёлым разделам и никого не заставляет ждать, а короткий предел,
+        /// поставленный ради поиска, рвёт ему страницы. Если отдельное
+        /// значение не задано, обход берёт прежние двадцать пять секунд.
+        /// </summary>
+        static int ТекущийПредел(Models.AppConf.CfFetchSettings conf)
+        {
+            if (!CloudflareClearance.ЭтоОбход)
+                return conf.timeoutSeconds;
+
+            return conf.crawlTimeoutSeconds > 0 ? conf.crawlTimeoutSeconds : 25;
+        }
+
         static string ProxyForHost(string url)
         {
             var rules = AppInit.conf?.globalproxy;
