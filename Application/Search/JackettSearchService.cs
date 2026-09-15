@@ -32,7 +32,7 @@ namespace JacBlack.Application.Search
             _kinozal = kinozal;
             _toloka = toloka;
             _bitru = bitru;
-            _closedTrackers = new ClosedTrackerSeeders(kinozal, toloka, bitru);
+            _closedTrackers = new ClosedTrackerSeeders(toloka, bitru);
         }
 
         public async Task<List<Result>> SearchAsync(JackettSearchRequest request, IMemoryCache cache, CancellationToken ct = default)

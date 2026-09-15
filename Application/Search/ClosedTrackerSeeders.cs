@@ -38,8 +38,16 @@ namespace JacBlack.Application.Search
     /// Почему отдельным слоем. Опрос анонса у них не работает: анонс не
     /// отвечает посторонним, а торрент-файлы помечены private, из-за чего
     /// нет ни DHT, ни обмена пирами. Зато у каждого есть свой способ:
-    /// у nnmclub, kinozal и toloka — собственный поиск с колонкой сидов,
-    /// у bitru — API по идентификатору, у rutracker — поиск через браузер.
+    /// у toloka — собственный поиск с колонкой сидов, у bitru — API по
+    /// идентификатору, у rutracker — поиск через браузер.
+    ///
+    /// nnmclub и kinozal здесь больше не опрашиваются (решение Сергея
+    /// 15.09.2026), их числа берутся из базы, её обновляет обход. Их опрашивали
+    /// прямо в запросе с пределом в 6 секунд, а после бана kinozal оба ходили
+    /// браузером: kinozal открывал десять страниц на каждый поиск, браузер
+    /// работает по очереди, и предел срабатывал почти всегда. Человек ждал
+    /// шесть лишних секунд, а брошенные запросы дорабатывали в очереди браузера
+    /// и отнимали его у обходов.
     ///
     /// Почему ОБЩИЙ. Раньше этот слой висел только на пути Лампы, а сайт
     /// ходил другой ручкой — и показывал числа из базы. Из-за этого удалённая
@@ -49,23 +57,13 @@ namespace JacBlack.Application.Search
     /// </summary>
     public sealed class ClosedTrackerSeeders
     {
-        readonly Infrastructure.Trackers.Kinozal.KinozalSyncService _kinozal;
         readonly Infrastructure.Trackers.Toloka.TolokaSyncService _toloka;
         readonly Infrastructure.Trackers.Bitru.BitruApiSyncService _bitru;
 
-        /// <summary>
-        /// Сколько ждать трекеры, которые спрашиваются прямо в запросе.
-        /// По очереди было нельзя: три поиска под входом складывались в 8–15
-        /// секунд ответа. Кто не успел — его числа останутся из базы.
-        /// </summary>
-        static readonly TimeSpan InlineBudget = TimeSpan.FromSeconds(6);
-
         public ClosedTrackerSeeders(
-            Infrastructure.Trackers.Kinozal.KinozalSyncService kinozal = null,
             Infrastructure.Trackers.Toloka.TolokaSyncService toloka = null,
             Infrastructure.Trackers.Bitru.BitruApiSyncService bitru = null)
         {
-            _kinozal = kinozal;
             _toloka = toloka;
             _bitru = bitru;
         }
@@ -80,7 +78,7 @@ namespace JacBlack.Application.Search
         /// Русское тоже нужно: слишком общий оригинал вроде «The Boys»
         /// топит свои же раздачи среди чужих строк.
         /// </summary>
-        public async Task<HashSet<string>> ApplyAsync(
+        public Task<HashSet<string>> ApplyAsync(
             IReadOnlyList<SeedTarget> targets,
             string originalTitle,
             string russianTitle,
@@ -89,36 +87,19 @@ namespace JacBlack.Application.Search
             var verified = new HashSet<string>(StringComparer.Ordinal);
 
             if (targets == null || targets.Count == 0)
-                return verified;
+                return Task.FromResult(verified);
 
             string primary = FirstNotEmpty(originalTitle, russianTitle);
             if (string.IsNullOrWhiteSpace(primary))
-                return verified;
+                return Task.FromResult(verified);
 
-            // Спрашиваем прямо в запросе только тех, кто отвечает быстро.
-            var inline = new[]
-            {
-                ApplyNNMClubAsync(targets, primary, verified),
-                ApplyKinozalAsync(targets, verified, primary, russianTitle)
-            };
-
-            try
-            {
-                await Task.WhenAll(inline).WaitAsync(InlineBudget, ct);
-            }
-            catch (Exception)
-            {
-                // Предел вышел или трекер не ответил — выдача уже собрана,
-                // числа просто останутся из базы и будут помечены непроверенными.
-            }
-
-            // Эти спрашиваются ПОСЛЕ ответа: вход у них занимает секунды.
-            // Берём сохранённое, обновление уходит в фон.
+            // Прямо в запросе никого не ждём: вход у этих трекеров занимает
+            // секунды. Берём сохранённое, обновление уходит в фон.
             ApplyTolokaCached(targets, primary, verified);
             ApplyBitruCached(targets, primary, verified);
             ApplyRutrackerCached(targets, verified, primary, russianTitle);
 
-            return verified;
+            return Task.FromResult(verified);
         }
 
         static string FirstNotEmpty(params string[] values) =>
@@ -183,43 +164,6 @@ namespace JacBlack.Application.Search
             }
 
             return missing;
-        }
-
-        static async Task ApplyNNMClubAsync(IReadOnlyList<SeedTarget> targets, string title, HashSet<string> verified)
-        {
-            if (!Any(targets, "nnmclub"))
-                return;
-
-            var fresh = await Infrastructure.Trackers.NNMClub.NNMClubSearchSeeders.FetchAsync(title);
-
-            // Пустая выдача поиска означает «трекер не ответил», а не «раздач
-            // нет». Спрашивать после этого про пропажи нельзя — под нож пошли
-            // бы все раздачи разом.
-            if (fresh == null || fresh.Count == 0)
-                return;
-
-            var missing = Fill(targets, "nnmclub", @"viewtopic\.php\?t=(\d+)",
-                id => fresh.TryGetValue(id, out var c) && c != null ? (c.Sid, c.Pir) : null,
-                verified);
-
-            Infrastructure.Trackers.DeletedReleaseProbe.QueueInBackground(
-                "nnmclub", missing, Infrastructure.Trackers.NNMClub.NNMClubSearchSeeders.IsDeletedAsync);
-        }
-
-        async Task ApplyKinozalAsync(IReadOnlyList<SeedTarget> targets, HashSet<string> verified, params string[] titles)
-        {
-            if (_kinozal == null || !Any(targets, "kinozal"))
-                return;
-
-            var fresh = await _kinozal.LiveSeedersAsync(titles);
-            if (fresh.Count == 0)
-                return;
-
-            var missing = Fill(targets, "kinozal", @"details\.php\?id=(\d+)",
-                id => fresh.TryGetValue(id, out var c) ? c : null, verified);
-
-            Infrastructure.Trackers.DeletedReleaseProbe.QueueInBackground(
-                "kinozal", missing, _kinozal.IsDeletedAsync);
         }
 
         void ApplyTolokaCached(IReadOnlyList<SeedTarget> targets, string title, HashSet<string> verified)
