@@ -40,6 +40,13 @@ namespace JacBlack.Infrastructure.Trackers.Selezen
             };
         }
 
+        /// <summary>Страница отдана под входом: на ней стоит имя нашей учётки.</summary>
+        internal static bool LoggedIn(string html, string user) =>
+            !string.IsNullOrEmpty(html)
+            && !string.IsNullOrEmpty(user)
+            && html.Contains("dle_root")
+            && html.Contains($">{user}<");
+
         string Cookie()
         {
             if (_memoryCache.TryGetValue("selezen:cookie", out string cookie))
@@ -220,12 +227,24 @@ namespace JacBlack.Infrastructure.Trackers.Selezen
                 ParserLog.Write(TrackerName, "Page parse failed", new Dictionary<string, object> { { "page", page }, { "url", listUrl }, { "reason", reason } });
                 return (0, 0, 0, 0, 0);
             }
-            if (!html.Contains($">{AppInit.conf.Selezen.login.u}<"))
+            if (!LoggedIn(html, AppInit.conf.Selezen.login?.u))
             {
-                if (string.IsNullOrEmpty(AppInit.conf.Selezen.cookie))
-                    await TakeLogin();
-                ParserLog.Write(TrackerName, "Page parse failed", new Dictionary<string, object> { { "page", page }, { "reason", "login not found in response" } });
-                return (0, 0, 0, 0, 0);
+                // Сессия короткая (вход с login_not_save), а cookie хранится
+                // сутки, поэтому ежечасный проход почти всегда приходит с
+                // протухшей. Раньше здесь входили заново и сразу сдавались, не
+                // повторив страницу, — и следующий час начинался с той же
+                // протухшей cookie. Так selezen не приносил ничего с 14.09.2026.
+                if (string.IsNullOrEmpty(AppInit.conf.Selezen.cookie) && await TakeLogin())
+                {
+                    cookie = Cookie();
+                    (html, listResponse) = await HttpClient.BaseGetAsync(listUrl, cookie: cookie, referer: host + "/", addHeaders: GetSelezenHeaders(host), timeoutSeconds: 15, useproxy: AppInit.conf.Selezen.useproxy);
+                }
+
+                if (!LoggedIn(html, AppInit.conf.Selezen.login?.u))
+                {
+                    ParserLog.Write(TrackerName, "Page parse failed", new Dictionary<string, object> { { "page", page }, { "reason", "login not found in response" } });
+                    return (0, 0, 0, 0, 0);
+                }
             }
 
             var torrents = SelezenParser.ParseTorrentsFromListPage(html);
