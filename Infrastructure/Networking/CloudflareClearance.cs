@@ -57,6 +57,13 @@ namespace JacBlack.Infrastructure.Networking
             public bool SessionAlive;
             public DateTime LastUse = DateTime.MinValue;
             public Timer IdleTimer;
+
+            /// <summary>
+            /// Имя сессии этой полосы. Хранится здесь, потому что сторож простоя
+            /// живёт на таймере и выхода не знает: раньше он закрывал общее имя
+            /// `jacblack`, и сессии выходов не закрывались никогда.
+            /// </summary>
+            public string SessionName = CloudflareClearance.SessionName;
         }
 
         static readonly ConcurrentDictionary<string, Lane> _lanes =
@@ -70,14 +77,62 @@ namespace JacBlack.Infrastructure.Networking
         /// жизнь, и смешивать их в одной полосе нельзя.
         /// </summary>
         static Lane LaneOf(string url, string через) =>
-            _lanes.GetOrAdd((url ?? "") + "|" + (через ?? ""), _ => new Lane());
+            _lanes.GetOrAdd((url ?? "") + "|" + (через ?? ""), _ => new Lane { SessionName = SessionNameFor(через) });
 
         /// <summary>
         /// Имя сессии: своё на каждый выход. FlareSolverr берёт прокси только
         /// при создании сессии, поэтому для другого выхода нужна другая.
+        ///
+        /// Имя обязано быть одним и тем же от запуска к запуску. Прежде оно
+        /// строилось через `string.GetHashCode()`, а в .NET тот случаен на
+        /// каждый процесс: после любого перезапуска службы для того же выхода
+        /// выходило новое имя, старый браузер оставался у FlareSolverr
+        /// навсегда. 15.09.2026 их набралось 28 — 352 процесса Chrome, 270%
+        /// процессора из 400, поиск по 9 секунд. Сам адрес в имя не кладём:
+        /// в нём может быть логин с паролем, а имена сессий FlareSolverr пишет в лог.
         /// </summary>
-        static string SessionNameFor(string через) =>
-            через == null ? SessionName : SessionName + "-" + Math.Abs(через.GetHashCode()).ToString();
+        internal static string SessionNameFor(string через)
+        {
+            if (через == null)
+                return SessionName;
+
+            byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(через.Trim()));
+            return SessionName + "-" + Convert.ToHexString(hash, 0, 5).ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Какие из сессий браузера — наши сироты: названы по-нашему, но этот
+        /// процесс их открыть не мог. Сюда попадают сессии прежних запусков со
+        /// старым случайным именем и сессии выходов, убранных из конфига.
+        /// Чужие сессии (не с нашим префиксом) не трогаем.
+        /// </summary>
+        internal static List<string> OrphanSessions(IEnumerable<string> live, IEnumerable<string> proxies)
+        {
+            var known = new HashSet<string>(StringComparer.Ordinal) { SessionName };
+            if (proxies != null)
+            {
+                foreach (string адрес in proxies)
+                {
+                    if (!string.IsNullOrWhiteSpace(адрес))
+                        known.Add(SessionNameFor(адрес.Trim()));
+                }
+            }
+
+            var orphans = new List<string>();
+            if (live == null)
+                return orphans;
+
+            foreach (string name in live)
+            {
+                if (name == null || known.Contains(name))
+                    continue;
+
+                if (name.StartsWith(SessionName + "-", StringComparison.Ordinal))
+                    orphans.Add(name);
+            }
+
+            return orphans;
+        }
 
         /// <summary>Этот запрос — часть обхода, значит идёт к своему браузеру.</summary>
         static readonly AsyncLocal<bool> _crawlLane = new();
@@ -872,6 +927,8 @@ namespace JacBlack.Infrastructure.Networking
         #region сессия
         static async Task<bool> CreateSessionAsync(FlareSolverrSettingsView conf, Lane lane, string через = null)
         {
+            await SweepOrphansOnceAsync(conf, lane);
+
             var payload = new Dictionary<string, object>
             {
                 ["cmd"] = "sessions.create",
@@ -898,6 +955,53 @@ namespace JacBlack.Infrastructure.Networking
                 JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr: сессию создать не удалось: {root?.Value<string>("message")}");
 
             return ok;
+        }
+
+        /// <summary>Браузеры, у которых сироты уже убраны в этом запуске.</summary>
+        static readonly ConcurrentDictionary<string, byte> _swept = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Один раз за запуск на каждый браузер закрывает сессии, которые
+        /// этот процесс открыть не мог (см. <see cref="OrphanSessions"/>).
+        /// FlareSolverr сам сессии по времени не закрывает, а каждая держит
+        /// целый Chrome, который продолжает исполнять скрипты последней
+        /// страницы. Свои сессии с нынешними именами остаются: FlareSolverr
+        /// выдаёт их по имени, и решённая задача переживает перезапуск службы.
+        /// </summary>
+        static async Task SweepOrphansOnceAsync(FlareSolverrSettingsView conf, Lane lane)
+        {
+            if (conf.Url == null || !_swept.TryAdd(conf.Url, 0))
+                return;
+
+            var root = await CallAsync(conf, lane, new Dictionary<string, object> { ["cmd"] = "sessions.list" }, 30000);
+            if (root == null)
+            {
+                // Браузер недоступен — попробуем при следующем создании сессии.
+                _swept.TryRemove(conf.Url, out _);
+                return;
+            }
+
+            var live = (root["sessions"] as JArray)?.Values<string>();
+            var proxies = new List<string>();
+            foreach (var rule in AppInit.conf?.globalproxy ?? new())
+            {
+                if (rule?.list != null)
+                    proxies.AddRange(rule.list);
+            }
+
+            foreach (string name in OrphanSessions(live, proxies))
+            {
+                var answer = await CallAsync(conf, lane, new Dictionary<string, object>
+                {
+                    ["cmd"] = "sessions.destroy",
+                    ["session"] = name
+                }, 60000);
+
+                if (string.Equals(answer?.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
+                    JacBlackLog.Warning(JacBlackLogCategories.Host, $"FlareSolverr: закрыта осиротевшая сессия {name}");
+                else
+                    JacBlackLog.Error(JacBlackLogCategories.Host, $"FlareSolverr: осиротевшую сессию {name} закрыть не удалось: {answer?.Value<string>("message")}");
+            }
         }
 
         /// <summary>Закрывает сессию, не поднимая шума: она могла уже умереть сама.</summary>
@@ -950,7 +1054,7 @@ namespace JacBlack.Infrastructure.Networking
                 CallAsync(conf, lane, new Dictionary<string, object>
                 {
                     ["cmd"] = "sessions.destroy",
-                    ["session"] = SessionName
+                    ["session"] = lane.SessionName
                 }, 60000).GetAwaiter().GetResult();
 
                 lane.SessionAlive = false;
