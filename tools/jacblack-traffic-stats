@@ -174,6 +174,58 @@ def служебный_запрос(запрос, клиент):
     return 0
 
 
+def хост_из(значение):
+    """Хост из Origin или Referer: `http://lampa.mx/` → `lampa.mx`."""
+    v = (значение or "").strip().lower()
+    if v in ("", "-", "null"):
+        return ""
+    v = re.sub(r"^[a-z]+://", "", v)
+    return v.split("/")[0].split(":")[0]
+
+
+def класс_устройства(ua):
+    """Класс клиента по User-Agent.
+
+    Классы взяты из того, что реально приходит на поиск (разбор логов
+    15.09.2026), а не придуманы заранее. Лампой называем только то, что
+    Лампой представляется: одинаковый «Windows, Chrome» без Origin — это не
+    обязательно человек, 15.09.2026 один такой адрес давал 70% всех поисков.
+    """
+    u = ua or ""
+    if "lampa_client" in u:
+        return "Android, приложение Лампы"
+    if u.startswith("okhttp/"):
+        return "Android, okhttp"
+    if "Web0S" in u:
+        return "телевизор LG webOS"
+    if "Tizen" in u:
+        return "телевизор Samsung Tizen"
+    if "Lampa/" in u and "Electron" in u:
+        return "ПК, приложение Лампы"
+    if "Lampa/" in u or "iPad" in u or "iPhone" in u:
+        return "iOS"
+    if "Android" in u:
+        return "Android, прочее"
+    if re.search(r"jackett|python|curl|Go-http|wget|node-fetch|axios", u, re.I):
+        return "скрипт или прокси"
+    if "Windows NT" in u or "Macintosh" in u or "X11" in u:
+        return "ПК: браузер или скрипт под браузер"
+    if u.strip() in ("", "-", "Mozilla/5.0"):
+        return "без подробностей"
+    return "прочее"
+
+
+def канал(ua, origin, referer):
+    """Откуда поиск: наш сайт, Лампа или без признаков."""
+    хосты = (хост_из(origin), хост_из(referer))
+    if any(х == "jac.black" or х.endswith(".jac.black") for х in хосты):
+        return "сайт jac.black"
+    u = ua or ""
+    if "lampa_client" in u or "Lampa/" in u or u.startswith("okhttp/") or any("lampa" in х for х in хосты):
+        return "Лампа"
+    return "без признаков"
+
+
 def главное():
     скачать_asn()
     начала, записи = загрузить_asn()
@@ -185,7 +237,14 @@ def главное():
                         класс text, origin text, запросов integer, поисков integer,
                         служебных integer default 0,
                         primary key (день, ip, origin))""")
+    # Разрезы по дням. До 15.09.2026 они только печатались за прогон и
+    # пропадали; теперь копятся, чтобы сравнивать недели между собой.
+    conn.execute("""create table if not exists разрезы (
+                        день text, разрез text, значение text,
+                        запросов integer, поисков integer, адресов integer,
+                        primary key (день, разрез, значение))""")
 
+    срезы = {}   # (день, разрез, значение) → [запросов, поисков, set(ip)]
     счёт = {}
     по_стране = {}   # страна (Cloudflare) → живых запросов
     по_каналу = {}   # «зеркало»/«прямой» → живых запросов
@@ -210,9 +269,20 @@ def главное():
             # Разрезы считаем только по живому трафику, без проверок живости.
             if not служебный:
                 страна = (m.group("cc") or "").upper() or "?"
-                канал = "зеркало" if (m.group("mir") or "") == "ru" else "прямой"
+                вход = "зеркало" if (m.group("mir") or "") == "ru" else "прямой"
                 по_стране[страна] = по_стране.get(страна, 0) + 1
-                по_каналу[канал] = по_каналу.get(канал, 0) + 1
+                по_каналу[вход] = по_каналу.get(вход, 0) + 1
+
+                ua = m.group("ua")
+                for разрез, значение in (
+                        ("вход", вход),
+                        ("страна", страна),
+                        ("устройство", класс_устройства(ua)),
+                        ("канал", канал(ua, origin, m.group("ref")))):
+                    с = срезы.setdefault((день, разрез, значение), [0, 0, set()])
+                    с[0] += 1
+                    с[1] += поиск
+                    с[2].add(ip)
 
             ключ = (день, ip, origin)
             если_есть = счёт.get(ключ)
@@ -233,6 +303,14 @@ def главное():
                           служебных = excluded.служебных, asn = excluded.asn,
                           владелец = excluded.владелец, класс = excluded.класс""",
                      (день, ip, "", asn or "", владелец, класс, origin, запросов, поисков, служебных))
+
+    for (день, разрез, значение), (запросов, поисков, адреса) in срезы.items():
+        conn.execute("""insert into разрезы (день, разрез, значение, запросов, поисков, адресов)
+                        values (?,?,?,?,?,?)
+                        on conflict(день, разрез, значение) do update set
+                          запросов = excluded.запросов, поисков = excluded.поисков,
+                          адресов = excluded.адресов""",
+                     (день, разрез, значение, запросов, поисков, len(адреса)))
 
     conn.commit()
 
@@ -265,6 +343,15 @@ def главное():
         print("\n  топ стран (Cloudflare; зеркало РФ идёт без cc):")
         for k, n in sorted(по_стране.items(), key=lambda x: -x[1])[:12]:
             print("    %-6s %d" % (k, n))
+
+    вчера = conn.execute("select max(день) from разрезы where день < date('now')").fetchone()[0]
+    if вчера:
+        for разрез in ("канал", "устройство"):
+            print("\n  %s за %s (поиски; адресов — по всем запросам класса):" % (разрез, вчера))
+            for значение, поисков, адресов in conn.execute(
+                    """select значение, поисков, адресов from разрезы
+                       where день = ? and разрез = ? order by поисков desc""", (вчера, разрез)):
+                print("    %-36s поисков %6d, адресов %5d" % (значение, поисков, адресов))
 
     print("\n  самые активные адреса (без проверок живости):")
     for ip, класс, владелец, запросов, поисков in conn.execute(
