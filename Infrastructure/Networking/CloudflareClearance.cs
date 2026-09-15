@@ -894,12 +894,40 @@ namespace JacBlack.Infrastructure.Networking
             if (status != 200 || string.IsNullOrWhiteSpace(html))
                 return (FetchOutcome.PageFailed, null);
 
+            // Cloudflare не дождался сервера сайта и отдал свою страницу 5xx, а
+            // FlareSolverr сообщает о ней как о 200 — раньше она уходила
+            // вызывающему как настоящая страница. Это неудача страницы, и только.
+            //
+            // Паузу хосту здесь ставить нельзя: проверено 15.09.2026. Сервер
+            // rutracker отказывал частично (13 ответов из 55), пауза росла до
+            // десяти минут и останавливала обход целиком — одна страница за
+            // 18 минут против 2,8 в минуту без паузы в такой же сбой.
+            if (IsOriginErrorPage(html))
+            {
+                JacBlackLog.Warning(JacBlackLogCategories.Host, $"{new Uri(url).Host}: Cloudflare 5xx, сервер сайта не ответил");
+                return (FetchOutcome.PageFailed, null);
+            }
+
             // Задача решена, cookie у нас — дальше по этому хосту браузер
             // не нужен, пока она не перестанет проходить.
             await RememberClearance(url, solution);
 
             return (FetchOutcome.Ok, html);
         }
+
+        /// <summary>
+        /// Страница ошибки самого Cloudflare: сервер сайта не ответил (502, 504,
+        /// 520–526). Заголовок у неё вида «rutracker.org | 504: Gateway time-out»,
+        /// и в разметке блок `cf-error-details`. Проверка Cloudflare («Just a
+        /// moment...») сюда не относится — у неё другой заголовок.
+        /// </summary>
+        internal static bool IsOriginErrorPage(string html) =>
+            !string.IsNullOrEmpty(html)
+            && html.Contains("cf-error-details")
+            && OriginErrorTitle.IsMatch(html);
+
+        static readonly System.Text.RegularExpressions.Regex OriginErrorTitle =
+            new(@"<title>[^<]*\|\s*5\d\d:", System.Text.RegularExpressions.RegexOptions.Compiled);
 
         static List<Dictionary<string, string>> ParseCookies(string cookie)
         {

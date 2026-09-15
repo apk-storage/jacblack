@@ -184,7 +184,7 @@ namespace JacBlack.Application.Search
                 return;
 
             Infrastructure.Logging.JacBlackLog.Warning(
-                Infrastructure.Logging.JacBlackLogCategories.Parser,
+                Infrastructure.Logging.JacBlackLogCategories.Search,
                 $"долгий поиск «{что}»: всего {часы.ElapsedMilliseconds} мс " +
                 $"(индекс {поискМс}, живые сиды {сидыМс}, закрытые трекеры {закрытыеМс}), раздач {найдено}");
         }

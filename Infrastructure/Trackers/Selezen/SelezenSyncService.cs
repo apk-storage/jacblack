@@ -40,6 +40,12 @@ namespace JacBlack.Infrastructure.Trackers.Selezen
             };
         }
 
+        /// <summary>
+        /// Паузы перед повтором страницы после нового входа: 3 и ещё 7 секунд.
+        /// Сессия у selezen начинает действовать через несколько секунд после входа.
+        /// </summary>
+        static readonly int[] AfterLoginRetryDelaysMs = { 3000, 7000 };
+
         /// <summary>Страница отдана под входом: на ней стоит имя нашей учётки.</summary>
         internal static bool LoggedIn(string html, string user) =>
             !string.IsNullOrEmpty(html)
@@ -109,7 +115,11 @@ namespace JacBlack.Infrastructure.Trackers.Selezen
                                     .LastOrDefault();
                                 if (!string.IsNullOrWhiteSpace(PHPSESSID))
                                 {
-                                    _memoryCache.Set("selezen:cookie", $"PHPSESSID={PHPSESSID}; _ym_isad=2;", DateTime.Now.AddDays(1));
+                                    // Храним меньше, чем живёт сессия: проверено 15.09.2026 —
+                                    // жива через 30 минут простоя, мертва через 62. Сутки
+                                    // хранения означали, что ежечасный проход всегда шёл с
+                                    // протухшей cookie.
+                                    _memoryCache.Set("selezen:cookie", $"PHPSESSID={PHPSESSID}; _ym_isad=2;", TimeSpan.FromMinutes(25));
                                     ParserLog.Write(TrackerName, "TakeLogin success", new Dictionary<string, object> { { "host", host } });
                                     return true;
                                 }
@@ -234,10 +244,23 @@ namespace JacBlack.Infrastructure.Trackers.Selezen
                 // протухшей. Раньше здесь входили заново и сразу сдавались, не
                 // повторив страницу, — и следующий час начинался с той же
                 // протухшей cookie. Так selezen не приносил ничего с 14.09.2026.
+                //
+                // Повторять сразу нельзя: сессия входа начинает действовать не
+                // мгновенно. Проверено 15.09.2026 одним входом — страница сразу
+                // после входа гостевая, через 5 секунд та же cookie под входом.
+                // Мгновенный повтор попадал ровно в это окно.
                 if (string.IsNullOrEmpty(AppInit.conf.Selezen.cookie) && await TakeLogin())
                 {
                     cookie = Cookie();
-                    (html, listResponse) = await HttpClient.BaseGetAsync(listUrl, cookie: cookie, referer: host + "/", addHeaders: GetSelezenHeaders(host), timeoutSeconds: 15, useproxy: AppInit.conf.Selezen.useproxy);
+
+                    foreach (int ждём in AfterLoginRetryDelaysMs)
+                    {
+                        await Task.Delay(ждём);
+                        (html, listResponse) = await HttpClient.BaseGetAsync(listUrl, cookie: cookie, referer: host + "/", addHeaders: GetSelezenHeaders(host), timeoutSeconds: 15, useproxy: AppInit.conf.Selezen.useproxy);
+
+                        if (LoggedIn(html, AppInit.conf.Selezen.login?.u))
+                            break;
+                    }
                 }
 
                 if (!LoggedIn(html, AppInit.conf.Selezen.login?.u))
