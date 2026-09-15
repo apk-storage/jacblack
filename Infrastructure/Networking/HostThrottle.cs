@@ -75,8 +75,10 @@ namespace JacBlack.Infrastructure.Networking
 
         /// <summary>
         /// Запомнить просьбу. Пауза — из Retry-After, иначе нарастающая.
+        /// Ответа может не быть вовсе: перегруженный kinozal отвечает не кодом,
+        /// а страницей-заглушкой с кодом 200, — тогда причина пишется словами.
         /// </summary>
-        public static void Throttled(string host, HttpResponseMessage response)
+        public static void Throttled(string host, HttpResponseMessage response, string why = "429")
         {
             if (string.IsNullOrWhiteSpace(host))
                 return;
@@ -98,7 +100,7 @@ namespace JacBlack.Infrastructure.Networking
                     state.Until = until;
 
                 JacBlackLog.Warning(JacBlackLogCategories.Host,
-                    $"{host} просит сбавить обороты (429), ждём {delay.TotalSeconds:F0} с, подряд {state.Strikes}");
+                    $"{host} просит сбавить обороты ({why}), ждём {delay.TotalSeconds:F0} с, подряд {state.Strikes}");
             }
         }
 
