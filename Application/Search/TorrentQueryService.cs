@@ -20,13 +20,12 @@ namespace JacBlack.Application.Search
         public TorrentQueryService(
             ILiveSeeders liveSeeders,
             JacBlack.Application.Index.IFastDbIndex fastDbIndex,
-            Infrastructure.Trackers.Kinozal.KinozalSyncService kinozal = null,
             Infrastructure.Trackers.Toloka.TolokaSyncService toloka = null,
             Infrastructure.Trackers.Bitru.BitruApiSyncService bitru = null)
         {
             _liveSeeders = liveSeeders;
             _fastDbIndex = fastDbIndex;
-            _closedTrackers = new ClosedTrackerSeeders(kinozal, toloka, bitru);
+            _closedTrackers = new ClosedTrackerSeeders(toloka, bitru);
         }
 
         /// <summary>
