@@ -64,7 +64,13 @@ JacBlack лимита нет намеренно — у него свой пре�
 поиск, два браузера обхода и семейный VPN.
 
 Правильно так: `nice -n 19 env DOCKER_BUILDKIT=0 docker build --cpuset-cpus="2,3"
---cpu-shares 256 -t jacblack:local /root/jacblack-build`. Два ядра из четырёх
+--cpu-shares 256 -t jacblack:local /root/jacblack-build`.
+*Устарело к 15.09.2026:* нынешний Dockerfile старым сборщиком не собирается —
+он не подставляет `$BUILDPLATFORM` в `FROM --platform` и не знает `COPY --chmod`.
+Рабочий путь тех дней: собрать на NUC (8 ядер, `docker build`), привезти
+`docker save | gzip | ssh … docker load`, на awg только `docker tag` и
+`docker compose up -d --no-deps jacblack`. Тесты там же:
+`mcr.microsoft.com/dotnet/sdk:10.0`, `dotnet test tests/JacBlack.Tests`. Два ядра из четырёх
 сборке, два боевым службам. `DOCKER_BUILDKIT=0` нужен затем, что `--cpuset-cpus`
 понимает только старый сборщик, а buildkit его молча игнорирует; наш Dockerfile
 buildkit-фич (`--mount`, `# syntax`) не использует, так что старый сборщик его

@@ -32,6 +32,17 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
         static Dictionary<string, Dictionary<string, List<TaskParse>>> taskParse = new Dictionary<string, Dictionary<string, List<TaskParse>>>();
 
         string _cookie;
+
+        /// <summary>До какого времени входить сразу браузером, минуя прямой POST.</summary>
+        DateTime _browserLoginOnlyUntil = DateTime.MinValue;
+
+        /// <summary>
+        /// Сколько помнить, что прямой вход закрыт. Шесть часов: бан Cloudflare
+        /// длится сутками, а раз в несколько часов проверить, не сняли ли его,
+        /// ничего не стоит.
+        /// </summary>
+        static readonly TimeSpan BrowserLoginOnlyFor = TimeSpan.FromHours(6);
+
         string _lastLoginError;
 
         static readonly Encoding PageEncoding = Encoding.GetEncoding(1251);
@@ -58,6 +69,23 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
             && html.Contains("t_peer")
             && html.Contains("details.php?id=")
             && (html.Contains("Кинозал.GURU</title>") || html.Contains("Кинозал.ТВ</title>") || html.Contains("::"));
+
+        /// <summary>
+        /// Заглушка kinozal «Сервер находится под высокой нагрузкой, очевидно в
+        /// связи с очередной атакой». Приходит с кодом 200 вместо листинга,
+        /// когда трекер перегружен, — и видят её все, не только мы: 15.09.2026
+        /// её же отдавали и наш выход, и Contabo1, который kinozal не обходит.
+        /// Cookie входа при этом целы (uid и pass в браузере на месте).
+        /// </summary>
+        internal static bool IsOverloadPage(string html) =>
+            !string.IsNullOrEmpty(html) && html.Contains("под высокой нагрузкой");
+
+        /// <summary>
+        /// Сколько обход готов ждать, пока трекер просит тишины. Потолок паузы
+        /// у HostThrottle — десять минут, ждём его целиком: пропущенная страница
+        /// глубокого обхода вернётся только на следующий день.
+        /// </summary>
+        static readonly TimeSpan OverloadWaitBudget = TimeSpan.FromMinutes(10);
 
         string CookieHeader()
         {
@@ -157,6 +185,13 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                     return false;
                 }
 
+                // Прямой вход недавно не прошёл, а браузером прошёл — идём сразу
+                // браузером. Иначе на каждый вход уходит заведомо отбитый POST
+                // с логином и паролем с того самого адреса, который Cloudflare
+                // забанил, — это только продлевает бан.
+                if (DateTime.UtcNow < _browserLoginOnlyUntil)
+                    return await TakeLoginViaBrowser();
+
                 var cookieJar = new CookieContainer();
 
                 try
@@ -226,7 +261,10 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                 // страницы браузером берутся исправно. Этот путь идёт формой
                 // через тот же браузер и забирает его cookie.
                 if (await TakeLoginViaBrowser())
+                {
+                    _browserLoginOnlyUntil = DateTime.UtcNow + BrowserLoginOnlyFor;
                     return true;
+                }
 
                 return false;
             }
@@ -507,7 +545,26 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                 return false;
 
             string browseUrl = $"{AppInit.conf.Kinozal.host}/browse.php?c={cat}&page={page}" + arg;
+            string host = new Uri(browseUrl).Host;
+
+            // Трекер недавно отдал заглушку — ждём, а не стучимся в неё снова.
+            if (!await HostThrottle.WaitAsync(host, OverloadWaitBudget))
+                return false;
+
             string html = await GetBrowseHtml(browseUrl);
+
+            if (IsOverloadPage(html))
+            {
+                // Трекер перегружен, а не выкинул нас из аккаунта. Раньше
+                // заглушку принимали за потерю входа и входили заново —
+                // 15.09.2026 восемь входов за 25 минут, и каждый только добавлял
+                // запросов лежащему трекеру. Пережидаем с нарастающей паузой.
+                HostThrottle.Throttled(host, null, "страница «высокая нагрузка»");
+                return false;
+            }
+
+            HostThrottle.Ok(host);
+
             if (!IsValidBrowsePage(html) || !html.Contains(">Выход</a>"))
             {
                 _cookie = null;
