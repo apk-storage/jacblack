@@ -450,11 +450,21 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                             if (res)
                                 val.updateTime = DateTime.Today;
 
-                            progress.PageDone(res);
+                            progress.PageDone(res, async () =>
+                            {
+                                await Task.Delay(AppInit.conf.Kinozal.parseDelay);
+
+                                bool again = await parsePage(cat.Key, val.page, arg.Key);
+                                if (again)
+                                    val.updateTime = DateTime.Today;
+
+                                return again;
+                            });
                         }
                     }
                 }
 
+                await progress.RetryFailedAsync();
                 progress.Finish();
             });
         }
