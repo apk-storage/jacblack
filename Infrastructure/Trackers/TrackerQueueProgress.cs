@@ -31,6 +31,13 @@ namespace JacBlack.Infrastructure.Trackers
         public static TimeSpan RetryPause = TimeSpan.FromMinutes(1);
 
         /// <summary>
+        /// Сколько второй заход может идти. 22.09.2026 он прошёл 2 379 страниц
+        /// за 48 минут и подобрал ровно одну: столько браузерного времени за
+        /// одну страницу не стоит, непрошедшие попадут в следующий круг.
+        /// </summary>
+        public static TimeSpan RetryBudget = TimeSpan.FromMinutes(15);
+
+        /// <summary>
         /// Доля неудач, выше которой второй заход не делается. Когда не вышло
         /// больше половины круга, беда не в отдельных страницах, а во входе —
         /// 12.09.2026 у rutracker было «разобрано 0, не вышло 14 827», и
@@ -194,6 +201,23 @@ namespace JacBlack.Infrastructure.Trackers
 
                 if (сделано % _savePages == 0)
                     Save();
+
+                // Молчание неотличимо от зависания — та же причина, по которой
+                // отметку раз в пять минут пишет PageDone. Без неё второй заход
+                // по 2 379 страницам выглядел как остановка всего обхода.
+                if (DateTime.UtcNow > _lastReport.AddMinutes(5))
+                {
+                    _lastReport = DateTime.UtcNow;
+                    ParserLog.Write(_trackerName,
+                        $"второй заход: {сделано} из {берём.Length} страниц, подобрано {_recovered}, идёт {(DateTime.UtcNow - начали).TotalMinutes:F0} мин");
+                }
+
+                if (DateTime.UtcNow - начали > RetryBudget)
+                {
+                    ParserLog.Write(_trackerName,
+                        $"второй заход остановлен по времени: прошло {(DateTime.UtcNow - начали).TotalMinutes:F0} мин, сделано {сделано} из {берём.Length}, подобрано {_recovered}");
+                    break;
+                }
             }
 
             ParserLog.Write(_trackerName,

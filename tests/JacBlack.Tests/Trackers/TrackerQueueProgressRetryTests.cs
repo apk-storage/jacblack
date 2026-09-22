@@ -103,6 +103,34 @@ public class TrackerQueueProgressRetryTests
     }
 
     [Fact]
+    public async Task Второй_заход_обрывается_по_времени()
+    {
+        // 22.09.2026 второй заход шёл 48 минут и подобрал одну страницу из
+        // 2 379. Столько браузерного времени за страницу не стоит: остальные
+        // и так попадут в следующий круг, поэтому есть потолок.
+        var прежний = TrackerQueueProgress.RetryBudget;
+        TrackerQueueProgress.RetryBudget = TimeSpan.Zero;
+        try
+        {
+            var обход = Обход(total: 100);
+            int пройдено = 0;
+
+            for (int i = 0; i < 5; i++)
+                обход.PageDone(false, async () => { пройдено++; return await Task.FromResult(false); });
+
+            await обход.RetryFailedAsync();
+
+            // Потолок нулевой: первая же проверка времени обрывает заход,
+            // поэтому пройти успевает только одна страница из пяти.
+            Assert.Equal(1, пройдено);
+        }
+        finally
+        {
+            TrackerQueueProgress.RetryBudget = прежний;
+        }
+    }
+
+    [Fact]
     public async Task Без_повтора_счётчики_прежние()
     {
         // Трекеру без потерь (megapeer разбирает все 77 страниц круга)
