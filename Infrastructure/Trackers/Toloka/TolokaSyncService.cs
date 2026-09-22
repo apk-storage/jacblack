@@ -373,10 +373,20 @@ namespace JacBlack.Infrastructure.Trackers.Toloka
                         if (res)
                             val.updateTime = DateTime.Today;
 
-                        progress.PageDone(res);
+                        progress.PageDone(res, async () =>
+                        {
+                            await Task.Delay(AppInit.conf.Toloka.parseDelay);
+
+                            bool again = await parsePage(task.Key, val.page);
+                            if (again)
+                                val.updateTime = DateTime.Today;
+
+                            return again;
+                        });
                     }
                 }
 
+                await progress.RetryFailedAsync();
                 progress.Finish();
             });
         }
