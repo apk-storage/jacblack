@@ -87,11 +87,37 @@ namespace JacBlack.Infrastructure.Persistence
         {
             lock (_dbLock)
             {
-                if (Database.Count > 0 && savechanges)
+                if (!savechanges)
+                    return;
+
+                string path = pathDb(fdbkey);
+
+                if (Database.Count > 0)
                 {
-                    string path = pathDb(fdbkey);
                     EnsureShardDir(path);
                     JsonStream.Write(path, Database);
+                    return;
+                }
+
+                // Шард опустел — его файл надо УБРАТЬ, а не оставить как был.
+                // Раньше пустой шард просто не записывался: ключ из masterDb
+                // выбрасывали (круг живости, перенос записи в шард нового
+                // имени), а файл со «удалёнными» записями оставался на диске.
+                // Поиск их не видел, база — видела: 26.09.2026 таких сирот
+                // набралось 61 тысяча, и «удалённые» кругом живости раздачи
+                // на деле лежали на месте.
+                try
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                catch (IOException ex)
+                {
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, $"не удалился опустевший шард {fdbkey}", ex);
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    JacBlackLog.Swallowed(JacBlackLogCategories.Fdb, $"не удалился опустевший шард {fdbkey}", ex);
                 }
             }
         }

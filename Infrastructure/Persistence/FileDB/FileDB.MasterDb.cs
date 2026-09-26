@@ -129,6 +129,9 @@ namespace JacBlack.Infrastructure.Persistence
         /// <summary>Ключ бакета по name/originalname (для поиска и миграции).</summary>
         public static string KeyForTorrent(string name, string originalname) => keyDb(name, originalname);
 
+        /// <summary>Путь к файлу шарда — для тестов, которым надо проверить сам файл.</summary>
+        internal static string PathForKey(string key) => pathDb(key);
+
         #endregion
 
         /// <summary>Перенос торрента в бакет с ключом newKey (после смены name/originalname). Вызывается из FileDB и из DevMaintenanceService.UpdateSearchName.</summary>

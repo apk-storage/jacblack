@@ -120,6 +120,66 @@ public class FileDBShardTests
         }
     }
 
+    [Fact]
+    public void Опустевший_шард_удаляется_с_диска()
+    {
+        // Раньше пустой шард просто не записывался: ключ из индекса выбрасывали,
+        // а файл со «удалёнными» записями оставался как был — сирота, которую
+        // поиск не видит, а диск хранит (61 тысяча таких на 26.09.2026).
+        const string name = "проба опустевшего шарда";
+        string key = FileDB.KeyForTorrent(name, name);
+        string path = FileDB.PathForKey(key);
+        const string url = "https://example.org/torrent/emptied-1";
+        var fdb = FileDB.OpenWrite(key);
+
+        try
+        {
+            fdb.AddOrUpdate(Torrent(url, name, "movie"));
+            fdb.savechanges = true;
+            fdb.SaveChangesIfNeeded();
+            Assert.True(System.IO.File.Exists(path), "шард с записью не лёг на диск");
+
+            fdb.Database.Remove(url);
+            fdb.savechanges = true;
+            fdb.SaveChangesIfNeeded();
+
+            Assert.False(System.IO.File.Exists(path), "опустевший шард остался на диске со старыми записями");
+        }
+        finally
+        {
+            fdb.savechanges = false;
+            fdb.Dispose();
+        }
+    }
+
+    [Fact]
+    public void Шард_без_изменений_не_трогается()
+    {
+        // Удаление должно срабатывать ТОЛЬКО когда шард опустел по правке, а не
+        // когда его просто открыли и закрыли.
+        const string name = "проба нетронутого шарда";
+        string key = FileDB.KeyForTorrent(name, name);
+        string path = FileDB.PathForKey(key);
+        var fdb = FileDB.OpenWrite(key);
+
+        try
+        {
+            fdb.AddOrUpdate(Torrent("https://example.org/torrent/untouched-1", name, "movie"));
+            fdb.savechanges = true;
+            fdb.SaveChangesIfNeeded();
+
+            fdb.savechanges = false;
+            fdb.SaveChangesIfNeeded();
+
+            Assert.True(System.IO.File.Exists(path));
+        }
+        finally
+        {
+            fdb.savechanges = false;
+            fdb.Dispose();
+        }
+    }
+
     sealed class ReferenceComparer : System.Collections.Generic.IEqualityComparer<FileDB>
     {
         public static readonly ReferenceComparer Instance = new ReferenceComparer();
