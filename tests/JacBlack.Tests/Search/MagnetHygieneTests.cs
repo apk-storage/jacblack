@@ -88,6 +88,54 @@ public class MagnetHygieneTests
     }
 
     [Fact]
+    public void Ссылка_без_трекеров_опрашивается_только_подставленными()
+    {
+        // Так хранятся раздачи rutracker, kinozal и nnmclub.
+        Assert.True(MagnetHygiene.HasOnlySubstitutedTrackers($"magnet:?xt=urn:btih:{Hash}&dn=Test"));
+    }
+
+    [Fact]
+    public void Вырезанный_свой_трекер_тоже_значит_подставленные()
+    {
+        Assert.True(MagnetHygiene.HasOnlySubstitutedTrackers(Magnet("http://retracker.local/announce")));
+    }
+
+    [Fact]
+    public void Свой_трекер_раздачи_не_подставленный()
+    {
+        // rutor живёт на opentor — это его собственный трекер.
+        Assert.False(MagnetHygiene.HasOnlySubstitutedTrackers(Magnet("udp://opentor.net:6969/announce")));
+        Assert.False(MagnetHygiene.HasOnlySubstitutedTrackers(Magnet("http://retracker.local/announce", "udp://bt.t-ru.org:2710/announce")));
+    }
+
+    [Fact]
+    public void Мусор_не_считается_подставленным()
+    {
+        Assert.False(MagnetHygiene.HasOnlySubstitutedTrackers("не ссылка вовсе"));
+        Assert.False(MagnetHygiene.HasOnlySubstitutedTrackers(null));
+    }
+
+    [Theory]
+    // Свой трекер говорит правду в обе стороны — ноль тоже ответ.
+    [InlineData(false, 0, 50, true)]
+    [InlineData(false, 3, 50, true)]
+    [InlineData(false, 80, 50, true)]
+    // Подставленный — только вверх: ноль и меньшее число значат «не вижу».
+    [InlineData(true, 0, 50, false)]
+    [InlineData(true, 3, 50, false)]
+    [InlineData(true, 50, 50, false)]
+    [InlineData(true, 80, 50, true)]
+    // В базе ноль: любой живой ответ — правда, нулевой — нет.
+    [InlineData(true, 1, 0, true)]
+    [InlineData(true, 0, 0, false)]
+    // Отрицательное в базе («нет данных») не мешает принять живое число.
+    [InlineData(true, 2, -1, true)]
+    public void Ответ_подставленных_трекеров_учитывается_только_вверх(bool substituted, int answered, int stored, bool counts)
+    {
+        Assert.Equal(counts, MagnetHygiene.AnswerCounts(substituted, answered, stored));
+    }
+
+    [Fact]
     public void Дубли_трекеров_схлопываются()
     {
         var urls = MagnetHygiene.AnnounceUrls(Magnet("udp://opentor.net:6969/announce", "udp://opentor.net:6969/announce"));

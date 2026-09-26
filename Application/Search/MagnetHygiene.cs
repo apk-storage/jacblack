@@ -90,6 +90,50 @@ namespace JacBlack.Application.Search
             }
         }
 
+        /// <summary>
+        /// У раздачи нет СВОИХ трекеров — опрашивать её можно только теми, что
+        /// подставили мы (<see cref="AnnounceUrls"/> дописывает список по умолчанию,
+        /// когда после чистки ничего не осталось). Так выглядят все раздачи
+        /// rutracker, kinozal и nnmclub.
+        ///
+        /// Для опроса это важно: публичный трекер знает только тех, кто
+        /// анонсировался ему, а люди этих раздач анонсируются трекеру самого
+        /// сайта. Его «0» значит «я их не вижу», а не «раздача мертва».
+        /// </summary>
+        public static bool HasOnlySubstitutedTrackers(string magnet)
+        {
+            var conf = AppInit.conf.magnet;
+            if (conf == null || !conf.addDefaultTrackers || string.IsNullOrWhiteSpace(magnet))
+                return false;
+
+            try
+            {
+                var link = MagnetLink.Parse(magnet);
+                return Filter(link.AnnounceUrls, conf.stripTrackers).Count == 0;
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Учитывать ли ответ опроса. Свой трекер раздачи говорит правду в обе
+        /// стороны. Подставленный — только вверх: если он видит БОЛЬШЕ раздающих,
+        /// чем записано, это живые люди; если меньше или ноль — он просто не видит
+        /// тех, кто сидит на трекере сайта, и такой ответ равен «не знаю».
+        ///
+        /// Без этого правила опрос в поиске затирал нулём число из базы и ставил
+        /// «проверено», а круг живости по тем же нулям прятал и удалял записи:
+        /// 26.09.2026 насчитали ~1,7 млн удалений за 735 прогонов.
+        /// </summary>
+        public static bool AnswerCounts(bool onlySubstitutedTrackers, int answeredSeeders, int storedSeeders)
+            => !onlySubstitutedTrackers || answeredSeeders > Math.Max(0, storedSeeders);
+
         static List<string> Filter(IList<string> announces, List<string> strip)
         {
             var result = new List<string>();
