@@ -103,6 +103,9 @@ namespace JacBlack.Application.Search
             // Раздача -> её хеш и трекеры. Одинаковые хеши в выдаче схлопываются.
             var byHash = new Dictionary<string, List<T>>(StringComparer.OrdinalIgnoreCase);
             var announcesByHash = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            // Раздачи, у которых трекеры только подставленные: их ответ учитываем
+            // лишь вверх (см. MagnetHygiene.AnswerCounts).
+            var substituted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var r in results)
             {
@@ -117,6 +120,9 @@ namespace JacBlack.Application.Search
                     announcesByHash[hash] = MagnetHygiene.AnnounceUrls(magnetOf(r))
                         .Where(a => TrackerScrapeClient.TryParseUdp(a, out _, out _))
                         .ToList();
+
+                    if (MagnetHygiene.HasOnlySubstitutedTrackers(magnetOf(r)))
+                        substituted.Add(hash);
                 }
 
                 list.Add(r);
@@ -177,8 +183,16 @@ namespace JacBlack.Application.Search
                 if (!byHash.TryGetValue(pair.Key, out var affected))
                     continue;
 
+                bool onlySubstituted = substituted.Contains(pair.Key);
                 foreach (var r in affected)
+                {
+                    // Подставленный трекер, видящий меньше записанного, — это «не знаю»:
+                    // оставляем число из базы и не ставим «проверено».
+                    if (!MagnetHygiene.AnswerCounts(onlySubstituted, pair.Value.Seeders, seedersOf(r)))
+                        continue;
+
                     applyCounts(r, pair.Value);
+                }
             }
 
             if (conf.demoteDead)

@@ -44,6 +44,13 @@ namespace JacBlack.Application.Maintenance
             public int zeroed { get; set; }
             public int reachedThreshold { get; set; }
             public int deleted { get; set; }
+
+            /// <summary>
+            /// Ответы подставленных трекеров, не превысившие записанное число и
+            /// потому засчитанные как «не знаю» (см. MagnetHygiene.AnswerCounts).
+            /// До 26.09.2026 каждый такой ответ шёл в нули, прятание и удаление.
+            /// </summary>
+            public int substitutedIgnored { get; set; }
             public double seconds { get; set; }
             public string cursor { get; set; }
             public bool wrapped { get; set; }
@@ -103,6 +110,7 @@ namespace JacBlack.Application.Maintenance
                 // ── Сбор ──
                 var byKey = new Dictionary<string, List<(string url, string hash)>>();
                 var announcesByHash = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                var substituted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (string key in slice)
                 {
@@ -136,7 +144,11 @@ namespace JacBlack.Application.Maintenance
                         list.Add((kv.Key, hash));
 
                         if (!announcesByHash.ContainsKey(hash))
+                        {
                             announcesByHash[hash] = announces;
+                            if (MagnetHygiene.HasOnlySubstitutedTrackers(t.magnet))
+                                substituted.Add(hash);
+                        }
 
                         report.torrents++;
                     }
@@ -158,7 +170,7 @@ namespace JacBlack.Application.Maintenance
                 report.asked = announcesByHash.Count;
 
                 // ── Запись ──
-                ApplyResults(conf, byKey, counts, report);
+                ApplyResults(conf, byKey, counts, substituted, report);
 
                 FileDB.SaveChangesToFile();
 
@@ -170,7 +182,8 @@ namespace JacBlack.Application.Maintenance
                 ParserLog.Write(LogName,
                     $"Прогон завершён за {report.seconds}с | ключей {report.keysProcessed}, раздач {report.torrents}, " +
                     $"спросили {report.asked}, живых {report.alive}, нулей {report.zero}, молчали {report.unknown}, " +
-                    $"воскресли {report.revived}, обнулено {report.zeroed}, достигли порога {report.reachedThreshold}, удалено {report.deleted}");
+                    $"воскресли {report.revived}, обнулено {report.zeroed}, достигли порога {report.reachedThreshold}, удалено {report.deleted}, " +
+                    $"не засчитано ответов подставленных трекеров {report.substitutedIgnored}");
 
                 return report;
             }
@@ -287,6 +300,7 @@ namespace JacBlack.Application.Maintenance
             Models.AppConf.SweepSettings conf,
             Dictionary<string, List<(string url, string hash)>> byKey,
             Dictionary<string, TrackerScrapeClient.Counts> counts,
+            HashSet<string> substituted,
             SweepReport report)
         {
             foreach (var (key, items) in byKey)
@@ -305,6 +319,15 @@ namespace JacBlack.Application.Maintenance
                             continue;
 
                         bool отвечали = counts.TryGetValue(hash, out var c);
+
+                        // Подставленные трекеры не видят людей трекера сайта: их
+                        // ответ, не превысивший записанное, — это «не знаю», а не
+                        // ноль. Иначе раздача получала бы нули, пряталась и удалялась.
+                        if (отвечали && !MagnetHygiene.AnswerCounts(substituted.Contains(hash), c.Seeders, t.sid))
+                        {
+                            отвечали = false;
+                            report.substitutedIgnored++;
+                        }
 
                         var решение = SweepDecision.Apply(
                             t,
