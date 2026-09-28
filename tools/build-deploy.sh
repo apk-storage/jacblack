@@ -28,7 +28,7 @@ SHA=$(git rev-parse --short HEAD)
 echo "== исходники $SHA → зеркало"
 # autocrlf=false: иначе на Windows архив отдаёт CRLF, и generate-version.sh
 # падает в сборке («$'\r': command not found»).
-git -c core.autocrlf=false archive --format=tar HEAD | ssh -i "$KEY_MIRROR" "$MIRROR" \
+git -c core.autocrlf=false -c core.eol=lf archive --format=tar HEAD | ssh -i "$KEY_MIRROR" "$MIRROR" \
     "rm -rf $BUILD_DIR && mkdir -p $BUILD_DIR && tar -x -C $BUILD_DIR"
 
 echo "== тесты"
