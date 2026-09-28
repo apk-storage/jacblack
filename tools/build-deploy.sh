@@ -37,7 +37,7 @@ ssh -i "$KEY_MIRROR" "$MIRROR" "docker run --rm -v $BUILD_DIR:/src -w /src \
     sh -c 'dotnet test tests/JacBlack.Tests -c Release --nologo -v q > /tmp/t.log 2>&1; rc=\$?; tail -5 /tmp/t.log; exit \$rc'"
 
 echo "== образ"
-ssh -i "$KEY_MIRROR" "$MIRROR" "cd $BUILD_DIR && nice docker build -q -t jacblack:$TAG \
+ssh -i "$KEY_MIRROR" "$MIRROR" "cd $BUILD_DIR && nice docker buildx build --load -q -t jacblack:$TAG \
     --label jacblack.git=$SHA . > /tmp/jb-build.log 2>&1; rc=\$?; tail -3 /tmp/jb-build.log; exit \$rc"
 
 echo "== доставка на awg"
