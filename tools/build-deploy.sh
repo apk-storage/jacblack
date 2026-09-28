@@ -26,7 +26,9 @@ SHA=$(git rev-parse --short HEAD)
     echo "в рабочей копии незакоммиченные правки кода — собирается только HEAD, закоммить сначала"; exit 1; }
 
 echo "== исходники $SHA → зеркало"
-git archive --format=tar HEAD | ssh -i "$KEY_MIRROR" "$MIRROR" \
+# autocrlf=false: иначе на Windows архив отдаёт CRLF, и generate-version.sh
+# падает в сборке («$'\r': command not found»).
+git -c core.autocrlf=false archive --format=tar HEAD | ssh -i "$KEY_MIRROR" "$MIRROR" \
     "rm -rf $BUILD_DIR && mkdir -p $BUILD_DIR && tar -x -C $BUILD_DIR"
 
 echo "== тесты"
