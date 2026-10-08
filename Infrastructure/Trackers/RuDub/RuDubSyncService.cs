@@ -6,7 +6,6 @@ using JacBlack.Infrastructure.Networking;
 using JacBlack.Infrastructure.Parsing;
 using JacBlack.Infrastructure.Persistence;
 using JacBlack.Models.Details;
-using JacBlack.Models.tParse;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace JacBlack.Infrastructure.Trackers.RuDub
