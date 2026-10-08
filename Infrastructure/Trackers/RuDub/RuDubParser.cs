@@ -43,7 +43,14 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
             return node == null ? string.Empty : Parsing.Html.Normalize(node.TextContent);
         }
 
-        public static List<TorrentDetails> ParseTorrentsFromListPage(string html)
+        /// <param name="host">
+        /// Адрес трекера. Нужен, потому что в базу идёт ПОЛНЫЙ адрес раздачи,
+        /// а не относительный: он служит ключом записи, и по относительному
+        /// «details.php?id=55583» запись не сохраняется вовсе. 08.10.2026 на
+        /// этом первый обход разобрал 150 раздач и не положил ни одной.
+        /// Так же поступает Rutor и остальные.
+        /// </param>
+        public static List<TorrentDetails> ParseTorrentsFromListPage(string html, string host = null)
         {
             var torrents = new List<TorrentDetails>();
             if (string.IsNullOrWhiteSpace(html))
@@ -72,6 +79,10 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
 
                 if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(title))
                     continue;
+
+                // Полный адрес: он ключ записи в базе.
+                if (!string.IsNullOrWhiteSpace(host) && !url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                    url = host.TrimEnd('/') + "/" + url.TrimStart('/');
 
                 // «2026-10-07 21:37:08»
                 DateTime createTime = tParse.ParseCreateTime(ByTitle(card, "Дата"), "yyyy-MM-dd HH:mm:ss");

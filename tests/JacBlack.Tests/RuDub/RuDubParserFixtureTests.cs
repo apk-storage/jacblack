@@ -115,6 +115,25 @@ public class RuDubParserFixtureTests
     }
 
     [Fact]
+    public void Адрес_раздачи_становится_полным_когда_известен_хост()
+    {
+        // Ключ записи в базе — ПОЛНЫЙ адрес. С относительным
+        // «details.php?id=…» запись не сохраняется вовсе: 08.10.2026 первый
+        // обход разобрал 150 раздач и не положил ни одной.
+        var список = RuDubParser.ParseTorrentsFromListPage(Html(), "https://r4.rudub.world");
+
+        Assert.All(список, t => Assert.StartsWith("https://r4.rudub.world/details.php?id=", t.url));
+    }
+
+    [Fact]
+    public void Без_хоста_адрес_остаётся_как_на_странице()
+    {
+        var список = RuDubParser.ParseTorrentsFromListPage(Html());
+
+        Assert.All(список, t => Assert.Contains("details.php?id=", t.url));
+    }
+
+    [Fact]
     public void Пустой_ввод_не_роняет_разбор()
     {
         Assert.Empty(RuDubParser.ParseTorrentsFromListPage(null));

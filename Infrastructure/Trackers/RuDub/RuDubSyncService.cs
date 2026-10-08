@@ -115,7 +115,7 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
                 return 0;
             }
 
-            var torrents = RuDubParser.ParseTorrentsFromListPage(html);
+            var torrents = RuDubParser.ParseTorrentsFromListPage(html, host);
             if (torrents.Count == 0)
                 return 0;
 
