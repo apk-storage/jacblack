@@ -133,6 +133,29 @@ public class RuDubParserFixtureTests
         Assert.All(список, t => Assert.Contains("details.php?id=", t.url));
     }
 
+    [Theory]
+    [InlineData("<b>Год:</b> 2026 <b>Страна:</b> США", 2026)]
+    [InlineData("Год: 1999 Жанр: драма", 1999)]
+    [InlineData("Год:&nbsp;2024", 2024)]
+    public void Год_берётся_со_страницы_раздачи(string html, int ожидаем)
+    {
+        // В списке года нет вовсе — это единственное поле, за которым
+        // приходится идти на страницу раздачи.
+        Assert.Equal(ожидаем, RuDubParser.ParseYear(html));
+    }
+
+    [Theory]
+    [InlineData("Сезон 3 Серии 01-08")]            // номер сезона не год
+    [InlineData("HD1080p WEBRip")]                  // разрешение не год
+    [InlineData("© 1917 какой-то текст")]           // слишком рано
+    [InlineData("Год: 2099")]                       // слишком поздно
+    [InlineData(null)]
+    [InlineData("")]
+    public void Чужие_числа_за_год_не_принимаются(string html)
+    {
+        Assert.Equal(0, RuDubParser.ParseYear(html));
+    }
+
     [Fact]
     public void Пустой_ввод_не_роняет_разбор()
     {

@@ -183,6 +183,33 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
             return m.Success ? "/download2.php?id=" + m.Groups[1].Value : null;
         }
 
+        /// <summary>
+        /// Год выпуска со страницы раздачи: «Год: 2026».
+        ///
+        /// В списке года нет вовсе — это единственное поле, за которым
+        /// приходится идти на страницу раздачи. Без него запись ложится с
+        /// `relased = 0`, и поиск по году её не найдёт.
+        ///
+        /// Берём только правдоподобное: от первого звукового кино до
+        /// следующего года. Иначе в год попадёт номер сезона, разрешение или
+        /// год регистрации домена из подвала страницы.
+        /// </summary>
+        public static int ParseYear(string detailsHtml)
+        {
+            if (string.IsNullOrWhiteSpace(detailsHtml))
+                return 0;
+
+            // Разметка между «Год:» и числом бывает любой — тег, пробел,
+            // неразрывный пробел, — поэтому смотрим не на html, а на текст.
+            string текст = Regex.Replace(detailsHtml, "<[^>]+>", " ");
+            var m = Regex.Match(текст, @"Год\s*:?\s*[^0-9]{0,8}((?:19|20)\d{2})");
+            if (!m.Success)
+                return 0;
+
+            return int.TryParse(m.Groups[1].Value, out int год)
+                && год >= 1930 && год <= DateTime.Now.Year + 1 ? год : 0;
+        }
+
         /// <summary>Сколько всего страниц в списке — из нумерации внизу.</summary>
         public static int LastPage(string html)
         {

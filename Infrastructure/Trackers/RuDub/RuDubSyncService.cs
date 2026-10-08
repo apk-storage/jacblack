@@ -122,7 +122,7 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
             // Счётчики нужны по существу, а не для отладки: «разобрано 90» и
             // «записано 90» — разные утверждения, и 08.10.2026 они разошлись
             // молча. Без них не видно, на каком шаге раздачи теряются.
-            int известных = 0, безФайла = 0, безМагнита = 0, записано = 0;
+            int известных = 0, безФайла = 0, безМагнита = 0, безГода = 0, записано = 0;
 
             await FileDB.AddOrUpdate(torrents, async (t, db) =>
             {
@@ -140,6 +140,19 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
                     безФайла++;
                     return false;
                 }
+
+                // Год есть только на странице раздачи — в списке его не
+                // печатают. Лишний запрос делаем ТОЛЬКО для новых раздач:
+                // сюда мы уже дошли, значит эту раздачу видим впервые, и
+                // торрент всё равно сейчас качать. Без года запись ложится
+                // с нулём, и поиск по году её не находит.
+                string страница = await HttpClient.Get(host + "/" + t.url.Split('/')[^1],
+                    encoding: System.Text.Encoding.GetEncoding(1251));
+                int год = RuDubParser.ParseYear(страница);
+                if (год > 0)
+                    t.relased = год;
+                else
+                    безГода++;
 
                 byte[] torrent = await HttpClient.Download(host + torrentUrl, referer: host);
                 if (torrent == null || torrent.Length == 0)
@@ -162,7 +175,7 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
 
             ParserLog.Write(TrackerName,
                 $"page {page}: разобрано={torrents.Count} записано={записано} известных={известных} " +
-                $"без_файла={безФайла} без_магнита={безМагнита}");
+                $"без_файла={безФайла} без_магнита={безМагнита} без_года={безГода}");
 
             return torrents.Count;
         }
