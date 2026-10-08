@@ -12,6 +12,7 @@ using JacBlack.Infrastructure.Trackers.PirateBay;
 using JacBlack.Infrastructure.Trackers.Nyaa;
 using JacBlack.Infrastructure.Trackers.Rutor;
 using JacBlack.Infrastructure.Trackers.Rutracker;
+using JacBlack.Infrastructure.Trackers.RuDub;
 using JacBlack.Infrastructure.Trackers.Selezen;
 using JacBlack.Infrastructure.Trackers.Toloka;
 using JacBlack.Infrastructure.Trackers.TorrentBy;
@@ -37,6 +38,7 @@ namespace JacBlack.Infrastructure.Trackers
             services.AddSingleton<TorrentBySyncService>();
             services.AddSingleton<MegapeerSyncService>();
             services.AddSingleton<AnidubSyncService>();
+            services.AddSingleton<RuDubSyncService>();
             services.AddSingleton<SelezenSyncService>();
             services.AddSingleton<RutorSyncService>();
             services.AddSingleton<NNMClubSyncService>();

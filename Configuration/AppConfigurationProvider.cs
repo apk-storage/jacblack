@@ -84,6 +84,7 @@ namespace JacBlack.Configuration
                 case "rutor": return config.Rutor.log;
                 case "rutracker": return config.Rutracker.log;
                 case "selezen": return config.Selezen.log;
+                case "rudub": return config.RuDub.log;
                 case "toloka": return config.Toloka.log;
                 case "torrentby": return config.TorrentBy.log;
                 default: return parserLogEnabled;

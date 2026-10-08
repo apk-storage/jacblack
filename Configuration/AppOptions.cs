@@ -149,6 +149,10 @@ namespace JacBlack.Configuration
 
         public TrackerSettings Bitru = new TrackerSettings("https://bitru.org");
 
+        // RuDub: торрент отдаётся гостю, вход не нужен. Адрес через rudub.tv —
+        // он сам ведёт на живое зеркало, их имена меняются (сейчас r4.).
+        public TrackerSettings RuDub = new TrackerSettings("https://rudub.tv");
+
         public TrackerSettings Toloka = new TrackerSettings("https://toloka.to");
 
 
