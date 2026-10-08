@@ -119,25 +119,50 @@ namespace JacBlack.Infrastructure.Trackers.RuDub
             if (torrents.Count == 0)
                 return 0;
 
+            // Счётчики нужны по существу, а не для отладки: «разобрано 90» и
+            // «записано 90» — разные утверждения, и 08.10.2026 они разошлись
+            // молча. Без них не видно, на каком шаге раздачи теряются.
+            int известных = 0, безФайла = 0, безМагнита = 0, записано = 0;
+
             await FileDB.AddOrUpdate(torrents, async (t, db) =>
             {
                 // Уже знаем эту раздачу и заголовок не менялся — файл не
                 // качаем: инфо-хеш у неё тот же.
                 if (db.TryGetValue(t.url, out TorrentDetails _кеш) && _кеш.title == t.title)
+                {
+                    известных++;
                     return true;
+                }
 
                 string torrentUrl = RuDubParser.TorrentUrl(t.url);
                 if (string.IsNullOrWhiteSpace(torrentUrl))
+                {
+                    безФайла++;
                     return false;
+                }
 
                 byte[] torrent = await HttpClient.Download(host + torrentUrl, referer: host);
+                if (torrent == null || torrent.Length == 0)
+                {
+                    безФайла++;
+                    return false;
+                }
+
                 string magnet = BencodeTo.Magnet(torrent);
                 if (magnet == null)
+                {
+                    безМагнита++;
                     return false;
+                }
 
                 t.magnet = magnet;
+                записано++;
                 return true;
             });
+
+            ParserLog.Write(TrackerName,
+                $"page {page}: разобрано={torrents.Count} записано={записано} известных={известных} " +
+                $"без_файла={безФайла} без_магнита={безМагнита}");
 
             return torrents.Count;
         }
