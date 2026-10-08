@@ -149,9 +149,16 @@ namespace JacBlack.Configuration
 
         public TrackerSettings Bitru = new TrackerSettings("https://bitru.org");
 
-        // RuDub: торрент отдаётся гостю, вход не нужен. Адрес через rudub.tv —
-        // он сам ведёт на живое зеркало, их имена меняются (сейчас r4.).
-        public TrackerSettings RuDub = new TrackerSettings("https://rudub.tv");
+        // RuDub: торрент отдаётся гостю, вход не нужен.
+        //
+        // Адрес ЗЕРКАЛА, а не rudub.tv: главная отвечает 301 на живое зеркало,
+        // а загрузчик торрентов за редиректом не идёт — 08.10.2026 из-за этого
+        // первый обход разобрал 150 раздач и не сохранил ни одной: файл не
+        // качался, magnet выходил пустым, запись отбрасывалась.
+        //
+        // Имена зеркал у них меняются (сейчас r4.). Перестанет отвечать —
+        // открыть https://rudub.tv и посмотреть, куда ведёт редирект.
+        public TrackerSettings RuDub = new TrackerSettings("https://r4.rudub.world");
 
         public TrackerSettings Toloka = new TrackerSettings("https://toloka.to");
 
