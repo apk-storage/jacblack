@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using JacBlack.Application.Index;
 using JacBlack.Infrastructure.Indexers;
+using JacBlack.Infrastructure.Persistence;
 using JacBlack.Models.Api;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -121,16 +122,27 @@ namespace JacBlack.Application.Search
             // отсортированным по сидам ДО живого опроса, а опрос числа менял —
             // порядок к этому моменту уже не соответствует показанному.
             //
-            // Проверенные идут выше непроверенных при любом раскладе.
-            // Непроверенное число — это снимок неизвестной давности, и
-            // прошлогодние 96 раздающих не должны стоять над сегодняшними 44.
-            // Именно так удалённая раздача «Кода 8» оказывалась первой строкой
-            // выдачи (случай 02.08.2026).
-            filtered = filtered
-                .OrderByDescending(r => r.info != null && r.info.seedersLive)
-                .ThenByDescending(r => r.Seeders)
-                .ThenByDescending(r => r.Peers)
-                .ToList();
+            // Ключи по порядку.
+            //
+            // 1. ВОЗМОЖНОСТЬ РУССКОЙ ДОРОЖКИ. Не вкус, а назначение сервиса:
+            //    jac.black ищет для русскоязычной Лампы. Повод (Сергей,
+            //    09.10.2026): «почему я в Лампе Кэрри от рудаб так и не
+            //    увидел?» А он был — на 63-м месте из 66: сортировка по сидам
+            //    ставила вперёд англоязычные раздачи с 600–1300 раздающими, и
+            //    четыре русские с 3–37 оказывались за концом списка. Формально
+            //    выдача верна, для человека — пусто.
+            //    Зарубежные источники (knaben, eztv, yts, piratebay, nyaa,
+            //    animetosho) заведены ради донора озвучек Перегона и остаются:
+            //    с русским звуком они проходят тем же ключом, потому что
+            //    `МожетБытьРусскийПеревод` пускает их по кириллице и по
+            //    пометке rus.
+            // 2. ПРОВЕРЕННЫЕ сиды выше непроверенных при любом раскладе:
+            //    непроверенное число — снимок неизвестной давности, и
+            //    прошлогодние 96 раздающих не должны стоять над сегодняшними
+            //    44. Именно так удалённая раздача «Кода 8» оказывалась первой
+            //    строкой выдачи (случай 02.08.2026).
+            // 3. Сами сиды, 4. личи.
+            filtered = Упорядочить(filtered);
 
             filtered = DropDeadUnlessNothingLeft(filtered);
 
@@ -234,6 +246,24 @@ namespace JacBlack.Application.Search
         /// Порог берём общий с обходом живости, чтобы «мёртвая» значило одно
         /// и то же в обоих местах.
         /// </summary>
+        /// <summary>
+        /// Порядок выдачи. Отдельным методом, чтобы его можно было проверить:
+        /// внутри `SearchAsync` он требовал живых трекеров и базы.
+        /// </summary>
+        internal static List<Result> Упорядочить(List<Result> results)
+        {
+            if (results == null)
+                return new List<Result>();
+
+            return results
+                .OrderByDescending(r => FileDB.МожетБытьРусскийПеревод(
+                    (r.Title ?? string.Empty).ToLowerInvariant(), r.Tracker))
+                .ThenByDescending(r => r.info != null && r.info.seedersLive)
+                .ThenByDescending(r => r.Seeders)
+                .ThenByDescending(r => r.Peers)
+                .ToList();
+        }
+
         internal static List<Result> DropDeadUnlessNothingLeft(List<Result> results)
         {
             if (results == null || results.Count == 0)

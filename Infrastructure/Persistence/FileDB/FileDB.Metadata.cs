@@ -340,7 +340,7 @@ namespace JacBlack.Infrastructure.Persistence
         /// прямая пометка русской дорожки: там встречаются редкие релизы с
         /// русским звуком, и терять их из-за общего правила незачем.
         /// </summary>
-        static bool МожетБытьРусскийПеревод(string titlelower, string trackerName)
+        public static bool МожетБытьРусскийПеревод(string titlelower, string trackerName)
         {
             if (string.IsNullOrEmpty(trackerName) || !ЗарубежныеТрекеры.Contains(trackerName))
                 return true;
