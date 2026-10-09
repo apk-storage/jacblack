@@ -1,0 +1,101 @@
+#!/bin/sh
+# Утренний отчёт по обходам JacBlack — в телеграм, боту J.A.R.V.I.S.
+#
+# Пишем то, что человек не увидит сам: как идут глубокие обходы, насколько
+# заняты оба браузера и не сыпались ли отказы. Приборы вроде /health и «cron
+# вернул 200» тут бесполезны — они были зелёными и тогда, когда обход стоял.
+#
+# 26.09.2026: прежде отчёт разбирал только rutracker, а тот по расписанию
+# стартует в 10:00 по Цюриху — ПОСЛЕ отчёта в 08:00. Последней строкой всегда
+# было «глубокий обход завершён» другого формата, и вместо чисел выходили «?»,
+# а «за ночь прибавилось» считало вчерашний дневной прогон. Теперь по каждому
+# трекеру показываем его собственную последнюю строку обхода за сутки.
+set -u   # без -e: пропуск одного трекера не должен обрывать весь отчёт
+
+LOGS=/opt/jacblack/Data/log
+NOTIFY=/usr/local/bin/jacblack-notify
+
+# трекер (имя лога) : шаблон процесса глубокого обхода из cron
+CRAWLS="rutracker:jacblack-deep rutracker [0-9]
+kinozal:jacblack-deep kinozal
+nnmclub:jacblack-deep nnmclub-archive
+bitru:jacblack-deep bitru-archive
+piratebay:jacblack-deep piratebay
+rutor:jacblack-deep rutor
+megapeer:jacblack-deep megapeer
+toloka:jacblack-deep toloka
+eztv:jacblack-deep eztv
+yts:jacblack-deep yts"
+
+busy() {  # занятость браузера за N часов, в процентах
+    name=$1; hours=$2
+    docker logs --since "${hours}h" "$name" 2>&1 \
+        | grep -oE 'Response in [0-9.]+ s' \
+        | awk -v h="$hours" '{s+=$3} END {printf "%.0f", s/(h*36)}'
+}
+
+count() { docker logs --since "$2" "$1" 2>&1 | grep -c "$3" || true; }
+
+# --- обходы ---------------------------------------------------------------
+: > /tmp/jacblack-crawls.txt
+printf '%s\n' "$CRAWLS" | while IFS=: read -r t pat; do
+    L="$LOGS/$t.log"
+    [ -f "$L" ] || continue
+    line=$(grep -E "глубокий обход|обход архива" "$L" 2>/dev/null | tail -1 || true)
+    [ -n "$line" ] || continue
+    when=$(printf '%s' "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+    # Строки старше суток не показываем: такой обход в эту ночь не шёл.
+    ts=$(date -d "$when" +%s 2>/dev/null || echo 0)
+    [ $(( $(date +%s) - ts )) -lt 93600 ] || continue
+    text=$(printf '%s' "$line" | sed 's/^\[[^]]*\] //')
+    if pgrep -f "$pat" >/dev/null 2>&1; then
+        st="идёт"
+    else
+        st="закончил $(printf '%s' "$when" | awk '{split($1,d,"-"); print d[3] "." d[2] " " substr($2,1,5)}')"
+    fi
+    printf '• %s (%s): %s\n' "$t" "$st" "$text" >> /tmp/jacblack-crawls.txt
+done
+running=$(printf '%s\n' "$CRAWLS" | while IFS=: read -r t pat; do
+    pgrep -f "$pat" >/dev/null 2>&1 && printf '%s ' "$t"; done; true)
+[ -n "$running" ] || running="ни один не запущен"
+
+# --- браузеры и отказы ----------------------------------------------------
+busy_crawl=$(busy flaresolverr-crawl 8 || echo "?")
+busy_main=$(busy flaresolverr 8 || echo "?")
+lost=$(count jacblack 8h "cookie больше не проходит")
+throttled=$(count jacblack 8h "сбавить обороты")
+logins=$(count jacblack 8h "вход выполнен")
+
+# --- база и место ---------------------------------------------------------
+keys=$(docker logs --since 2h jacblack 2>&1 | grep "rebuild end" | tail -1 | sed -n 's/.*keys=\([0-9]*\).*/\1/p')
+disk=$(df -h /opt | tail -1 | awk '{print $4 " свободно (" $5 " занято)"}')
+health=$(curl -s -o /dev/null -w '%{http_code}' -m 15 http://127.0.0.1:9117/health || echo "нет ответа")
+
+printf 'Обходы за сутки\n\n'                                             >  /tmp/jacblack-report.txt
+if [ -s /tmp/jacblack-crawls.txt ]; then
+    cat /tmp/jacblack-crawls.txt                                         >> /tmp/jacblack-report.txt
+else
+    printf 'за сутки ни одной записи обхода — обходы не шли\n'           >> /tmp/jacblack-report.txt
+fi
+printf '\nсейчас работают: %s\n\n' "$running"                            >> /tmp/jacblack-report.txt
+printf 'браузеры за 8 ч: обходной занят %s%%, общий %s%%\n' "${busy_crawl:-?}" "${busy_main:-?}" >> /tmp/jacblack-report.txt
+printf 'отказов cookie %s, просьб сбавить обороты %s, входов %s\n\n' "$lost" "$throttled" "$logins" >> /tmp/jacblack-report.txt
+printf 'ключей в индексе: %s\n' "${keys:-?}"                             >> /tmp/jacblack-report.txt
+printf 'диск: %s\n' "$disk"                                              >> /tmp/jacblack-report.txt
+printf 'health: %s\n' "$health"                                          >> /tmp/jacblack-report.txt
+
+
+# --- что искали люди ------------------------------------------------------
+# Отчёт до 09.10.2026 говорил только о наполнении базы: идут ли обходы, жив
+# ли браузер, сколько ключей в индексе. Сергей: «а ты логи вообще ведешь? что
+# ищут люди, что находят, есть ли ошибки?» Логи велись — в vhost-логе есть и
+# размер ответа, и время, — но никто в них не смотрел, и пустая выдача могла
+# жить месяцами. Так четыре раздачи «Кэрри» простояли на 63-66 местах из 66.
+#
+# Отказ раздела не должен ронять отчёт: обходы важнее, они здесь главные.
+printf '\n'                                                              >> /tmp/jacblack-report.txt
+jacblack-search-report 24 >> /tmp/jacblack-report.txt 2>&1 \
+    || printf 'раздел поиска не собрался\n'                              >> /tmp/jacblack-report.txt
+
+[ "${1:-}" = "--dry" ] && { cat /tmp/jacblack-report.txt; exit 0; }
+"$NOTIFY" < /tmp/jacblack-report.txt
