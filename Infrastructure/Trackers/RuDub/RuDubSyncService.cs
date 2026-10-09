@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using JacBlack.Infrastructure.Logging;
 using JacBlack.Infrastructure.Networking;
 using JacBlack.Infrastructure.Parsing;
 using JacBlack.Infrastructure.Persistence;
