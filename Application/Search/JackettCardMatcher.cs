@@ -12,6 +12,28 @@ namespace JacBlack.Application.Search
 {
     internal static class JackettCardMatcher
     {
+        // Расклейка строки «русское название + оригинал + год», которую
+        // присылают сборки Lampac одним полем `query`.
+        //
+        // Дефис здесь был БАГОМ, и дорогим. Стояло `[^a-z-A-Z]`, а это не
+        // «кроме латиницы»: внутри класса `a-z`, затем САМ ДЕФИС, затем
+        // `A-Z`. То есть дефис тоже исключался, и любое русское название с
+        // дефисом под расклейку не подходило. Дальше title и title_original
+        // оставались пустыми, поиск шёл по склеенной строке целиком и
+        // возвращал НОЛЬ при живых раздачах.
+        //
+        // Нашлось 10.10.2026 из отчёта по пустым выдачам: «Человек-паук:
+        // Новый день» 76 раз за сутки — пусто, при 75 раздачах в базе.
+        // Сергей: «схренали его не находили?» Та же беда у «Человека-муравья»
+        // и вообще у всех названий через дефис; у «Аватара» и «Отеля Мумбаи»
+        // расклейка работала, поэтому баг и жил незамеченным.
+        //
+        // `ё` в кириллический класс добавлена отдельно: `а-я` её не включает,
+        // и без неё «Ёлки» утекали в латинскую половину.
+        const string РУС_ЛАТ_ГОД = "^([^a-zA-Z]+) ([^а-яА-ЯёЁ]+) ([0-9]{4})$";
+        const string РУС_ЛАТ = "^([^a-zA-Z]+) ([^а-яА-ЯёЁ]+)$";
+        const string РУС_ГОД = "^([^a-zA-Z]+) ((19|20)[0-9]{2})$";
+
         public static Dictionary<string, TorrentDetails> Search(
             IFastDbIndex fastDbIndex,
             string query,
@@ -29,7 +51,7 @@ namespace JacBlack.Application.Search
             #region Запрос с NUM
             if (rqnum && query != null)
             {
-                var mNum = Regex.Match(query, "^([^a-z-A-Z]+) ([^а-я-А-Я]+) ([0-9]{4})$");
+                var mNum = Regex.Match(query, РУС_ЛАТ_ГОД);
 
                 if (mNum.Success)
                 {
@@ -43,10 +65,10 @@ namespace JacBlack.Application.Search
                 }
                 else
                 {
-                    if (Regex.IsMatch(query, "^([^a-z-A-Z]+) ((19|20)[0-9]{2})$"))
+                    if (Regex.IsMatch(query, РУС_ГОД))
                         return torrents;
 
-                    mNum = Regex.Match(query, "^([^a-z-A-Z]+) ([^а-я-А-Я]+)$");
+                    mNum = Regex.Match(query, РУС_ЛАТ);
 
                     if (mNum.Success)
                     {
