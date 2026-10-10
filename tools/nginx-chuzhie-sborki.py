@@ -21,7 +21,7 @@ CFNetwork`), iPad, iPhone, Firefox и Chrome с компьютера. Правк
 * `TV-Gotovo-Parser-Gateway` (105) — чужой шлюз;
 * `CheckHost` (31) — сканер;
 * `Fishka-TV-Android` (15) — чужое приложение;
-* `Luxo/` (3) — чужое приложение под tvOS;
+(Luxo из списка исключён 10.10.2026 по слову Сергея — приложению доступ оставлен.)
 * `Dalvik/` (2) — голый Android-клиент: ни браузер, ни Лампа;
 * ровно `Mozilla/5.0` без скобок (92) — браузером не бывает; шлёт
   `limit=12&sort=sid`, чего Лампа не шлёт.
@@ -69,7 +69,6 @@ VHOST = "/etc/nginx/sites-enabled/jac.black"
 		"~*TV-Gotovo-Parser-Gateway"             1;
 		"~*Fishka-TV"                            1;
 		"~*CheckHost"                            1;
-		"~*^Luxo/"                               1;
 		"~*^Dalvik/"                             1;
 		# Ровно «Mozilla/5.0» и ничего больше: браузером не бывает.
 		"~^Mozilla/5\\.0$"                        1;
