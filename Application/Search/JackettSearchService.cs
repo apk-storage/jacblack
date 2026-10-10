@@ -54,7 +54,35 @@ namespace JacBlack.Application.Search
             if (string.IsNullOrWhiteSpace(query) && string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(title_original))
                 return new List<Result>();
 
+            bool склеено = string.IsNullOrWhiteSpace(title)
+                && string.IsNullOrWhiteSpace(title_original);
+
             SplitCombinedQuery(ref query, ref title, ref title_original);
+
+            // Расклеили сами — особый режим `rqnum` больше не нужен и ВРЕДЕН.
+            //
+            // Замер 10.10.2026 на живом сервисе, один и тот же запрос
+            // «Человек-паук: Новый день Spider-Man: Brand New Day 2026» с тем
+            // же клиентом:
+            //
+            //     rqnum включён   →  0 раздач
+            //     rqnum выключен  → 67 раздач
+            //
+            // За сутки этот клиент (сборка Lampac, User-Agent Chrome/106,
+            // приходит через российский вход) сделал 99 запросов и 72 из них
+            // получил пустыми — то есть сервиса для этих людей не было вовсе.
+            // Сергей, увидев «Человек-паук: Новый день» в списке ненайденного:
+            // «схренали его не находили?»
+            //
+            // Почему режим мешает: он задуман для склеенной строки и внутри
+            // карточки расклеивает её ВТОРОЙ раз своими регулярками, а заодно
+            // не заполняет `info` у раздач. К моменту его работы `title` и
+            // `title_original` уже разобраны здесь, и вторая попытка только
+            // путает выдачу. Там, где строку клиент прислал полями, режим
+            // остаётся как был.
+            if (склеено && !string.IsNullOrWhiteSpace(title)
+                && !string.IsNullOrWhiteSpace(title_original))
+                rqnum = false;
 
             title_original = ResolveCounterpartTitle(query, title, title_original);
 
