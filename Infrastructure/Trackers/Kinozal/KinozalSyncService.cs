@@ -659,9 +659,12 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
             try { long.TryParse(IO.File.ReadAllText(IdCursorFile).Trim(), out cursor); }
             catch { }
 
-            // Без файла начинаем со старшего номера из списков: назад не идём,
-            // прошлое добирает глубокий обход.
-            cursor = Math.Max(cursor, Interlocked.Read(ref _maxSeenId));
+            // Без файла начинаем со старшего номера из списков. С файлом идём от
+            // него, даже если списки ушли дальше: так добирается упущенное —
+            // записать в файл номер, с которого начать.
+            long maxSeen = Interlocked.Read(ref _maxSeenId);
+            if (cursor <= 0)
+                cursor = maxSeen;
             if (cursor <= 0)
                 return;
 
@@ -695,6 +698,11 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                 found++;
                 await FileDB.AddOrUpdate(new List<TorrentDetails> { t }, FetchHash);
             }
+
+            // Пустая полоса ниже уже виденных в списках номеров — удалённые
+            // раздачи, а не конец выложенного: перешагиваем, иначе встанем навсегда.
+            if (misses >= IdWalkMissesToStop && id < maxSeen)
+                cursor = id;
 
             try { IO.File.WriteAllText(IdCursorFile, cursor.ToString()); }
             catch (Exception ex) { ParserLog.Write(TrackerName, $"добор по номерам: курсор не записан: {ex.Message}"); }
