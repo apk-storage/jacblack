@@ -174,6 +174,29 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
         static readonly Regex DetailsSeeders = new Regex(">Раздают<span class=\"floatright\">([0-9]+)</span>", RegexOptions.Compiled);
         static readonly Regex DetailsLeechers = new Regex(">Скачивают<span class=\"floatright\">([0-9]+)</span>", RegexOptions.Compiled);
 
+        static readonly string[] MonthsGenitive =
+            { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
+
+        static readonly Regex DateWithMonthName = new Regex(
+            "^([0-9]{1,2}) ([а-я]+) ([0-9]{4}) в ([0-9]{2}:[0-9]{2})$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Страница раздачи пишет дату старше вчерашней словами — «31 октября
+        /// 2026 в 05:40», а список цифрами. Приводим к виду списка.
+        /// </summary>
+        static string MonthNameToDigits(string raw)
+        {
+            var m = DateWithMonthName.Match((raw ?? "").Trim());
+            if (!m.Success)
+                return raw;
+
+            int month = Array.IndexOf(MonthsGenitive, m.Groups[2].Value.ToLowerInvariant()) + 1;
+            if (month == 0)
+                return raw;
+
+            return $"{int.Parse(m.Groups[1].Value):00}.{month:00}.{m.Groups[3].Value} в {m.Groups[4].Value}";
+        }
+
         /// <summary>Номера нет: раздачу удалили или её ещё не выложили.</summary>
         public static bool IsMissingDetailsPage(string html) =>
             html != null && html.Contains("Нет раздачи с таким ID");
@@ -198,7 +221,7 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
             string title = System.Net.WebUtility.HtmlDecode(head.Groups[2].Value).Trim();
             string sizeName = DetailsSize.Match(html).Groups[1].Value.Trim();
             var updated = DetailsUpdated.Match(html);
-            DateTime createTime = ParseListingUpdateTime((updated.Success ? updated : DetailsUploaded.Match(html)).Groups[1].Value);
+            DateTime createTime = ParseListingUpdateTime(MonthNameToDigits((updated.Success ? updated : DetailsUploaded.Match(html)).Groups[1].Value));
             string _sid = DetailsSeeders.Match(html).Groups[1].Value;
             string _pir = DetailsLeechers.Match(html).Groups[1].Value;
 

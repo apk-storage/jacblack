@@ -58,6 +58,21 @@ public class KinozalDetailsPageTests
         Assert.Null(KinozalParser.ParseDetailsPage(html));
     }
 
+    [Theory]
+    [InlineData("31 октября 2026 в 05:40", 2026, 10, 31, 5, 40)]
+    [InlineData("1 ноября 2026 в 23:05", 2026, 11, 1, 23, 5)]
+    [InlineData("31.10.2026 в 05:40", 2026, 10, 31, 5, 40)]
+    public void ParseDetailsPage_DateWithMonthName(string raw, int y, int mo, int d, int h, int mi)
+    {
+        // 03.11.2026 первый проход добора засчитал 1 раздачу из 25: у всех
+        // старше вчерашней дата словами, и страница выбрасывалась.
+        string html = FixtureLoader.Read("Kinozal/details_2159643.html")
+            .Replace("сегодня в 16:21", raw);
+        var t = KinozalParser.ParseDetailsPage(html);
+        Assert.NotNull(t);
+        Assert.Equal(new DateTime(y, mo, d, h, mi, 0, DateTimeKind.Utc), t.createTime);
+    }
+
     [Fact]
     public void ParseDetailsPage_UpdatedWins()
     {
