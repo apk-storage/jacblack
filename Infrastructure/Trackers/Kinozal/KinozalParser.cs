@@ -102,56 +102,111 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                 url = $"{AppInit.conf.Kinozal.host}/{url}";
                 #endregion
 
-                #region Парсим раздачи
-                int relased = 0;
-                string name = null, originalname = null;
-
-                switch (meta.TitleKind)
-                {
-                    case KinozalTitleKind.Movie:
-                        ParseMovieTitle(title, out name, out originalname, out relased);
-                        break;
-                    // Этим двум нужна разметка строки целиком: они смотрят, есть ли
-                    // в ней слово «сезон». Отдаём как было, чтобы разбор заголовков
-                    // остался нетронутым.
-                    case KinozalTitleKind.SerialRu:
-                        ParseSerialRuTitle(title, row.InnerHtml, out name, out relased);
-                        break;
-                    case KinozalTitleKind.SerialEn:
-                        ParseSerialEnTitle(title, row.InnerHtml, out name, out originalname, out relased);
-                        break;
-                    case KinozalTitleKind.TvShow:
-                        ParseTvShowTitle(title, out name, out originalname, out relased);
-                        break;
-                }
-                #endregion
-
-                if (string.IsNullOrWhiteSpace(name))
-                    name = Regex.Split(title, "(\\[|\\/|\\(|\\|)", RegexOptions.IgnoreCase)[0].Trim();
-
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
-
-                int.TryParse(_sid, out int sid);
-                int.TryParse(_pir, out int pir);
-
-                torrents.Add(new TorrentDetails()
-                {
-                    trackerName = TrackerName,
-                    types = meta.Types,
-                    url = url,
-                    title = title,
-                    sid = sid,
-                    pir = pir,
-                    sizeName = sizeName,
-                    createTime = createTime,
-                    name = name,
-                    originalname = originalname,
-                    relased = relased
-                });
+                var t = BuildTorrent(meta, url, title, row.InnerHtml, _sid, _pir, sizeName, createTime);
+                if (t != null)
+                    torrents.Add(t);
             }
 
             return torrents;
+        }
+
+        /// <summary>
+        /// Раздача из уже вынутых полей. Общая для строки списка и страницы
+        /// раздачи, чтобы оба пути разбирали заголовок одинаково.
+        /// </summary>
+        static TorrentDetails BuildTorrent(KinozalCategory meta, string url, string title, string rowHtml, string _sid, string _pir, string sizeName, DateTime createTime)
+        {
+            #region Парсим раздачи
+            int relased = 0;
+            string name = null, originalname = null;
+
+            switch (meta.TitleKind)
+            {
+                case KinozalTitleKind.Movie:
+                    ParseMovieTitle(title, out name, out originalname, out relased);
+                    break;
+                // Этим двум нужна разметка строки целиком: они смотрят, есть ли
+                // в ней слово «сезон». Отдаём как было, чтобы разбор заголовков
+                // остался нетронутым.
+                case KinozalTitleKind.SerialRu:
+                    ParseSerialRuTitle(title, rowHtml, out name, out relased);
+                    break;
+                case KinozalTitleKind.SerialEn:
+                    ParseSerialEnTitle(title, rowHtml, out name, out originalname, out relased);
+                    break;
+                case KinozalTitleKind.TvShow:
+                    ParseTvShowTitle(title, out name, out originalname, out relased);
+                    break;
+            }
+            #endregion
+
+            if (string.IsNullOrWhiteSpace(name))
+                name = Regex.Split(title, "(\\[|\\/|\\(|\\|)", RegexOptions.IgnoreCase)[0].Trim();
+
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+
+            int.TryParse(_sid, out int sid);
+            int.TryParse(_pir, out int pir);
+
+            return new TorrentDetails()
+            {
+                trackerName = TrackerName,
+                types = meta.Types,
+                url = url,
+                title = title,
+                sid = sid,
+                pir = pir,
+                sizeName = sizeName,
+                createTime = createTime,
+                name = name,
+                originalname = originalname,
+                relased = relased
+            };
+        }
+
+        static readonly Regex DetailsTitle = new Regex(
+            "<h1><a href=\"[^\"]*details\\.php\\?id=([0-9]+)\"[^>]*>([^<]+)</a></h1>", RegexOptions.Compiled);
+        static readonly Regex DetailsCategory = new Regex("cat_img_r\" onclick=\"cat\\(([0-9]+)\\);", RegexOptions.Compiled);
+        static readonly Regex DetailsSize = new Regex("<li>Вес<span class=\"floatright[^\"]*\">([^<(]+)", RegexOptions.Compiled);
+        static readonly Regex DetailsUpdated = new Regex("<li>Обновлен<span class=\"floatright[^\"]*\">([^<]+)</span>", RegexOptions.Compiled);
+        static readonly Regex DetailsUploaded = new Regex("<li>Залит<span class=\"floatright[^\"]*\">([^<]+)</span>", RegexOptions.Compiled);
+        static readonly Regex DetailsSeeders = new Regex(">Раздают<span class=\"floatright\">([0-9]+)</span>", RegexOptions.Compiled);
+        static readonly Regex DetailsLeechers = new Regex(">Скачивают<span class=\"floatright\">([0-9]+)</span>", RegexOptions.Compiled);
+
+        /// <summary>Номера нет: раздачу удалили или её ещё не выложили.</summary>
+        public static bool IsMissingDetailsPage(string html) =>
+            html != null && html.Contains("Нет раздачи с таким ID");
+
+        /// <summary>
+        /// Раздача со страницы details.php. Нужна потому, что список browse.php
+        /// отдаёт нам свежие раздачи с опозданием до суток (03.11.2026: новое
+        /// приходило одной пачкой в 17:44 МСК), а страница по номеру открывается
+        /// сразу. Null, если раздел не наш или страница не разобралась. Дата —
+        /// «Обновлен», если он есть, иначе «Залит», как в колонке списка.
+        /// </summary>
+        public static TorrentDetails ParseDetailsPage(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return null;
+
+            var head = DetailsTitle.Match(html);
+            var cat = DetailsCategory.Match(html);
+            if (!head.Success || !cat.Success || !KinozalCategories.Map.TryGetValue(cat.Groups[1].Value, out var meta))
+                return null;
+
+            string title = System.Net.WebUtility.HtmlDecode(head.Groups[2].Value).Trim();
+            string sizeName = DetailsSize.Match(html).Groups[1].Value.Trim();
+            var updated = DetailsUpdated.Match(html);
+            DateTime createTime = ParseListingUpdateTime((updated.Success ? updated : DetailsUploaded.Match(html)).Groups[1].Value);
+            string _sid = DetailsSeeders.Match(html).Groups[1].Value;
+            string _pir = DetailsLeechers.Match(html).Groups[1].Value;
+
+            if (createTime == default || string.IsNullOrWhiteSpace(title) || !SizeCell.IsMatch(sizeName) || _sid == "" || _pir == "")
+                return null;
+
+            string url = $"{AppInit.conf.Kinozal.host}/details.php?id={head.Groups[1].Value}";
+            return BuildTorrent(meta, url, title, title, _sid, _pir, sizeName, createTime);
         }
 
         static void ParseMovieTitle(string title, out string name, out string originalname, out int relased)

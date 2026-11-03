@@ -367,6 +367,10 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                         await parsePage(cat, page);
                         log += $"{cat} - {page}\n";
                     }
+
+                    if (page == 0 && await EnsureLoggedIn())
+                        await WalkNewIds();
+
                     ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
                 }
                 catch (Exception ex)
@@ -587,31 +591,115 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
             }
 
             var torrents = KinozalParser.ParseTorrentsFromPage(html, cat);
+            foreach (var t in torrents)
+                NoteSeenId(t.url);
 
-            await FileDB.AddOrUpdate(torrents, async (t, db) =>
-            {
-                if (db.TryGetValue(t.url, out TorrentDetails cached) && KinozalParser.ShouldSkipHashFetch(cached, t))
-                    return true;
-
-                string id = Regex.Match(t.url, "\\?id=([0-9]+)").Groups[1].Value;
-                string srv_details = await HttpClient.Post($"{AppInit.conf.Kinozal.host}/get_srv_details.php?id={id}&action=2", $"id={id}&action=2", CookieHeader(), useproxy: AppInit.conf.Kinozal.useproxy);
-                if (srv_details != null)
-                {
-                    string torrentHash = new Regex("<ul><li>Инфо хеш:\\s*([A-Fa-f0-9]{40})</li>").Match(srv_details).Groups[1].Value;
-                    if (string.IsNullOrWhiteSpace(torrentHash))
-                        torrentHash = new Regex("([A-Fa-f0-9]{40})").Match(srv_details).Groups[1].Value;
-
-                    if (!string.IsNullOrWhiteSpace(torrentHash))
-                    {
-                        t.magnet = $"magnet:?xt=urn:btih:{torrentHash.ToUpperInvariant()}";
-                        return true;
-                    }
-                }
-
-                return false;
-            });
+            await FileDB.AddOrUpdate(torrents, FetchHash);
 
             return torrents.Count > 0;
+        }
+
+        /// <summary>Хеш раздачи отдельным POST: без магнета FileDB запись не создаёт.</summary>
+        async Task<bool> FetchHash(TorrentDetails t, IReadOnlyDictionary<string, TorrentDetails> db)
+        {
+            if (db.TryGetValue(t.url, out TorrentDetails cached) && KinozalParser.ShouldSkipHashFetch(cached, t))
+                return true;
+
+            string id = Regex.Match(t.url, "\\?id=([0-9]+)").Groups[1].Value;
+            string srv_details = await HttpClient.Post($"{AppInit.conf.Kinozal.host}/get_srv_details.php?id={id}&action=2", $"id={id}&action=2", CookieHeader(), useproxy: AppInit.conf.Kinozal.useproxy);
+            if (srv_details != null)
+            {
+                string torrentHash = new Regex("<ul><li>Инфо хеш:\\s*([A-Fa-f0-9]{40})</li>").Match(srv_details).Groups[1].Value;
+                if (string.IsNullOrWhiteSpace(torrentHash))
+                    torrentHash = new Regex("([A-Fa-f0-9]{40})").Match(srv_details).Groups[1].Value;
+
+                if (!string.IsNullOrWhiteSpace(torrentHash))
+                {
+                    t.magnet = $"magnet:?xt=urn:btih:{torrentHash.ToUpperInvariant()}";
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        const string IdCursorFile = "Data/temp/kinozal_id_cursor.txt";
+
+        /// <summary>Старший номер раздачи, увиденный в списках за время жизни службы.</summary>
+        static long _maxSeenId;
+
+        static void NoteSeenId(string url)
+        {
+            long.TryParse(Regex.Match(url ?? "", "\\?id=([0-9]+)").Groups[1].Value, out long id);
+            long cur;
+            while (id > (cur = Interlocked.Read(ref _maxSeenId)) && Interlocked.CompareExchange(ref _maxSeenId, id, cur) != cur) { }
+        }
+
+        /// <summary>Сколько несуществующих номеров подряд считать концом выложенного.</summary>
+        const int IdWalkMissesToStop = 15;
+
+        /// <summary>
+        /// Потолок номеров за проход: проход должен уложиться в 300 с крона и
+        /// после долгого простоя, хвост доберут следующие.
+        /// </summary>
+        const int IdWalkMaxPerPass = 60;
+
+        /// <summary>
+        /// Добор свежего по номерам. Список browse.php отдаёт нам новые раздачи
+        /// с опозданием до суток (03.11.2026: 23,5 ч ноль, потом пачка из 61 в
+        /// 17:44 МСК), а details.php?id=N открывается сразу. Номера у kinozal
+        /// идут подряд, поэтому идём от последнего известного вверх, пока не
+        /// встретим подряд <see cref="IdWalkMissesToStop"/> пустых: одиночные
+        /// дыры — удалённые раздачи, длинная — конец выложенного. Чужие разделы
+        /// (музыка, игры, книги) пропускаем, но номер засчитываем.
+        /// </summary>
+        async Task WalkNewIds()
+        {
+            long cursor = 0;
+            try { long.TryParse(IO.File.ReadAllText(IdCursorFile).Trim(), out cursor); }
+            catch { }
+
+            // Без файла начинаем со старшего номера из списков: назад не идём,
+            // прошлое добирает глубокий обход.
+            cursor = Math.Max(cursor, Interlocked.Read(ref _maxSeenId));
+            if (cursor <= 0)
+                return;
+
+            int misses = 0, checkedIds = 0, found = 0;
+            long id = cursor;
+            while (misses < IdWalkMissesToStop && checkedIds < IdWalkMaxPerPass)
+            {
+                id++;
+                checkedIds++;
+
+                string html = await GetBrowseHtml($"{AppInit.conf.Kinozal.host}/details.php?id={id}");
+                if (string.IsNullOrWhiteSpace(html) || IsOverloadPage(html))
+                    break; // не знаем, есть ли номер: курсор не двигаем, повторим в следующий проход
+
+                if (KinozalParser.IsMissingDetailsPage(html))
+                {
+                    misses++;
+                    continue;
+                }
+
+                if (!html.Contains(">Выход</a>"))
+                    break; // выпали из учётки: страница без неё не наша, повторим потом
+
+                misses = 0;
+                cursor = id;
+
+                var t = KinozalParser.ParseDetailsPage(html);
+                if (t == null)
+                    continue;
+
+                found++;
+                await FileDB.AddOrUpdate(new List<TorrentDetails> { t }, FetchHash);
+            }
+
+            try { IO.File.WriteAllText(IdCursorFile, cursor.ToString()); }
+            catch (Exception ex) { ParserLog.Write(TrackerName, $"добор по номерам: курсор не записан: {ex.Message}"); }
+
+            ParserLog.Write(TrackerName, $"добор по номерам: проверено {checkedIds}, наших разделов {found}, последний номер {cursor}");
         }
     }
 }
