@@ -165,71 +165,47 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
             };
         }
 
-        static readonly Regex DetailsTitle = new Regex(
-            "<h1><a href=\"[^\"]*details\\.php\\?id=([0-9]+)\"[^>]*>([^<]+)</a></h1>", RegexOptions.Compiled);
-        static readonly Regex DetailsCategory = new Regex("cat_img_r\" onclick=\"cat\\(([0-9]+)\\);", RegexOptions.Compiled);
-        static readonly Regex DetailsSize = new Regex("<li>Вес<span class=\"floatright[^\"]*\">([^<(]+)", RegexOptions.Compiled);
-        static readonly Regex DetailsUpdated = new Regex("<li>Обновлен<span class=\"floatright[^\"]*\">([^<]+)</span>", RegexOptions.Compiled);
-        static readonly Regex DetailsUploaded = new Regex("<li>Залит<span class=\"floatright[^\"]*\">([^<]+)</span>", RegexOptions.Compiled);
-        static readonly Regex DetailsSeeders = new Regex(">Раздают<span class=\"floatright\">([0-9]+)</span>", RegexOptions.Compiled);
-        static readonly Regex DetailsLeechers = new Regex(">Скачивают<span class=\"floatright\">([0-9]+)</span>", RegexOptions.Compiled);
-
-        static readonly string[] MonthsGenitive =
-            { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-
-        static readonly Regex DateWithMonthName = new Regex(
-            "^([0-9]{1,2}) ([а-я]+) ([0-9]{4}) в ([0-9]{2}:[0-9]{2})$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        static readonly Regex RssItem = new Regex(
+            "<item>\\s*<title>([^<]*)</title>\\s*<link>[^<]*details\\.php\\?id=([0-9]+)</link>\\s*<category>([0-9]+)</category>.*?<pubDate>([^<]+)</pubDate>",
+            RegexOptions.Singleline | RegexOptions.Compiled);
 
         /// <summary>
-        /// Страница раздачи пишет дату старше вчерашней словами — «31 октября
-        /// 2026 в 05:40», а список цифрами. Приводим к виду списка.
+        /// Раздачи наших разделов из rss.xml — последние 100 выложенных и
+        /// обновлённых. Лента нужна, потому что учётке kinozal открыто 100
+        /// раздач в сутки, и в этот счёт идут и страница раздачи, и запрос
+        /// хеша (04.11.2026: добор по номерам съедал их на музыке и пустых
+        /// номерах, сутки не добавлялось ничего), а лента — один запрос мимо
+        /// счёта. Сидов, пиров и размера в ленте нет: нули, их принесёт список,
+        /// он же заменит название — в ленте длинные обрезаны до «...».
+        /// Дата — pubDate по Москве, с меткой Z, как у списка.
         /// </summary>
-        static string MonthNameToDigits(string raw)
+        public static List<TorrentDetails> ParseRss(string xml)
         {
-            var m = DateWithMonthName.Match((raw ?? "").Trim());
-            if (!m.Success)
-                return raw;
+            var torrents = new List<TorrentDetails>();
+            if (string.IsNullOrWhiteSpace(xml))
+                return torrents;
 
-            int month = Array.IndexOf(MonthsGenitive, m.Groups[2].Value.ToLowerInvariant()) + 1;
-            if (month == 0)
-                return raw;
+            foreach (Match m in RssItem.Matches(xml))
+            {
+                if (!KinozalCategories.Map.TryGetValue(m.Groups[3].Value, out var meta))
+                    continue;
 
-            return $"{int.Parse(m.Groups[1].Value):00}.{month:00}.{m.Groups[3].Value} в {m.Groups[4].Value}";
-        }
+                if (!DateTimeOffset.TryParse(m.Groups[4].Value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var published))
+                    continue;
 
-        /// <summary>Номера нет: раздачу удалили или её ещё не выложили.</summary>
-        public static bool IsMissingDetailsPage(string html) =>
-            html != null && html.Contains("Нет раздачи с таким ID");
+                string title = System.Net.WebUtility.HtmlDecode(m.Groups[1].Value).Trim();
+                if (string.IsNullOrWhiteSpace(title))
+                    continue;
 
-        /// <summary>
-        /// Раздача со страницы details.php. Нужна потому, что список browse.php
-        /// отдаёт нам свежие раздачи с опозданием до суток (03.11.2026: новое
-        /// приходило одной пачкой в 17:44 МСК), а страница по номеру открывается
-        /// сразу. Null, если раздел не наш или страница не разобралась. Дата —
-        /// «Обновлен», если он есть, иначе «Залит», как в колонке списка.
-        /// </summary>
-        public static TorrentDetails ParseDetailsPage(string html)
-        {
-            if (string.IsNullOrWhiteSpace(html))
-                return null;
+                DateTime createTime = DateTime.SpecifyKind(published.ToOffset(TimeSpan.FromHours(3)).DateTime, DateTimeKind.Utc);
+                string url = $"{AppInit.conf.Kinozal.host}/details.php?id={m.Groups[2].Value}";
 
-            var head = DetailsTitle.Match(html);
-            var cat = DetailsCategory.Match(html);
-            if (!head.Success || !cat.Success || !KinozalCategories.Map.TryGetValue(cat.Groups[1].Value, out var meta))
-                return null;
+                var t = BuildTorrent(meta, url, title, title, "0", "0", string.Empty, createTime);
+                if (t != null)
+                    torrents.Add(t);
+            }
 
-            string title = System.Net.WebUtility.HtmlDecode(head.Groups[2].Value).Trim();
-            string sizeName = DetailsSize.Match(html).Groups[1].Value.Trim();
-            var updated = DetailsUpdated.Match(html);
-            DateTime createTime = ParseListingUpdateTime(MonthNameToDigits((updated.Success ? updated : DetailsUploaded.Match(html)).Groups[1].Value));
-            string _sid = DetailsSeeders.Match(html).Groups[1].Value;
-            string _pir = DetailsLeechers.Match(html).Groups[1].Value;
-
-            if (createTime == default || string.IsNullOrWhiteSpace(title) || !SizeCell.IsMatch(sizeName) || _sid == "" || _pir == "")
-                return null;
-
-            string url = $"{AppInit.conf.Kinozal.host}/details.php?id={head.Groups[1].Value}";
-            return BuildTorrent(meta, url, title, title, _sid, _pir, sizeName, createTime);
+            return torrents;
         }
 
         static void ParseMovieTitle(string title, out string name, out string originalname, out int relased)
@@ -378,6 +354,12 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
         {
             if (string.IsNullOrWhiteSpace(cached.magnet))
                 return false;
+
+            // Без размера запись только что принесла лента (ParseRss) с
+            // обрезанным названием и свежим хешем: второй запрос хеша съел бы
+            // ещё одну из 100 раздач учётки в сутки.
+            if (string.IsNullOrWhiteSpace(cached.sizeName))
+                return true;
 
             if (cached.title != parsed.title)
                 return false;

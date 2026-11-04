@@ -369,7 +369,7 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                     }
 
                     if (page == 0 && await EnsureLoggedIn())
-                        await WalkNewIds();
+                        await TakeRss();
 
                     ParserLog.Write(TrackerName, $"Parse completed successfully (took {sw.Elapsed.TotalSeconds:F1}s)");
                 }
@@ -591,9 +591,6 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
             }
 
             var torrents = KinozalParser.ParseTorrentsFromPage(html, cat);
-            foreach (var t in torrents)
-                NoteSeenId(t.url);
-
             await FileDB.AddOrUpdate(torrents, FetchHash);
 
             return torrents.Count > 0;
@@ -618,96 +615,57 @@ namespace JacBlack.Infrastructure.Trackers.Kinozal
                     t.magnet = $"magnet:?xt=urn:btih:{torrentHash.ToUpperInvariant()}";
                     return true;
                 }
+
+                if (srv_details.Contains(QuotaText))
+                    Interlocked.Increment(ref _quotaHits);
             }
 
             return false;
         }
 
-        const string IdCursorFile = "Data/temp/kinozal_id_cursor.txt";
+        /// <summary>Ответ kinozal, когда суточные 100 раздач учётки кончились.</summary>
+        const string QuotaText = "раздач в сутки";
 
-        /// <summary>Старший номер раздачи, увиденный в списках за время жизни службы.</summary>
-        static long _maxSeenId;
-
-        static void NoteSeenId(string url)
-        {
-            long.TryParse(Regex.Match(url ?? "", "\\?id=([0-9]+)").Groups[1].Value, out long id);
-            long cur;
-            while (id > (cur = Interlocked.Read(ref _maxSeenId)) && Interlocked.CompareExchange(ref _maxSeenId, id, cur) != cur) { }
-        }
-
-        /// <summary>Сколько несуществующих номеров подряд считать концом выложенного.</summary>
-        const int IdWalkMissesToStop = 15;
+        static int _quotaHits;
 
         /// <summary>
-        /// Потолок номеров за проход: проход должен уложиться в 300 с крона и
-        /// после долгого простоя, хвост доберут следующие.
+        /// Свежее из rss.xml. Список browse.php отдаёт нам новые раздачи раз в
+        /// сутки пачкой (03.11.2026: 23,5 ч ноль, потом 61 разом), а лента
+        /// держит последние 100 выложенных и обновлённых сразу. Учётке открыто
+        /// 100 раздач в сутки, и запрос хеша идёт в этот счёт, поэтому лента
+        /// только добавляет новые номера; обновления, как и прежде, за списком.
+        /// Сравнивать с базой по названию нельзя: в ленте длинные названия
+        /// обрезаны до «...» и без запятых.
+        /// Добор по номерам (03–04.11) открывал каждую страницу и съедал счёт
+        /// на чужих разделах и пустых номерах — сутки не добавлялось ничего.
         /// </summary>
-        const int IdWalkMaxPerPass = 60;
-
-        /// <summary>
-        /// Добор свежего по номерам. Список browse.php отдаёт нам новые раздачи
-        /// с опозданием до суток (03.11.2026: 23,5 ч ноль, потом пачка из 61 в
-        /// 17:44 МСК), а details.php?id=N открывается сразу. Номера у kinozal
-        /// идут подряд, поэтому идём от последнего известного вверх, пока не
-        /// встретим подряд <see cref="IdWalkMissesToStop"/> пустых: одиночные
-        /// дыры — удалённые раздачи, длинная — конец выложенного. Чужие разделы
-        /// (музыка, игры, книги) пропускаем, но номер засчитываем.
-        /// </summary>
-        async Task WalkNewIds()
+        async Task TakeRss()
         {
-            long cursor = 0;
-            try { long.TryParse(IO.File.ReadAllText(IdCursorFile).Trim(), out cursor); }
-            catch { }
-
-            // Без файла начинаем со старшего номера из списков. С файлом идём от
-            // него, даже если списки ушли дальше: так добирается упущенное —
-            // записать в файл номер, с которого начать.
-            long maxSeen = Interlocked.Read(ref _maxSeenId);
-            if (cursor <= 0)
-                cursor = maxSeen;
-            if (cursor <= 0)
-                return;
-
-            int misses = 0, checkedIds = 0, found = 0;
-            long id = cursor;
-            while (misses < IdWalkMissesToStop && checkedIds < IdWalkMaxPerPass)
+            string xml = await GetBrowseHtml($"{AppInit.conf.Kinozal.host}/rss.xml");
+            var torrents = KinozalParser.ParseRss(xml);
+            if (torrents.Count == 0)
             {
-                id++;
-                checkedIds++;
-
-                string html = await GetBrowseHtml($"{AppInit.conf.Kinozal.host}/details.php?id={id}");
-                if (string.IsNullOrWhiteSpace(html) || IsOverloadPage(html))
-                    break; // не знаем, есть ли номер: курсор не двигаем, повторим в следующий проход
-
-                if (KinozalParser.IsMissingDetailsPage(html))
-                {
-                    misses++;
-                    continue;
-                }
-
-                if (!html.Contains(">Выход</a>"))
-                    break; // выпали из учётки: страница без неё не наша, повторим потом
-
-                misses = 0;
-                cursor = id;
-
-                var t = KinozalParser.ParseDetailsPage(html);
-                if (t == null)
-                    continue;
-
-                found++;
-                await FileDB.AddOrUpdate(new List<TorrentDetails> { t }, FetchHash);
+                ParserLog.Write(TrackerName, $"лента: наших раздач нет, ответ {xml?.Length ?? 0} байт");
+                return;
             }
 
-            // Пустая полоса ниже уже виденных в списках номеров — удалённые
-            // раздачи, а не конец выложенного: перешагиваем, иначе встанем навсегда.
-            if (misses >= IdWalkMissesToStop && id < maxSeen)
-                cursor = id;
+            int asked = 0, got = 0;
+            Interlocked.Exchange(ref _quotaHits, 0);
+            await FileDB.AddOrUpdate(torrents, async (t, db) =>
+            {
+                if (db.ContainsKey(t.url))
+                    return false;
 
-            try { IO.File.WriteAllText(IdCursorFile, cursor.ToString()); }
-            catch (Exception ex) { ParserLog.Write(TrackerName, $"добор по номерам: курсор не записан: {ex.Message}"); }
+                asked++;
+                bool ok = await FetchHash(t, db);
+                if (ok)
+                    got++;
+                return ok;
+            });
 
-            ParserLog.Write(TrackerName, $"добор по номерам: проверено {checkedIds}, наших разделов {found}, последний номер {cursor}");
+            int quota = Interlocked.Exchange(ref _quotaHits, 0);
+            ParserLog.Write(TrackerName, $"лента: наших раздач {torrents.Count}, новых {asked}, хеш получен у {got}"
+                + (quota > 0 ? $", упёрлись в лимит учётки (100 раздач в сутки): {quota}" : ""));
         }
     }
 }
