@@ -117,6 +117,13 @@ namespace JacBlack.Infrastructure.Persistence
 
             if (RxSubsOnly.IsMatch(titlelower))
                 t.voices.Add("Субтитры");
+
+            // Русские только субтитры, звук без перевода: «/ СТ /» у kinozal,
+            // «| Sub» у rutor, «[EN / RU, EN Sub]» у nnmclub. Такая раздача не
+            // должна попадать под фильтр «Русский» (12.11.2026, сравнение с jac.red).
+            bool толькоСубтитры = ТолькоСубтитры(titlelower);
+            if (толькоСубтитры)
+                t.voices.Add("Субтитры");
             #endregion
 
             #region languages
@@ -173,7 +180,7 @@ namespace JacBlack.Infrastructure.Persistence
             // многоголосый». Характерный случай: раздача kinozal с пометкой
             // «ДБ, ПД, СТ» имела voices = [«Дубляж»], но «Дубляж» — это не
             // студия, и в rusVoices его нет.
-            if (!t.languages.Contains("rus") && !t.languages.Contains("ukr")
+            if (!t.languages.Contains("rus") && !t.languages.Contains("ukr") && !толькоСубтитры
                 && RxRusAudio.IsMatch(titlelower))
                 t.languages.Add("rus");
 
@@ -183,7 +190,7 @@ namespace JacBlack.Infrastructure.Persistence
             // на выборке в две с половиной тысячи записей — англоязычных среди
             // добавленных не оказалось. Толока сюда не входит: она украинская,
             // и её раздачи размечаются как ukr выше.
-            if (!t.languages.Contains("rus") && !t.languages.Contains("ukr")
+            if (!t.languages.Contains("rus") && !t.languages.Contains("ukr") && !толькоСубтитры
                 && rusTrackers.Contains(t.trackerName) && RxCyrillic.IsMatch(t.title))
                 t.languages.Add("rus");
             #endregion
@@ -425,6 +432,57 @@ namespace JacBlack.Infrastructure.Persistence
         static readonly Regex RxRusAudio = new Regex(
             @"(дубляж|дублированн|многоголос|двухголос|одноголос|закадров|\bmvo\b|\bdvo\b|\bavo\b|\bdub\b|проф\.?\s*перевод)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        // Блок перевода kinozal между слэшами: «СТ», «ПМ (LostFilm), СТ», «6 x ПМ, ЛМ, АП (Яроцкий), СТ».
+        // «ОР» сюда не входит: что он значит на трекере, не проверено.
+        static readonly Regex RxKinozalCodes = new(
+            @"^(\d+\s*x\s*)?(дб|пм|пд|по|лм|лд|ло|ап|ст)(\s*\([^)]*\))?(\s*,\s*(\d+\s*x\s*)?(дб|пм|пд|по|лм|лд|ло|ап|ст)(\s*\([^)]*\))?)*$",
+            RegexOptions.Compiled);
+
+        static readonly Regex RxKinozalCode = new(@"(?<![а-я])(дб|пм|пд|по|лм|лд|ло|ап|ст)(?![а-я])", RegexOptions.Compiled);
+
+        // Коды перевода rutor после «|»: D, P, P2, L, L1, A — звук; Sub — субтитры.
+        static readonly Regex RxRutorCode = new(@"^(d|p\d?|l\d?|a|subs?)$", RegexOptions.Compiled);
+
+        // nnmclub: «[EN / RU, EN Sub]» — звук до слэша, субтитры после.
+        static readonly Regex RxNnmAudioSubs = new(
+            @"\[\s*([a-z]{2,3}(?:\s*,\s*[a-z]{2,3})*)\s*/\s*([a-z]{2,3}(?:\s*,\s*[a-z]{2,3})*)\s+subs?\s*\]",
+            RegexOptions.Compiled);
+
+        static readonly Regex RxRuCode = new(@"\bru(s)?\b", RegexOptions.Compiled);
+
+        /// <summary>
+        /// В названии прямо сказано, что перевод — только субтитры. Молчание
+        /// названия — не «только субтитры»: тогда false.
+        /// </summary>
+        internal static bool ТолькоСубтитры(string titlelower)
+        {
+            if (string.IsNullOrEmpty(titlelower))
+                return false;
+
+            foreach (var кусок in titlelower.Split('/'))
+            {
+                string s = кусок.Trim();
+                if (!RxKinozalCodes.IsMatch(s))
+                    continue;
+                var коды = RxKinozalCode.Matches(Regex.Replace(s, @"\([^)]*\)", " ")).Select(m => m.Value).ToList();
+                if (коды.Count > 0)
+                    return коды.All(k => k == "ст");
+            }
+
+            var rutor = titlelower.Split('|').Skip(1)
+                .Select(seg => seg.Split(',').Select(x => x.Trim()).ToArray())
+                .Where(токены => токены.Length > 0 && токены.All(x => RxRutorCode.IsMatch(x)))
+                .SelectMany(x => x).ToList();
+            if (rutor.Count > 0)
+                return rutor.All(x => x.StartsWith("sub", StringComparison.Ordinal));
+
+            var nnm = RxNnmAudioSubs.Match(titlelower);
+            if (nnm.Success)
+                return !RxRuCode.IsMatch(nnm.Groups[1].Value) && RxRuCode.IsMatch(nnm.Groups[2].Value);
+
+            return false;
+        }
 
         /// <summary>Есть ли в строке кириллица.</summary>
         static readonly Regex RxCyrillic = new Regex("[А-Яа-яЁё]", RegexOptions.Compiled);
