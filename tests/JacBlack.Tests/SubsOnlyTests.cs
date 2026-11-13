@@ -54,6 +54,54 @@ public class SubsOnlyTests
         Assert.Contains("rus", t.languages);
     }
 
+    static System.Collections.Generic.List<JacBlack.Models.Api.Result> Склеить(params (string title, string tracker)[] записи)
+    {
+        var все = new System.Collections.Generic.Dictionary<string, TorrentDetails>();
+        int n = 0;
+        foreach (var (title, tracker) in записи)
+        {
+            var t = Разобрать(title, tracker);
+            t.magnet = "magnet:?xt=urn:btih:229d75956f6a8b1c2d3e4f5a6b7c8d9e0f1a2b3c";
+            t.url = $"https://{tracker}.example/{n++}";
+            все[t.url] = t;
+        }
+        return JacBlack.Application.Search.JackettResultBuilder.Build(все, "rus", false);
+    }
+
+    [Fact]
+    // 13.11.2026: bitru молчит («… (2026) WEB-DL»), и его догадка «rus» через
+    // склейку дублей перебивала «/ СТ /» kinozal и «| Sub» rutor.
+    public void Склейка_молчащий_трекер_не_перебивает_пометку_субтитров()
+    {
+        var r = Склеить(
+            ("Убийца-психопат / Psycho Killer (2026) WEB-DL", "bitru"),
+            ("Убийца-психопат / Psycho Killer / 2026 / СТ / WEB-DL (1080p)", "kinozal"),
+            ("Убийца-психопат / Psycho Killer (2026) WEB-DL 1080p | Sub", "rutor"));
+
+        Assert.Empty(r);
+    }
+
+    [Fact]
+    public void Склейка_с_озвучкой_у_другого_трекера_остаётся_русской()
+    {
+        var r = Склеить(
+            ("Убийца-психопат / Psycho Killer / 2026 / СТ / WEB-DL (1080p)", "kinozal"),
+            ("Убийца-психопат / Psycho Killer (2026) WEB-DL 1080p | P", "rutor"));
+
+        Assert.Single(r);
+        Assert.Contains("rus", r[0].languages);
+    }
+
+    [Fact]
+    public void Склейка_без_пометки_субтитров_как_раньше()
+    {
+        var r = Склеить(
+            ("Король Талсы / Tulsa King (2024) WEB-DLRip", "bitru"),
+            ("Король Талсы / Tulsa King / 2024 / ПМ (LostFilm), СТ / WEB-DLRip", "kinozal"));
+
+        Assert.Single(r);
+    }
+
     [Theory]
     // Молчание названия — не «только субтитры»: прежнее правило трекера работает.
     [InlineData("Король Талсы 2 сезон (1-10 из 10) / Tulsa King (2024) WEB-DLRip", "bitru")]

@@ -86,10 +86,23 @@ namespace JacBlack.Application.Search
             {
                 Dictionary<string, (TorrentDetails torrent, string title, string Name, List<string> AnnounceUrls)> temp = new Dictionary<string, (TorrentDetails, string, string, List<string>)>();
 
+                // Языки складываются со всех трекеров раздачи, и догадка «русский
+                // трекер + кириллица» у молчащего названия (bitru: «… (2026) WEB-DL»)
+                // перебивала прямую пометку «/ СТ /» у kinozal. 13.11.2026 так под
+                // фильтром «Русский» остался «Убийца-психопат» с одними субтитрами.
+                var толькоСубтитры = new HashSet<string>();
+                var русскийЯвно = new HashSet<string>();
+
                 foreach (var torrent in torrents.Values.OrderByDescending(i => i.createTime).ThenBy(i => i.trackerName == "selezen"))
                 {
                     var magnetLink = MagnetLink.Parse(torrent.magnet);
                     string hex = magnetLink.InfoHashes.V1OrV2.ToHex();
+
+                    if (Infrastructure.Persistence.FileDB.ТолькоСубтитры(torrent.title?.ToLowerInvariant()))
+                        толькоСубтитры.Add(hex);
+                    else if (torrent.languages != null && torrent.languages.Contains("rus") && torrent.voices != null
+                        && torrent.voices.Any(v => v != "Субтитры" && v != "Две дорожки" && v != "Мультиязычная"))
+                        русскийЯвно.Add(hex);
 
                     if (!temp.TryGetValue(hex, out _))
                     {
@@ -228,6 +241,13 @@ namespace JacBlack.Application.Search
                         if (t.torrent.ffprobe == null && torrent.ffprobe != null)
                             t.torrent.ffprobe = torrent.ffprobe;
                     }
+                }
+
+                foreach (string hex in толькоСубтитры)
+                {
+                    var t = temp[hex].torrent;
+                    if (!русскийЯвно.Contains(hex) && t.languages != null && t.languages.Contains("rus"))
+                        t.languages = new HashSet<string>(t.languages.Where(l => l != "rus")); // новый набор: старый может быть общим с записью базы
                 }
 
                 result = temp.Select(i => i.Value.torrent);
