@@ -98,10 +98,8 @@ namespace JacBlack.Application.Search
                     var magnetLink = MagnetLink.Parse(torrent.magnet);
                     string hex = magnetLink.InfoHashes.V1OrV2.ToHex();
 
-                    if (Infrastructure.Persistence.FileDB.ТолькоСубтитры(torrent.title?.ToLowerInvariant()))
-                        толькоСубтитры.Add(hex);
-                    else if (Infrastructure.Persistence.FileDB.РусскийПоНазванию(torrent))
-                        русскийЯвно.Add(hex);
+                    Infrastructure.Persistence.FileDB.ОтметитьДляСклейки(hex, torrent.title, torrent.trackerName,
+                        torrent.languages, torrent.voices, толькоСубтитры, русскийЯвно);
 
                     if (!temp.TryGetValue(hex, out _))
                     {
@@ -245,8 +243,7 @@ namespace JacBlack.Application.Search
                 foreach (string hex in толькоСубтитры)
                 {
                     var t = temp[hex].torrent;
-                    if (!русскийЯвно.Contains(hex) && t.languages != null && t.languages.Contains("rus"))
-                        t.languages = new HashSet<string>(t.languages.Where(l => l != "rus")); // новый набор: старый может быть общим с записью базы
+                    t.languages = Infrastructure.Persistence.FileDB.ЯзыкиПослеСклейки(hex, t.languages, толькоСубтитры, русскийЯвно);
                 }
 
                 result = temp.Select(i => i.Value.torrent);

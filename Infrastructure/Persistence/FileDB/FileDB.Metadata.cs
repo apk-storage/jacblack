@@ -501,17 +501,42 @@ namespace JacBlack.Infrastructure.Persistence
         /// Нужен склейке дублей: молчащий трекер не должен перебивать пометку
         /// «только субтитры» у соседа по инфохешу.
         /// </summary>
-        internal static bool РусскийПоНазванию(TorrentDetails t)
+        internal static bool РусскийПоНазванию(TorrentDetails t) =>
+            РусскийПоНазванию(t.title, t.trackerName, t.languages, t.voices);
+
+        internal static bool РусскийПоНазванию(string title, string tracker, ICollection<string> languages, IEnumerable<string> voices)
         {
-            string tl = t.title?.ToLowerInvariant();
-            if (string.IsNullOrEmpty(tl) || t.languages == null || !t.languages.Contains("rus"))
+            string tl = title?.ToLowerInvariant();
+            if (string.IsNullOrEmpty(tl) || languages == null || !languages.Contains("rus"))
                 return false;
 
-            return t.trackerName == "lostfilm"
+            return tracker == "lostfilm"
                 || КодыПеревода(tl) == false
                 || RxRusAudio.IsMatch(tl)
-                || (t.voices != null && rusVoices.Overlaps(t.voices))
+                || (voices != null && rusVoices.Overlaps(voices))
                 || RxLangSlots.Matches(tl).Any(m => m.Groups[2].Value.ToLowerInvariant() == "rus");
+        }
+
+        /// <summary>
+        /// Склейка одной раздачи с разных трекеров: если кто-то прямо пишет
+        /// «только субтитры», а rus у остальных — лишь догадка по трекеру,
+        /// rus снимается. Отметки копятся в двух наборах по ключу раздачи.
+        /// </summary>
+        internal static void ОтметитьДляСклейки(string key, string title, string tracker, ICollection<string> languages,
+            IEnumerable<string> voices, HashSet<string> толькоСубтитры, HashSet<string> русскийЯвно)
+        {
+            if (ТолькоСубтитры(title?.ToLowerInvariant()))
+                толькоСубтитры.Add(key);
+            else if (РусскийПоНазванию(title, tracker, languages, voices))
+                русскийЯвно.Add(key);
+        }
+
+        /// <summary>Языки без rus, если склейка его не подтверждает; иначе те же. Набор новый — старый бывает общим с записью базы.</summary>
+        internal static HashSet<string> ЯзыкиПослеСклейки(string key, HashSet<string> languages, HashSet<string> толькоСубтитры, HashSet<string> русскийЯвно)
+        {
+            if (languages == null || !languages.Contains("rus") || !толькоСубтитры.Contains(key) || русскийЯвно.Contains(key))
+                return languages;
+            return new HashSet<string>(languages.Where(l => l != "rus"));
         }
 
         /// <summary>Есть ли в строке кириллица.</summary>

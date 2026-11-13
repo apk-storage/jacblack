@@ -81,6 +81,37 @@ public class SubsOnlyTests
         Assert.Empty(r);
     }
 
+    static JacBlack.Models.Api.Result Копия(string title, string tracker, params string[] langs) => new()
+    {
+        Title = title,
+        Tracker = tracker,
+        MagnetUri = "magnet:?xt=urn:btih:229d75956f6a8b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+        languages = langs.Length > 0 ? new System.Collections.Generic.HashSet<string>(langs) : null,
+    };
+
+    [Fact]
+    // Второй путь склейки — результаты разных заходов поиска: пустые языки
+    // копии kinozal заполнялись rus от записи bitru.
+    public void Склейка_заходов_не_берёт_rus_у_молчащего_трекера()
+    {
+        var r = JacBlack.Infrastructure.Indexers.IndexerResultMerger.MergeAndSort(
+            new[] { Копия("Убийца-психопат / Psycho Killer / 2026 / СТ / WEB-DL (1080p) | Субтитры", "bitru, rutor, kinozal") },
+            new[] { Копия("Убийца-психопат / Psycho Killer (2026) WEB-DL", "bitru", "rus") });
+
+        Assert.Single(r);
+        Assert.True(r[0].languages == null || !r[0].languages.Contains("rus"));
+    }
+
+    [Fact]
+    public void Склейка_заходов_с_явной_озвучкой_оставляет_rus()
+    {
+        var r = JacBlack.Infrastructure.Indexers.IndexerResultMerger.MergeAndSort(
+            new[] { Копия("Убийца-психопат / Psycho Killer / 2026 / СТ / WEB-DL (1080p)", "kinozal") },
+            new[] { Копия("Убийца-психопат / Psycho Killer (2026) WEB-DL 1080p | P", "rutor", "rus") });
+
+        Assert.Contains("rus", r[0].languages);
+    }
+
     [Fact]
     public void Склейка_с_озвучкой_у_другого_трекера_остаётся_русской()
     {

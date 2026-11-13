@@ -14,6 +14,11 @@ namespace JacBlack.Infrastructure.Indexers
         {
             var map = new Dictionary<string, Result>(StringComparer.OrdinalIgnoreCase);
 
+            // Пустые языки одной копии заполнялись чужими: «/ СТ /» kinozal
+            // получала rus от молчащего bitru (13.11.2026, «Убийца-психопат»).
+            var толькоСубтитры = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var русскийЯвно = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var batch in batches)
             {
                 if (batch == null) continue;
@@ -25,6 +30,9 @@ namespace JacBlack.Infrastructure.Indexers
                     {
                         key = "md5:" + Md5(item.Title + "|" + item.MagnetUri);
                     }
+
+                    Persistence.FileDB.ОтметитьДляСклейки(key, item.Title, item.Tracker, item.languages,
+                        item.info?.voices, толькоСубтитры, русскийЯвно);
 
                     if (!map.TryGetValue(key, out var existing))
                     {
@@ -70,6 +78,9 @@ namespace JacBlack.Infrastructure.Indexers
                     }
                 }
             }
+
+            foreach (string key in толькоСубтитры)
+                map[key].languages = Persistence.FileDB.ЯзыкиПослеСклейки(key, map[key].languages, толькоСубтитры, русскийЯвно);
 
             return map.Values.OrderByDescending(r => r.Seeders).ThenByDescending(r => r.Peers).ToList();
         }
