@@ -455,10 +455,17 @@ namespace JacBlack.Infrastructure.Persistence
         /// В названии прямо сказано, что перевод — только субтитры. Молчание
         /// названия — не «только субтитры»: тогда false.
         /// </summary>
-        internal static bool ТолькоСубтитры(string titlelower)
+        internal static bool ТолькоСубтитры(string titlelower) => КодыПеревода(titlelower) == true;
+
+        /// <summary>
+        /// Коды перевода в названии: true — русские только субтитры, false —
+        /// русский звук назван кодом («ПМ», «| P», «[RU / …]»), null — пометок нет
+        /// или по ним не понять.
+        /// </summary>
+        static bool? КодыПеревода(string titlelower)
         {
             if (string.IsNullOrEmpty(titlelower))
-                return false;
+                return null;
 
             foreach (var кусок in titlelower.Split('/'))
             {
@@ -479,9 +486,32 @@ namespace JacBlack.Infrastructure.Persistence
 
             var nnm = RxNnmAudioSubs.Match(titlelower);
             if (nnm.Success)
-                return !RxRuCode.IsMatch(nnm.Groups[1].Value) && RxRuCode.IsMatch(nnm.Groups[2].Value);
+            {
+                if (RxRuCode.IsMatch(nnm.Groups[1].Value))
+                    return false;
+                return RxRuCode.IsMatch(nnm.Groups[2].Value) ? true : null;
+            }
 
-            return false;
+            return null;
+        }
+
+        /// <summary>
+        /// rus у записи выведен из самого названия (вид перевода, студия,
+        /// языковая разметка), а не из догадки «русский трекер + кириллица».
+        /// Нужен склейке дублей: молчащий трекер не должен перебивать пометку
+        /// «только субтитры» у соседа по инфохешу.
+        /// </summary>
+        internal static bool РусскийПоНазванию(TorrentDetails t)
+        {
+            string tl = t.title?.ToLowerInvariant();
+            if (string.IsNullOrEmpty(tl) || t.languages == null || !t.languages.Contains("rus"))
+                return false;
+
+            return t.trackerName == "lostfilm"
+                || КодыПеревода(tl) == false
+                || RxRusAudio.IsMatch(tl)
+                || (t.voices != null && rusVoices.Overlaps(t.voices))
+                || RxLangSlots.Matches(tl).Any(m => m.Groups[2].Value.ToLowerInvariant() == "rus");
         }
 
         /// <summary>Есть ли в строке кириллица.</summary>

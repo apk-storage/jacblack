@@ -100,8 +100,7 @@ namespace JacBlack.Application.Search
 
                     if (Infrastructure.Persistence.FileDB.ТолькоСубтитры(torrent.title?.ToLowerInvariant()))
                         толькоСубтитры.Add(hex);
-                    else if (torrent.languages != null && torrent.languages.Contains("rus") && torrent.voices != null
-                        && torrent.voices.Any(v => v != "Субтитры" && v != "Две дорожки" && v != "Мультиязычная"))
+                    else if (Infrastructure.Persistence.FileDB.РусскийПоНазванию(torrent))
                         русскийЯвно.Add(hex);
 
                     if (!temp.TryGetValue(hex, out _))
